@@ -1,0 +1,347 @@
+// Precificaragao — schema de precificacao, engenharia de cardapio e compras.
+//
+// Convencao de dinheiro: todos os valores monetarios sao Decimal(12,4) no banco
+// e convertidos para `number` na fronteira (src/lib/mappers.ts). A biblioteca de
+// calculo (src/lib/pricing) trabalha apenas com `number` puro.
+//
+// Convencao de quantidade: toda quantidade persistida em campos *Base esta na
+// unidade base do insumo (G, ML ou UN). Conversoes em src/lib/units.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Uma unica variavel de ambiente de proposito: o Prisma exige que toda a env
+// declarada aqui exista, e um `directUrl` obrigatorio faria a aplicacao inteira
+// rebentar em quem so define DATABASE_URL — o caso normal no Neon. Se quiser
+// usar `prisma migrate` contra uma ligacao em pool, acrescente
+// `directUrl = env("DIRECT_URL")` e defina a variavel; ver o README.
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/// Insumo alimenticio x embalagem/descartavel.
+enum IngredientCategory {
+  FOOD
+  PACKAGING
+}
+
+/// Unidade em que o insumo e comprado.
+enum PurchaseUnit {
+  KG
+  G
+  L
+  ML
+  UN
+}
+
+/// Unidade base de consumo. KG/G -> G, L/ML -> ML, UN -> UN.
+enum BaseUnit {
+  G
+  ML
+  UN
+}
+
+/// BASE = preparacao intermediaria (molho, massa). PRODUCT = item de venda.
+enum RecipeKind {
+  BASE
+  PRODUCT
+}
+
+/// O preco de menu ja inclui IVA (tipico em PT/BR) ou o IVA e acrescido.
+enum VatMode {
+  INCLUDED
+  ADDED
+}
+
+enum ChannelKind {
+  COUNTER
+  OWN_DELIVERY
+  PLATFORM
+}
+
+/// Como o preco de venda do produto e definido.
+enum PricingMode {
+  TARGET_CMV
+  TARGET_MARGIN
+  MANUAL
+}
+
+/// Arredondamento psicologico aplicado ao preco sugerido.
+enum RoundingStrategy {
+  NONE
+  NEAREST_05
+  NEAREST_10
+  ENDING_90
+  ENDING_95
+}
+
+/// Origem de uma cotacao de preco de insumo.
+enum QuoteSource {
+  MANUAL
+  CSV
+  CONTINENTE
+  PINGO_DOCE
+  AUCHAN
+  OTHER
+}
+
+// ---------------------------------------------------------------------------
+// Modulo 5 — Configuracoes globais
+// ---------------------------------------------------------------------------
+
+/// Linha unica (id = "default"). Guarda a moeda e todas as variaveis globais
+/// de precificacao.
+model Settings {
+  id       String @id @default("default")
+  /// Codigo ISO 4217: EUR, BRL, USD...
+  currency String @default("EUR")
+  /// BCP 47, define separador decimal e posicao do simbolo: pt-PT, pt-BR...
+  locale   String @default("pt-PT")
+
+  /// IVA/imposto sobre a receita. 0.13 = 13% (restauracao em Portugal).
+  vatRate Decimal @default(0.13) @db.Decimal(12, 4)
+  vatMode VatMode @default(INCLUDED)
+
+  /// Custos fixos + mao de obra + energia, como fracao da receita liquida.
+  fixedCostRate Decimal @default(0.22) @db.Decimal(12, 4)
+  /// Taxa media de cartao, como fracao do valor bruto pago pelo cliente.
+  cardFeeRate   Decimal @default(0.012) @db.Decimal(12, 4)
+
+  /// CMV desejado (custo primo / receita liquida). 0.30 = 30%.
+  targetCmv    Decimal @default(0.30) @db.Decimal(12, 4)
+  /// Lucro liquido alvo, como fracao da receita liquida.
+  targetMargin Decimal @default(0.15) @db.Decimal(12, 4)
+
+  rounding RoundingStrategy @default(NONE)
+
+  businessName String?
+  updatedAt    DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Modulo 1 — Insumos, embalagens e fornecedores
+// ---------------------------------------------------------------------------
+
+model Supplier {
+  id    String  @id @default(cuid())
+  name  String  @unique
+  notes String?
+  /// Loja/URL de referencia para consulta de precos.
+  url   String?
+
+  ingredients Ingredient[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Ingredient {
+  id       String             @id @default(cuid())
+  name     String
+  category IngredientCategory @default(FOOD)
+
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  /// Preco pago pela embalagem de compra inteira. Ex: 12.50
+  purchasePrice Decimal      @db.Decimal(12, 4)
+  /// Tamanho da embalagem de compra. Ex: 5 (kg)
+  purchaseQty   Decimal      @db.Decimal(12, 4)
+  purchaseUnit  PurchaseUnit
+  /// Unidade base derivada de purchaseUnit. Denormalizada para consultas.
+  baseUnit      BaseUnit
+
+  /// Fator de correcao = peso bruto / peso liquido. 1 = sem perda.
+  /// Ex: 1.25 significa 20% de perda na limpeza.
+  correctionFactor Decimal @default(1) @db.Decimal(12, 4)
+
+  /// Estoque atual na unidade base. Usado pelo Modulo 4.
+  stockBase Decimal @default(0) @db.Decimal(12, 4)
+
+  sku   String?
+  notes String?
+
+  recipeItems          RecipeItem[]
+  packagingFor         Recipe[]           @relation("MainPackaging")
+  deliveryPackagingFor Recipe[]           @relation("DeliveryPackaging")
+  quotes               PriceQuote[]
+  purchaseLines        PurchaseListLine[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, supplierId])
+  @@index([category])
+}
+
+/// Cotacao historica de preco (Modulo 1: consulta de supermercados PT).
+/// Nunca sobrescreve o Ingredient: quem decide aplicar e o usuario.
+model PriceQuote {
+  id           String     @id @default(cuid())
+  ingredientId String
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  source QuoteSource
+  /// Nome do produto como aparece na fonte.
+  label  String?
+  price  Decimal      @db.Decimal(12, 4)
+  qty    Decimal      @db.Decimal(12, 4)
+  unit   PurchaseUnit
+  url    String?
+
+  capturedAt DateTime @default(now())
+
+  @@index([ingredientId, capturedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Modulo 2 — Fichas tecnicas e preparacoes base
+// ---------------------------------------------------------------------------
+
+model Recipe {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  kind        RecipeKind @default(PRODUCT)
+  description String?
+
+  /// Rendimento do lote. PRODUCT: numero de porcoes (yieldUnit = UN).
+  /// BASE: rendimento em G/ML do lote inteiro.
+  yieldQty  Decimal  @db.Decimal(12, 4)
+  yieldUnit BaseUnit @default(UN)
+
+  /// Embalagem principal, cobrada por porcao.
+  packagingId String?
+  packaging   Ingredient? @relation("MainPackaging", fields: [packagingId], references: [id], onDelete: SetNull)
+
+  /// Embalagem extra de transporte, cobrada por porcao nos canais de entrega.
+  deliveryPackagingId String?
+  deliveryPackaging   Ingredient? @relation("DeliveryPackaging", fields: [deliveryPackagingId], references: [id], onDelete: SetNull)
+
+  pricingMode PricingMode @default(TARGET_CMV)
+  /// Preco de balcao definido a mao quando pricingMode = MANUAL.
+  manualPrice Decimal?    @db.Decimal(12, 4)
+  /// Sobrescreve Settings.targetCmv para este produto.
+  targetCmv    Decimal? @db.Decimal(12, 4)
+  /// Sobrescreve Settings.targetMargin para este produto.
+  targetMargin Decimal? @db.Decimal(12, 4)
+
+  items      RecipeItem[]          @relation("RecipeOwner")
+  /// Onde esta receita e usada como sub-receita.
+  usedIn     RecipeItem[]          @relation("RecipeChild")
+  orderLines ProductionOrderLine[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([kind])
+}
+
+/// Linha da ficha tecnica. Aponta para um Ingredient OU para outra Recipe
+/// (sub-receita), nunca para os dois.
+model RecipeItem {
+  id       String @id @default(cuid())
+  recipeId String
+  recipe   Recipe @relation("RecipeOwner", fields: [recipeId], references: [id], onDelete: Cascade)
+
+  ingredientId String?
+  ingredient   Ingredient? @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+
+  childRecipeId String?
+  childRecipe   Recipe? @relation("RecipeChild", fields: [childRecipeId], references: [id], onDelete: Restrict)
+
+  /// Quantidade na unidade informada (convertida para base no calculo).
+  qty  Decimal      @db.Decimal(12, 4)
+  unit PurchaseUnit
+
+  sortOrder Int     @default(0)
+  notes     String?
+
+  @@index([recipeId])
+  @@index([childRecipeId])
+}
+
+// ---------------------------------------------------------------------------
+// Modulo 3 — Canais de venda
+// ---------------------------------------------------------------------------
+
+model SalesChannel {
+  id   String      @id @default(cuid())
+  name String      @unique
+  kind ChannelKind
+
+  /// Comissao da plataforma sobre o valor bruto. 0.30 = 30%.
+  commissionRate Decimal @default(0) @db.Decimal(12, 4)
+  /// Custo fixo de entrega por pedido (entregador proprio, em moeda).
+  deliveryCost   Decimal @default(0) @db.Decimal(12, 4)
+  /// Sobrescreve Settings.cardFeeRate neste canal (plataformas costumam ja
+  /// embutir o pagamento na comissao -> 0).
+  cardFeeRate    Decimal? @db.Decimal(12, 4)
+  /// Cobra a embalagem extra de transporte.
+  usesDeliveryPackaging Boolean @default(false)
+
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Modulo 4 — Producao e lista de compras (schema pronto; UI na fase 2)
+// ---------------------------------------------------------------------------
+
+model ProductionOrder {
+  id    String    @id @default(cuid())
+  name  String
+  notes String?
+  /// Data alvo da producao.
+  dueAt DateTime?
+
+  lines     ProductionOrderLine[]
+  listLines PurchaseListLine[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProductionOrderLine {
+  id      String          @id @default(cuid())
+  orderId String
+  order   ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  recipeId String
+  recipe   Recipe @relation(fields: [recipeId], references: [id], onDelete: Restrict)
+
+  /// Quantidade de porcoes a produzir.
+  qty Decimal @db.Decimal(12, 4)
+
+  @@index([orderId])
+}
+
+/// Resultado congelado da explosao de insumos (MRP) de uma ordem.
+model PurchaseListLine {
+  id      String          @id @default(cuid())
+  orderId String
+  order   ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  ingredientId String
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+
+  /// Necessidade bruta na unidade base (ja com fator de correcao).
+  requiredBase Decimal @db.Decimal(12, 4)
+  /// Estoque considerado no momento do calculo.
+  stockBase    Decimal @db.Decimal(12, 4)
+  /// Falta a comprar, na unidade base.
+  missingBase  Decimal @db.Decimal(12, 4)
+  /// Embalagens de compra a adquirir (arredondado para cima).
+  packsToBuy   Decimal @db.Decimal(12, 4)
+
+  estimatedCost Decimal @db.Decimal(12, 4)
+
+  @@index([orderId])
+}
