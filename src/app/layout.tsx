@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 
 import { BottomNav, TopNav } from '@/components/site-nav';
+import { sair } from '@/lib/actions/auth';
 
 import './globals.css';
 
@@ -26,7 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-PT">
       <body className="min-h-screen bg-background">
         <div className="flex min-h-screen flex-col">
-          <TopNav />
+          <TopNav sair={sair} />
 
           {/* pb-24 no telemovel: a barra de baixo e fixa e taparia o fim da
               pagina. Acima de md ela nao existe e o espaco volta ao normal. */}

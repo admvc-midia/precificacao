@@ -203,3 +203,17 @@ balança uma vez e escreva o peso.
 **A ficha mostra os custos, e eu só quero ver a receita.**
 Há um botão **Ver custos** por cima da tabela. Os custos começam escondidos, e a app
 lembra-se da sua escolha neste telemóvel ou computador.
+
+**A app pede-me uma palavra-passe. Onde a defino?**
+Na Vercel, em Settings → Environment Variables, com o nome `APP_PASSWORD` e o valor
+que quiser; depois publique outra vez para ela valer. No seu computador, acrescente
+`APP_PASSWORD=...` ao ficheiro `.env` e reinicie.
+
+Não há contas nem utilizadores: é uma palavra-passe só, partilhada por quem trabalha
+na casa. Fica ligado 30 dias em cada aparelho, e o botão de sair está no canto
+superior direito. Trocar a palavra-passe faz sair toda a gente — é assim que se tira
+o acesso a alguém.
+
+Enquanto não a definir, **ninguém entra**, nem você. É de propósito: esta app tem os
+seus custos, as suas margens e os seus fornecedores, e estava publicada sem nada a
+proteger.

@@ -21,6 +21,7 @@ import {
   TrendingUp,
   Warehouse,
   LayoutDashboard,
+  LogOut,
   Settings as SettingsIcon,
   Store,
   Tag,
@@ -66,8 +67,18 @@ function isActive(pathname: string, href: string): boolean {
   return href === '/' ? pathname === '/' : pathname.startsWith(href);
 }
 
-export function TopNav() {
+/**
+ * A pagina de entrada nao tem navegacao: nao ha para onde ir sem entrar, e
+ * uma barra cheia de destinos inalcancaveis so faz parecer que a aplicacao
+ * esta avariada.
+ */
+function semNavegacao(pathname: string): boolean {
+  return pathname === '/entrar';
+}
+
+export function TopNav({ sair }: { sair?: () => Promise<void> }) {
   const pathname = usePathname();
+  if (semNavegacao(pathname)) return null;
 
   return (
     <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
@@ -117,6 +128,19 @@ export function TopNav() {
             </Link>
           ))}
         </nav>
+
+        {sair ? (
+          <form action={sair} className="shrink-0">
+            <button
+              type="submit"
+              aria-label="Sair"
+              title="Sair"
+              className="grid h-9 w-9 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <LogOut className="h-[18px] w-[18px]" />
+            </button>
+          </form>
+        ) : null}
       </div>
     </header>
   );
@@ -124,6 +148,7 @@ export function TopNav() {
 
 export function BottomNav() {
   const pathname = usePathname();
+  if (semNavegacao(pathname)) return null;
 
   return (
     <nav
