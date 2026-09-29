@@ -138,7 +138,9 @@ A lista mostrada é sempre recalculada ao vivo. **Guardar lista** congela os pre
 
 ### Preços por fornecedor
 
-Um insumo pode ter o preço de vários fornecedores. O preço **do insumo** continua a ser um só — é esse que alimenta o custo de todas as fichas — e as ofertas são alternativas para comparar. Adotar uma é um clique explícito: se a app trocasse sozinha pelo mais barato, o custo dos produtos mudava porque alguém anotou um preço só para consultar.
+Um insumo **é** um item com uma lista de quem o vende. Açúcar refinado comprado no Continente e no Makro é um item com dois preços, não dois itens — e a primeira versão desta app forçava o contrário, pedindo fornecedor e preço logo no cadastro. O resultado apareceu nos dados reais: dois "Açucar refinado" criados com 15 minutos de diferença, um por fornecedor.
+
+Agora **criar** pede o item e o seu primeiro preço; **editar** mostra o item e a lista completa de preços, na mesma janela. Exatamente um preço fica **em uso**: é ele que alimenta o custo de todas as fichas e o que a lista de compras recomenda. Os outros são alternativas para comparar. Trocar é um clique explícito — se a app adotasse sozinha o mais barato, o custo dos produtos mudava porque alguém anotou um preço só para consultar.
 
 **O preço por grama não chega para decidir onde comprar.** É o instinto, e falha quando se precisa de pouco, porque não se compra fração de embalagem:
 

@@ -13,7 +13,8 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { num } from '@/lib/mappers';
 import { parseDecimal } from '@/lib/money';
-import { baseUnitOf, type PurchaseUnit } from '@/lib/units';
+import { baseUnitOf, toBase, type PurchaseUnit } from '@/lib/units';
+import { lerPreco } from './offers';
 import { findSimilarNames } from '@/lib/pricing/offers';
 import {
   CATEGORY,
@@ -27,8 +28,6 @@ const ingredientSchema = z.object({
   name: z.string().trim().min(1, 'O nome e obrigatorio.'),
   category: CATEGORY,
   supplierId: z.string().trim().optional(),
-  purchasePrice: z.number().positive('O preco pago tem de ser maior que zero.'),
-  purchaseQty: z.number().positive('A quantidade de compra tem de ser maior que zero.'),
   purchaseUnit: PURCHASE_UNIT,
   correctionFactor: z
     .number()
@@ -56,8 +55,6 @@ function readIngredient(form: FormData) {
     name: String(form.get('name') ?? ''),
     category: String(form.get('category') ?? 'FOOD'),
     supplierId: String(form.get('supplierId') ?? ''),
-    purchasePrice: parseDecimal(String(form.get('purchasePrice') ?? '')),
-    purchaseQty: parseDecimal(String(form.get('purchaseQty') ?? '')),
     purchaseUnit: String(form.get('purchaseUnit') ?? 'UN'),
     correctionFactor: readCorrectionFactor(form),
     stockBase: parseDecimal(String(form.get('stockBase') ?? '0')),
@@ -74,13 +71,11 @@ export async function saveIngredient(
     const id = String(form.get('id') ?? '');
     const data = readIngredient(form);
 
+    // Preco, quantidade e fornecedor nao estao aqui: vivem na lista de
+    // precos e chegam ao insumo por copia do que estiver em uso.
     const payload = {
       name: data.name,
       category: data.category,
-      supplierId: data.supplierId || null,
-      purchasePrice: data.purchasePrice,
-      purchaseQty: data.purchaseQty,
-      purchaseUnit: data.purchaseUnit as PurchaseUnit,
       baseUnit: baseUnitOf(data.purchaseUnit as PurchaseUnit),
       correctionFactor: data.correctionFactor,
       stockBase: data.stockBase,
@@ -137,7 +132,45 @@ export async function saveIngredient(
         }
       }
 
-      await prisma.ingredient.create({ data: payload });
+      // O insumo nasce com o seu primeiro preco, senao ficava com custo zero
+      // e as fichas que o usassem mentiam em silencio.
+      const preco = await lerPreco(form);
+
+      if (baseUnitOf(preco.purchaseUnit) !== payload.baseUnit) {
+        throw new Error(
+          'A unidade do preco tem de ser da mesma familia da unidade de medida do insumo.',
+        );
+      }
+
+      await prisma.$transaction(async (tx) => {
+        const criado = await tx.ingredient.create({
+          data: {
+            ...payload,
+            supplierId: preco.supplierId,
+            purchasePrice: preco.purchasePrice,
+            purchaseQty: preco.purchaseQty,
+            purchaseUnit: preco.purchaseUnit,
+            // Estoque inicial com base de custo: sem ela, as saidas desse
+            // saldo entravam a zero no CMV real.
+            avgCostBase:
+              payload.stockBase > 0
+                ? preco.purchasePrice / toBase(preco.purchaseQty, preco.purchaseUnit)
+                : 0,
+          },
+        });
+
+        await tx.supplierOffer.create({
+          data: {
+            ingredientId: criado.id,
+            supplierId: preco.supplierId,
+            purchasePrice: preco.purchasePrice,
+            purchaseQty: preco.purchaseQty,
+            purchaseUnit: preco.purchaseUnit,
+            sku: preco.sku,
+            inUse: true,
+          },
+        });
+      });
     }
 
     revalidatePath('/insumos');

@@ -104,11 +104,11 @@ export default async function OrdemPage({
       i.offers.map((o) => ({
         id: o.id,
         supplierId: o.supplierId,
-        supplierName: o.supplier.name,
+        supplierName: o.supplier?.name ?? 'Sem fornecedor',
         purchasePrice: num(o.purchasePrice),
         purchaseQty: num(o.purchaseQty),
         purchaseUnit: o.purchaseUnit,
-        preferred: o.preferred,
+        inUse: o.inUse,
       })),
     ]),
   );

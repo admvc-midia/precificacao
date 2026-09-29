@@ -1,14 +1,17 @@
-import { Plus, Store, Upload } from 'lucide-react';
+import { Plus, Upload } from 'lucide-react';
 
 import { ConfirmDelete, FormDialog } from '@/components/action-form';
 import { GroupedList, type ListColumn, type ListRow } from '@/components/data-list';
 import { CsvImport } from '@/components/forms/csv-import';
 import { IngredientForm } from '@/components/forms/ingredient-form';
-import { OffersDialog, type OfferRow } from '@/components/forms/offers-dialog';
+import {
+  IngredientDialog,
+  type PriceRow,
+} from '@/components/forms/ingredient-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { importIngredientsCsv } from '@/lib/actions/import';
-import { adoptOffer, deleteOffer, saveOffer } from '@/lib/actions/offers';
+import { deleteOffer, saveOffer, setOfferInUse } from '@/lib/actions/offers';
 import { deleteIngredient, saveIngredient } from '@/lib/actions/ingredients';
 import { num, toIngredientFormValues, toIngredientInput } from '@/lib/mappers';
 import { formatMoney, formatPercent, formatUnitCost } from '@/lib/money';
@@ -65,29 +68,24 @@ export default async function InsumosPage() {
       row.offers.map((o) => ({
         id: o.id,
         supplierId: o.supplierId,
-        supplierName: o.supplier.name,
+        supplierName: o.supplier?.name ?? 'Sem fornecedor',
         purchasePrice: num(o.purchasePrice),
         purchaseQty: num(o.purchaseQty),
         purchaseUnit: o.purchaseUnit,
-        preferred: o.preferred,
+        inUse: o.inUse,
       })),
     );
 
-    const offerRows: OfferRow[] = ranked.map((o) => ({
+    const priceRows: PriceRow[] = ranked.map((o) => ({
       id: o.id,
-      supplierId: o.supplierId,
       supplierName: o.supplierName,
       packLabel: `${formatMoney(o.purchasePrice, currency)} / ${o.purchaseQty} ${UNIT_LABEL[o.purchaseUnit]}`,
       unitCostLabel: `${formatUnitCost(o.unitCost, currency)}/${unit}`,
       cheapest: o.cheapest,
-      preferred: o.preferred,
+      inUse: o.inUse,
       premiumLabel: o.premium > 0.0001
         ? formatPercent(o.premium, currency.locale, 0)
         : null,
-      // "Em uso" e o fornecedor e o preco que o insumo tem hoje.
-      inUse:
-        o.supplierId === row.supplierId &&
-        Math.abs(o.unitCost - raw) < 1e-9,
     }));
 
     const maisBarato = ranked.find((o) => o.cheapest);
@@ -96,48 +94,20 @@ export default async function InsumosPage() {
 
     const acoes = (
       <>
-        <OffersDialog
-          ingredientId={row.id}
-          ingredientName={row.name}
-          baseUnitLabel={unit}
+        <IngredientDialog
+          ingredient={toIngredientFormValues(row)}
+          suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
           unitOptions={compatibleUnits(row.baseUnit).map((u) => ({
             value: u,
             label: UNIT_LABEL[u],
           }))}
-          offers={offerRows}
-          suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
-          currentLabel={`${formatMoney(num(row.purchasePrice), currency)} / ${num(row.purchaseQty)} ${UNIT_LABEL[row.purchaseUnit]}`}
+          prices={priceRows}
+          saveIngredient={saveIngredient}
           saveOffer={saveOffer}
           deleteOffer={deleteOffer}
-          adoptOffer={adoptOffer}
-          trigger={
-            <Button
-              variant="ghost"
-              size="sm"
-              className={
-                poupanca > 0
-                  ? 'text-amber-700 dark:text-amber-400'
-                  : 'text-muted-foreground hover:text-foreground'
-              }
-            >
-              <Store className="h-4 w-4" />
-              <span className="sr-only">Precos por fornecedor</span>
-            </Button>
-          }
+          setOfferInUse={setOfferInUse}
         />
 
-        <FormDialog
-          action={saveIngredient}
-          title={`Editar ${row.name}`}
-          description="Alterar o preco aqui muda o custo de todas as fichas que usam este insumo."
-          submitLabel="Guardar alteracoes"
-        >
-          <IngredientForm
-            initial={toIngredientFormValues(row)}
-            suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
-            idPrefix={`edit-${row.id}`}
-          />
-        </FormDialog>
         <ConfirmDelete
           action={deleteIngredient}
           fields={{ id: row.id }}

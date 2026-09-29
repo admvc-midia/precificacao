@@ -489,8 +489,11 @@ model SupplierOffer {
   id           String     @id @default(cuid())
   ingredientId String
   ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
-  supplierId   String
-  supplier     Supplier   @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  /// Nulo quando se sabe o preco mas nao de onde veio. E permitido um unico
+  /// preco sem fornecedor por insumo — a action recusa o segundo.
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 
   /// Preco da embalagem inteira neste fornecedor.
   purchasePrice Decimal      @db.Decimal(12, 4)
@@ -502,14 +505,19 @@ model SupplierOffer {
   sku   String?
   notes String?
 
-  /// Preferido por outra razao que nao o preco: qualidade, prazo, confianca.
-  /// A lista de compras respeita esta escolha e diz quanto ela custa.
-  preferred Boolean @default(false)
-  active    Boolean @default(true)
+  /// O preco que a aplicacao usa de facto.
+  ///
+  /// E ele que alimenta o custo de todas as fichas tecnicas e que a lista de
+  /// compras recomenda. Exatamente um por insumo, garantido pelas actions.
+  ///
+  /// Ser uma escolha explicita e o ponto: anotar o preco de outro fornecedor
+  /// so para comparar nao pode mudar o custo dos produtos sem se mandar.
+  inUse  Boolean @default(false)
+  active Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([ingredientId, supplierId])
-  @@index([ingredientId])
+  @@index([ingredientId, inUse])
 }

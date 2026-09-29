@@ -12,7 +12,7 @@ const oferta = (
   purchasePrice: number,
   purchaseQty: number,
   purchaseUnit: SupplierOffer['purchaseUnit'],
-  preferred = false,
+  inUse = false,
 ): SupplierOffer => ({
   id: supplierName,
   supplierId: supplierName,
@@ -20,7 +20,7 @@ const oferta = (
   purchasePrice,
   purchaseQty,
   purchaseUnit,
-  preferred,
+  inUse,
 });
 
 describe('comparar fornecedores', () => {
@@ -109,7 +109,7 @@ describe('onde comprar uma quantidade concreta', () => {
 
     expect(r.cheapest.offer.supplierName).toBe('Mercado');
     expect(r.recommended.offer.supplierName).toBe('Talho');
-    expect(r.preferred!.offer.supplierName).toBe('Talho');
+    expect(r.inUse!.offer.supplierName).toBe('Talho');
     // Seguir a preferencia custa 12,50 - 3,20.
     expect(r.costOfPreference).toBeCloseTo(9.3, 10);
   });
@@ -121,7 +121,7 @@ describe('onde comprar uma quantidade concreta', () => {
     ])!;
 
     expect(r.recommended.offer.supplierName).toBe('Talho');
-    expect(r.preferred).toBeNull();
+    expect(r.inUse).toBeNull();
     expect(r.costOfPreference).toBeCloseTo(0, 10);
   });
 

@@ -19,7 +19,7 @@
  *
  * E ha ainda a preferencia do utilizador. Quem escolhe um fornecedor por
  * qualidade ou prazo nao quer a aplicacao a discutir — quer saber quanto
- * custa essa escolha. Por isso a preferida ganha, e o que se poupava vai
+ * custa essa escolha. Por isso a emUso ganha, e o que se poupava vai
  * escrito ao lado.
  */
 
@@ -27,12 +27,13 @@ import { toBase, type PurchaseUnit } from '@/lib/units';
 
 export interface SupplierOffer {
   id: string;
-  supplierId: string;
+  /** Nulo quando se sabe o preco mas nao de onde veio. */
+  supplierId: string | null;
   supplierName: string;
   purchasePrice: number;
   purchaseQty: number;
   purchaseUnit: PurchaseUnit;
-  preferred: boolean;
+  inUse: boolean;
 }
 
 export interface RankedOffer extends SupplierOffer {
@@ -91,7 +92,7 @@ export interface BestForNeed {
   /** Onde esta compra fica mais barata. */
   cheapest: NeedQuote;
   /** O fornecedor marcado como preferido, se houver e se nao for o mais barato. */
-  preferred: NeedQuote | null;
+  inUse: NeedQuote | null;
   /** Todas as opcoes, da mais barata para a mais cara nesta compra. */
   options: NeedQuote[];
   /**
@@ -134,12 +135,12 @@ export function bestOfferForNeed(
   options.sort((a, b) => a.cost - b.cost || a.leftoverBase - b.leftoverBase);
 
   const cheapest = options[0];
-  const preferida = options.find((o) => o.offer.preferred) ?? null;
-  const recommended = preferida ?? cheapest;
+  const emUso = options.find((o) => o.offer.inUse) ?? null;
+  const recommended = emUso ?? cheapest;
 
   return {
     cheapest,
-    preferred: preferida && preferida !== cheapest ? preferida : null,
+    inUse: emUso && emUso !== cheapest ? emUso : null,
     options,
     recommended,
     costOfPreference: recommended.cost - cheapest.cost,

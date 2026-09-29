@@ -4,15 +4,24 @@
  * Formulario de insumo.
  *
  * ---------------------------------------------------------------------------
+ * CRIAR E EDITAR PEDEM COISAS DIFERENTES
+ * ---------------------------------------------------------------------------
+ * Ao **criar**, pede-se tambem o primeiro preco: um insumo sem preco nenhum
+ * daria custo zero e faria as fichas que o usam mentir em silencio.
+ *
+ * Ao **editar**, os campos de preco desaparecem. O preco vive na lista de
+ * fornecedores, ao lado — um acucar comprado no Continente e no Makro tem
+ * dois precos, nao um, e obrigar a escolher um aqui era o que levava a
+ * cadastrar o mesmo item duas vezes.
+ *
+ * ---------------------------------------------------------------------------
  * PORQUE E UM COMPONENTE DE CLIENTE COM ESTADO
  * ---------------------------------------------------------------------------
  * Os campos eram nao-controlados, com `defaultValue`. O React 19 repoe um
  * formulario assim assim que a action termina — **inclusive quando ela
  * recusa**. Resultado: escrevia-se tudo, o servidor dizia "ja existe um
- * registo com esse nome", e o ecra aparecia em branco.
- *
- * Com o valor a viver em estado de React, a reposicao do DOM nao apaga nada:
- * o que estava escrito continua la para corrigir.
+ * registo com esse nome", e o ecra aparecia em branco. Com o valor em estado
+ * de React, a reposicao do DOM nao apaga nada.
  *
  * A perda e o fator de correcao sao dois campos para o mesmo numero e
  * sincronizam-se: 20% de perda e FC 1,25 dizem a mesma coisa. Quem limpa
@@ -54,6 +63,35 @@ export const EMPTY_INGREDIENT: IngredientFormValues = {
   notes: '',
 };
 
+/** Rotulo da familia de medida do insumo. */
+const MEDIDA: Record<PurchaseUnit, string> = {
+  KG: 'quilos / gramas',
+  G: 'quilos / gramas',
+  L: 'litros / mililitros',
+  ML: 'litros / mililitros',
+  UN: 'unidades',
+};
+
+/** Tamanhos de embalagem possiveis dentro de cada familia. */
+const UNIDADES: Record<'KG' | 'L' | 'UN', Array<{ value: PurchaseUnit; label: string }>> =
+  {
+    KG: [
+      { value: 'KG', label: 'kg' },
+      { value: 'G', label: 'g' },
+    ],
+    L: [
+      { value: 'L', label: 'L' },
+      { value: 'ML', label: 'ml' },
+    ],
+    UN: [{ value: 'UN', label: 'unidade' }],
+  };
+
+function familia(u: PurchaseUnit): 'KG' | 'L' | 'UN' {
+  if (u === 'KG' || u === 'G') return 'KG';
+  if (u === 'L' || u === 'ML') return 'L';
+  return 'UN';
+}
+
 function fmt(value: number, casas: number): string {
   if (!Number.isFinite(value)) return '';
   return String(Number(value.toFixed(casas)));
@@ -76,8 +114,18 @@ export function IngredientForm({
   const [v, setV] = useState(initial);
   const estado = useActionFormState();
   const parecidos = estado.similar ?? [];
+
   const fcInicial = parse(initial.correctionFactor) || 1;
   const [perda, setPerda] = useState(() => fmt(wastePercentFromFc(fcInicial) * 100, 2));
+
+  // Um insumo ja existente tem a sua lista de precos ao lado: aqui so se
+  // editam as caracteristicas dele.
+  const aEditar = Boolean(initial.id);
+
+  // A familia so filtra as unidades de embalagem possiveis; nao e enviada.
+  // O que o servidor recebe e a unidade da embalagem, e a familia deduz-se
+  // dela. Dois campos a disputar o mesmo nome dariam a unidade errada.
+  const [fam, setFam] = useState<'KG' | 'L' | 'UN'>(() => familia(initial.purchaseUnit));
 
   const set = <K extends keyof IngredientFormValues>(
     campo: K,
@@ -99,7 +147,7 @@ export function IngredientForm({
           name="name"
           value={v.name}
           onChange={(e) => set('name', e.target.value)}
-          placeholder="Carne picada 20% gordura"
+          placeholder="Acucar refinado"
           required
         />
       </Field>
@@ -113,8 +161,8 @@ export function IngredientForm({
             ))}
           </ul>
           <p className="mt-2 text-xs">
-            Se for o mesmo insumo, feche esta janela e edite o que ja existe em vez
-            de criar outro.
+            Se for o mesmo insumo comprado noutro sitio, feche esta janela, abra o
+            que ja existe e acrescente la o preco do outro fornecedor.
           </p>
           <label className="mt-2 flex items-center gap-2 text-sm font-medium">
             <input
@@ -142,61 +190,109 @@ export function IngredientForm({
             <option value="PACKAGING">Embalagem / descartavel</option>
           </Select>
         </Field>
-        <Field label="Fornecedor" htmlFor={id('supplier')}>
-          <Select
-            id={id('supplier')}
-            name="supplierId"
-            value={v.supplierId}
-            onChange={(e) => set('supplierId', e.target.value)}
-          >
-            <option value="">— sem fornecedor —</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </Select>
+
+        <Field
+          label="Medido em"
+          htmlFor={id('unit')}
+          hint={
+            aEditar
+              ? 'Nao se altera: os precos ja registados dependem desta medida.'
+              : 'A familia de medida, nao o tamanho da embalagem.'
+          }
+        >
+          {aEditar ? (
+            <>
+              <input type="hidden" name="purchaseUnit" value={v.purchaseUnit} />
+              <div className="flex h-10 items-center rounded-md border border-input bg-muted/50 px-3 text-sm text-muted-foreground">
+                {MEDIDA[v.purchaseUnit]}
+              </div>
+            </>
+          ) : (
+            <Select
+              id={id('unit')}
+              value={fam}
+              onChange={(e) => {
+                const nova = e.target.value as 'KG' | 'L' | 'UN';
+                setFam(nova);
+                set('purchaseUnit', UNIDADES[nova][0].value);
+              }}
+            >
+              <option value="KG">quilos / gramas</option>
+              <option value="L">litros / mililitros</option>
+              <option value="UN">unidades</option>
+            </Select>
+          )}
         </Field>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Preco pago" htmlFor={id('price')}>
-          <Input
-            id={id('price')}
-            name="purchasePrice"
-            inputMode="decimal"
-            value={v.purchasePrice}
-            onChange={(e) => set('purchasePrice', e.target.value)}
-            placeholder="12,50"
-            required
-          />
-        </Field>
-        <Field label="Quantidade" htmlFor={id('qty')}>
-          <Input
-            id={id('qty')}
-            name="purchaseQty"
-            inputMode="decimal"
-            value={v.purchaseQty}
-            onChange={(e) => set('purchaseQty', e.target.value)}
-            placeholder="5"
-            required
-          />
-        </Field>
-        <Field label="Unidade" htmlFor={id('unit')}>
-          <Select
-            id={id('unit')}
-            name="purchaseUnit"
-            value={v.purchaseUnit}
-            onChange={(e) => set('purchaseUnit', e.target.value as PurchaseUnit)}
-          >
-            <option value="KG">kg</option>
-            <option value="G">g</option>
-            <option value="L">L</option>
-            <option value="ML">ml</option>
-            <option value="UN">unidade</option>
-          </Select>
-        </Field>
-      </div>
+      {aEditar ? null : (
+        <div className="rounded-md border bg-muted/40 p-3">
+          <p className="text-sm font-medium">Primeiro preco</p>
+          <p className="mb-3 mt-0.5 text-xs text-muted-foreground">
+            Onde compra hoje. Depois de guardar, pode acrescentar os outros
+            fornecedores deste mesmo insumo e comparar.
+          </p>
+
+          <Field label="Fornecedor" htmlFor={id('supplier')}>
+            <Select
+              id={id('supplier')}
+              name="supplierId"
+              value={v.supplierId}
+              onChange={(e) => set('supplierId', e.target.value)}
+            >
+              <option value="">— nao registar —</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <Field label="Preco pago" htmlFor={id('price')}>
+              <Input
+                id={id('price')}
+                name="purchasePrice"
+                inputMode="decimal"
+                value={v.purchasePrice}
+                onChange={(e) => set('purchasePrice', e.target.value)}
+                placeholder="1,69"
+                required
+              />
+            </Field>
+            <Field
+              label="Embalagem"
+              htmlFor={id('qty')}
+              hint="O tamanho que se compra."
+            >
+              <Input
+                id={id('qty')}
+                name="purchaseQty"
+                inputMode="decimal"
+                value={v.purchaseQty}
+                onChange={(e) => set('purchaseQty', e.target.value)}
+                placeholder="1"
+                required
+              />
+            </Field>
+            <Field label="Unidade" htmlFor={id('packunit')}>
+              <Select
+                id={id('packunit')}
+                name="purchaseUnit"
+                value={v.purchaseUnit}
+                onChange={(e) => set('purchaseUnit', e.target.value as PurchaseUnit)}
+              >
+                {UNIDADES[fam].map((u) => (
+                  <option key={u.value} value={u.value}>
+                    {u.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-md border bg-muted/40 p-3">
         <p className="text-sm font-medium">Perda entre o que se compra e o que se usa</p>
@@ -217,7 +313,10 @@ export function IngredientForm({
                 setPerda(e.target.value);
                 const p = parse(e.target.value);
                 if (p >= 0 && p < 100) {
-                  set('correctionFactor', fmt(p > 0 ? fcFromWastePercent(p / 100) : 1, 4));
+                  set(
+                    'correctionFactor',
+                    fmt(p > 0 ? fcFromWastePercent(p / 100) : 1, 4),
+                  );
                 }
               }}
             />
@@ -230,7 +329,6 @@ export function IngredientForm({
           >
             <Input
               id={id('fc')}
-              // Este e o campo que o servidor le.
               name="correctionFactor"
               inputMode="decimal"
               value={v.correctionFactor}
