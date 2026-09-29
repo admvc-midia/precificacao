@@ -23,7 +23,7 @@ import { revalidatePath } from 'next/cache';
 
 import { prisma } from '@/lib/db';
 import { buildCostContext, num } from '@/lib/mappers';
-import { parseDecimal } from '@/lib/money';
+import { parseQty } from '@/lib/money';
 import { explodeIngredients } from '@/lib/pricing/cost';
 import { buildPurchaseList } from '@/lib/pricing/purchase';
 import {
@@ -255,7 +255,7 @@ export async function recordAdjustment(
       throw new Error('Tipo de movimento invalido.');
     }
 
-    const qty = parseDecimal(String(form.get('qty') ?? ''));
+    const qty = parseQty(String(form.get('qty') ?? ''));
     if (qty <= 0) throw new Error('A quantidade tem de ser maior que zero.');
 
     const unit = PURCHASE_UNIT.parse(String(form.get('unit') ?? 'G'));
@@ -309,7 +309,7 @@ export async function countInventory(
     const ingredientId = String(form.get('ingredientId') ?? '');
     if (!ingredientId) throw new Error('Insumo nao informado.');
 
-    const contado = parseDecimal(String(form.get('counted') ?? ''));
+    const contado = parseQty(String(form.get('counted') ?? ''));
     if (contado < 0) throw new Error('A contagem nao pode ser negativa.');
 
     const unit = PURCHASE_UNIT.parse(String(form.get('unit') ?? 'G'));

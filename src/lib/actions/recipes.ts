@@ -8,9 +8,10 @@
 import { revalidatePath } from 'next/cache';
 
 import { prisma } from '@/lib/db';
-import { parseDecimal, parsePercent } from '@/lib/money';
+import { parseDecimal, parsePercent, parseQty } from '@/lib/money';
 import { buildCostContext } from '@/lib/mappers';
 import { computeRecipeCost } from '@/lib/pricing/cost';
+import { fromDisplay } from '@/lib/units';
 import {
   BASE_UNIT,
   errorMessage,
@@ -31,13 +32,18 @@ export async function saveRecipe(
     if (!name) throw new Error('O nome da ficha e obrigatorio.');
 
     const kind = RECIPE_KIND.parse(String(form.get('kind') ?? 'PRODUCT'));
-    const yieldQty = parseDecimal(String(form.get('yieldQty') ?? '1'));
-    if (yieldQty <= 0) throw new Error('O rendimento tem de ser maior que zero.');
 
-    // Um produto final rende porcoes; uma base rende peso ou volume.
+    // Um produto final rende porcoes; uma base rende peso.
     const yieldUnit = kind === 'PRODUCT'
       ? 'UN'
       : BASE_UNIT.parse(String(form.get('yieldUnit') ?? 'G'));
+
+    // O campo pede kg; a coluna guarda gramas, como todas as quantidades.
+    const yieldQty = fromDisplay(
+      parseQty(String(form.get('yieldQty') ?? '1')),
+      yieldUnit,
+    );
+    if (yieldQty <= 0) throw new Error('O rendimento tem de ser maior que zero.');
 
     const payload = {
       name,
@@ -106,7 +112,7 @@ export async function addRecipeItem(
     if (!recipeId) throw new Error('Ficha nao informada.');
 
     const ref = String(form.get('ref') ?? '');
-    const qty = parseDecimal(String(form.get('qty') ?? ''));
+    const qty = parseQty(String(form.get('qty') ?? ''));
     const unit = PURCHASE_UNIT.parse(String(form.get('unit') ?? 'G'));
     if (qty <= 0) throw new Error('A quantidade tem de ser maior que zero.');
 
@@ -167,7 +173,7 @@ export async function updateRecipeItem(
   try {
     if (!id) throw new Error('Linha nao informada.');
 
-    const qty = parseDecimal(String(form.get('qty') ?? ''));
+    const qty = parseQty(String(form.get('qty') ?? ''));
     const unit = PURCHASE_UNIT.parse(String(form.get('unit') ?? 'G'));
     if (qty <= 0) throw new Error('A quantidade tem de ser maior que zero.');
 

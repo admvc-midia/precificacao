@@ -22,7 +22,15 @@ import {
 } from '@/lib/pricing/cost';
 import { getIngredients, getSettings, getSuppliers } from '@/lib/queries';
 import { rankOffers } from '@/lib/pricing/offers';
-import { BASE_UNIT_LABEL, compatibleUnits, UNIT_LABEL } from '@/lib/units';
+import {
+  displayFactor,
+  displayQtyValue,
+  displayUnitOf,
+  DISPLAY_UNIT_LABEL,
+  formatCostPerUnit,
+  toBase,
+  UNIT_LABEL,
+} from '@/lib/units';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,9 +58,11 @@ export default async function InsumosPage() {
     const raw = costPerBaseUnit(input);
     const real = effectiveCostPerBaseUnit(input);
     const waste = wastePercentFromFc(input.correctionFactor);
-    const unit = BASE_UNIT_LABEL[row.baseUnit];
+    const unit = DISPLAY_UNIT_LABEL[row.baseUnit];
 
-    const compra = `${formatMoney(num(row.purchasePrice), currency)} / ${num(
+    // "1,69 € ÷ 1 kg": o sinal de divisao explica de onde vem o preco por kg
+    // ao lado, sem precisar de legenda nenhuma.
+    const compra = `${formatMoney(num(row.purchasePrice), currency)} ÷ ${num(
       row.purchaseQty,
     )} ${UNIT_LABEL[row.purchaseUnit]}`;
 
@@ -62,6 +72,10 @@ export default async function InsumosPage() {
       ) : (
         <span key="p" className="text-muted-foreground">—</span>
       );
+
+    // `rankOffers` devolve so o que precisa para ordenar; o resto da linha
+    // (a referencia do fornecedor) vem daqui.
+    const ofertaPorId = new Map(row.offers.map((o) => [o.id, o]));
 
     // Precos de outros fornecedores, ja ordenados do mais barato ao mais caro.
     const ranked = rankOffers(
@@ -79,8 +93,21 @@ export default async function InsumosPage() {
     const priceRows: PriceRow[] = ranked.map((o) => ({
       id: o.id,
       supplierName: o.supplierName,
-      packLabel: `${formatMoney(o.purchasePrice, currency)} / ${o.purchaseQty} ${UNIT_LABEL[o.purchaseUnit]}`,
-      unitCostLabel: `${formatUnitCost(o.unitCost, currency)}/${unit}`,
+      supplierId: o.supplierId,
+      unitCostLabel: formatCostPerUnit(o.unitCost, row.baseUnit, currency),
+      packLabel: `${formatMoney(o.purchasePrice, currency)} ÷ ${o.purchaseQty} ${
+        UNIT_LABEL[o.purchaseUnit]
+      }`,
+      // Em bruto, para o formulario de alteracao voltar a mostrar o que la
+      // esta. A embalagem vai na unidade de exibicao, como o campo espera.
+      form: {
+        purchasePrice: String(o.purchasePrice),
+        purchaseQty: displayQtyValue(
+          toBase(o.purchaseQty, o.purchaseUnit),
+          row.baseUnit,
+        ),
+        sku: ofertaPorId.get(o.id)?.sku ?? '',
+      },
       cheapest: o.cheapest,
       inUse: o.inUse,
       premiumLabel: o.premium > 0.0001
@@ -97,10 +124,7 @@ export default async function InsumosPage() {
         <IngredientDialog
           ingredient={toIngredientFormValues(row)}
           suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
-          unitOptions={compatibleUnits(row.baseUnit).map((u) => ({
-            value: u,
-            label: UNIT_LABEL[u],
-          }))}
+          unit={{ value: displayUnitOf(row.baseUnit), label: unit }}
           prices={priceRows}
           saveIngredient={saveIngredient}
           saveOffer={saveOffer}
@@ -133,17 +157,22 @@ export default async function InsumosPage() {
           {compra}
         </span>,
         <span key="b" className="text-muted-foreground">
-          {formatUnitCost(raw, currency)}/{unit}
+          {formatCostPerUnit(raw, row.baseUnit, currency)}
         </span>,
         perdaBadge,
         <span key="r" className="font-medium">
-          {formatUnitCost(real, currency)}/{unit}
+          {formatCostPerUnit(real, row.baseUnit, currency)}
         </span>,
       ],
       title: row.name,
       lead: (
-        <span className="font-medium">
-          {formatUnitCost(real, currency)}/{unit}
+        <span className="block text-right">
+          <span className="block text-lg font-semibold tabular-nums">
+            {formatUnitCost(real * displayFactor(row.baseUnit), currency)}
+          </span>
+          <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
+            por {unit}
+          </span>
         </span>
       ),
       meta: (
@@ -221,7 +250,7 @@ function NovoInsumo({ suppliers }: { suppliers: SupplierRow[] }) {
     <FormDialog
       action={saveIngredient}
       title="Novo insumo"
-      description="Informe o que pagou e o tamanho da embalagem: o custo por grama sai sozinho."
+      description="Diga o que pagou e o tamanho da embalagem. O preco por kg ou por unidade sai sozinho."
       submitLabel="Guardar insumo"
       trigger={
         <Button className="flex-1 sm:flex-none">

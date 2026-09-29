@@ -12,8 +12,8 @@ import { z } from 'zod';
 
 import { prisma } from '@/lib/db';
 import { num } from '@/lib/mappers';
-import { parseDecimal } from '@/lib/money';
-import { baseUnitOf, toBase, type PurchaseUnit } from '@/lib/units';
+import { parseDecimal, parseQty } from '@/lib/money';
+import { baseUnitOf, fromDisplay, toBase, type PurchaseUnit } from '@/lib/units';
 import { lerPreco } from './offers';
 import { findSimilarNames } from '@/lib/pricing/offers';
 import {
@@ -41,7 +41,7 @@ const ingredientSchema = z.object({
 /**
  * A perda chega como fator de correcao. O formulario mostra tambem a
  * percentagem, mas os dois campos estao sincronizados no cliente e e o FC que
- * e enviado — ver `components/forms/waste-input.tsx`.
+ * e enviado.
  */
 function readCorrectionFactor(form: FormData): number {
   const fc = parseDecimal(String(form.get('correctionFactor') ?? '1'));
@@ -51,13 +51,24 @@ function readCorrectionFactor(form: FormData): number {
 }
 
 function readIngredient(form: FormData) {
+  const purchaseUnit = String(form.get('purchaseUnit') ?? 'UN');
+
+  // O formulario fala em kg e unidades; a base de dados guarda em gramas. Sem
+  // esta conversao, escrever 2 a pensar em 2 kg guardava 2 g — e guardava-o em
+  // silencio, porque 2 g e um saldo perfeitamente possivel.
+  const base = baseUnitOf(purchaseUnit as PurchaseUnit);
+  const stockBase = fromDisplay(
+    parseQty(String(form.get('stockBase') ?? '0')),
+    base,
+  );
+
   return ingredientSchema.parse({
     name: String(form.get('name') ?? ''),
     category: String(form.get('category') ?? 'FOOD'),
     supplierId: String(form.get('supplierId') ?? ''),
-    purchaseUnit: String(form.get('purchaseUnit') ?? 'UN'),
+    purchaseUnit,
     correctionFactor: readCorrectionFactor(form),
-    stockBase: parseDecimal(String(form.get('stockBase') ?? '0')),
+    stockBase,
     sku: String(form.get('sku') ?? ''),
     notes: String(form.get('notes') ?? ''),
   });
@@ -220,7 +231,7 @@ export async function applyQuote(
   try {
     const ingredientId = String(form.get('ingredientId') ?? '');
     const price = parseDecimal(String(form.get('price') ?? ''));
-    const qty = parseDecimal(String(form.get('qty') ?? ''));
+    const qty = parseQty(String(form.get('qty') ?? ''));
     const unit = PURCHASE_UNIT.parse(String(form.get('unit') ?? 'UN'));
     const source = QUOTE_SOURCE.parse(String(form.get('source') ?? 'MANUAL'));
 

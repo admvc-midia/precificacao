@@ -7,9 +7,9 @@ import { RecipeFields } from '@/components/forms/fields';
 import { Alert } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { deleteRecipe, saveRecipe } from '@/lib/actions/recipes';
-import { formatMoney, formatUnitCost } from '@/lib/money';
+import { formatMoney } from '@/lib/money';
 import { getCostedRecipes, getIngredients } from '@/lib/queries';
-import { BASE_UNIT_LABEL } from '@/lib/units';
+import { formatBaseQty, formatCostPerUnit } from '@/lib/units';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,14 +25,12 @@ export default async function FichasPage() {
 
   const build = (r: Costed, perUnit: boolean): ListRow => {
     const rendimento = r.cost
-      ? `${r.cost.yieldQty} ${BASE_UNIT_LABEL[r.cost.yieldUnit]}`
+      ? formatBaseQty(r.cost.yieldQty, r.cost.yieldUnit, currency.locale)
       : '—';
 
     const custo = r.cost
       ? perUnit
-        ? `${formatUnitCost(r.cost.foodCostPerUnit, currency)}/${
-            BASE_UNIT_LABEL[r.cost.yieldUnit]
-          }`
+        ? formatCostPerUnit(r.cost.foodCostPerUnit, r.cost.yieldUnit, currency)
         : formatMoney(r.cost.productCost, currency)
       : '—';
 

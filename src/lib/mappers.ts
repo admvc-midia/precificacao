@@ -23,7 +23,7 @@ import type {
   IngredientInput,
   RecipeInput,
 } from '@/lib/pricing/types';
-import { baseUnitOf } from '@/lib/units';
+import { baseUnitOf, displayQtyValue } from '@/lib/units';
 
 /** Decimal do Prisma (ou qualquer coisa numerica) para `number`. */
 export function num(value: unknown): number {
@@ -110,7 +110,8 @@ export function toIngredientFormValues(row: IngredientRow) {
     purchaseQty: dec(row.purchaseQty),
     purchaseUnit: row.purchaseUnit,
     correctionFactor: dec(row.correctionFactor),
-    stockBase: dec(row.stockBase),
+    // O formulario mostra kg; a coluna guarda gramas.
+    stockBase: displayQtyValue(num(row.stockBase), row.baseUnit),
     notes: row.notes ?? '',
   };
 }

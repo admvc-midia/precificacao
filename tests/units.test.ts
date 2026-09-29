@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatMoney, formatPercent, parseDecimal, parsePercent } from '@/lib/money';
+import {
+  formatMoney,
+  formatPercent,
+  parseDecimal,
+  parsePercent,
+  parseQty,
+} from '@/lib/money';
 import {
   compareQuote,
   parseIngredientCsv,
@@ -9,10 +15,14 @@ import {
 } from '@/lib/providers';
 import {
   baseUnitOf,
-  compatibleUnits,
+  displayQtyValue,
+  displayUnitOf,
   formatBaseQty,
+  formatCostPerUnit,
   fromBase,
+  fromDisplay,
   toBase,
+  toDisplay,
   UnitMismatchError,
 } from '@/lib/units';
 
@@ -33,8 +43,9 @@ describe('conversao de unidades', () => {
     expect(baseUnitOf('KG')).toBe('G');
     expect(baseUnitOf('ML')).toBe('ML');
     expect(baseUnitOf('UN')).toBe('UN');
-    expect(compatibleUnits('G')).toEqual(['KG', 'G']);
-    expect(compatibleUnits('ML')).toEqual(['L', 'ML']);
+    expect(displayUnitOf('G')).toBe('KG');
+    expect(displayUnitOf('ML')).toBe('L');
+    expect(displayUnitOf('UN')).toBe('UN');
   });
 
   it('recusa misturar familias', () => {
@@ -43,10 +54,67 @@ describe('conversao de unidades', () => {
     expect(() => toBase(200, 'G', 'G')).not.toThrow();
   });
 
-  it('escolhe a escala legivel na formatacao', () => {
-    expect(formatBaseQty(1500, 'G')).toContain('kg');
-    expect(formatBaseQty(250, 'G')).toContain('g');
-    expect(formatBaseQty(2000, 'ML')).toContain('L');
+  it('mostra sempre na unidade de exibicao, nunca em gramas', () => {
+    expect(formatBaseQty(1500, 'G')).toBe('1,5 kg');
+    // O que antes escalava para "250 g" — a lista mudava de unidade conforme
+    // o valor de cada linha, e duas linhas deixavam de se comparar.
+    expect(formatBaseQty(250, 'G')).toBe('0,25 kg');
+    expect(formatBaseQty(2000, 'ML')).toBe('2 L');
+    expect(formatBaseQty(3, 'UN')).toBe('3 un');
+  });
+
+  it('nao arredonda uma pitada para zero', () => {
+    // Meio grama de corante ainda tem de aparecer.
+    expect(formatBaseQty(0.5, 'G')).toBe('0,0005 kg');
+    expect(formatBaseQty(15, 'G')).toBe('0,015 kg');
+  });
+
+  it('converte nos dois sentidos entre a base e o que se ve', () => {
+    expect(toDisplay(1500, 'G')).toBeCloseTo(1.5, 10);
+    expect(fromDisplay(0.2, 'G')).toBeCloseTo(200, 10);
+    // Os contaveis nao se convertem: 3 unidades sao 3 unidades.
+    expect(toDisplay(3, 'UN')).toBe(3);
+    expect(fromDisplay(3, 'UN')).toBe(3);
+  });
+
+  it('a ida e volta pelo campo de texto nao perde o valor', () => {
+    for (const g of [15, 200, 1500, 0.5]) {
+      expect(fromDisplay(Number(displayQtyValue(g, 'G')), 'G')).toBeCloseTo(g, 6);
+    }
+  });
+});
+
+describe('custo por unidade', () => {
+  const eur = { currency: 'EUR', locale: 'pt-PT' };
+
+  // O `Intl` separa o numero do simbolo com espaco nao-quebravel, e a versao
+  // do ICU decide qual. Comparar com um espaco normal partia o teste sem nada
+  // ter mudado no codigo.
+  const limpo = (s: string) => s.replace(/[  ]/g, ' ');
+
+  it('mostra por kg, nunca por grama', () => {
+    // 1,69 EUR/kg guarda-se como 0,00169 por grama.
+    expect(limpo(formatCostPerUnit(0.00169, 'G', eur))).toBe('1,69 €/kg');
+    expect(limpo(formatCostPerUnit(0.0025, 'G', eur))).toBe('2,50 €/kg');
+  });
+
+  it('nao multiplica os contaveis', () => {
+    // Um guardanapo a 1,50 cada cem: 0,015 por unidade, e nao 15.
+    expect(limpo(formatCostPerUnit(0.015, 'UN', eur))).toBe('0,015 €/un');
+  });
+
+  it('cadastrar em g ou em kg da o mesmo custo por kg', () => {
+    // 1,69 por um pacote de 1 kg, contra 1,69 por um pacote de 1000 g.
+    const porKg = 1.69 / toBase(1, 'KG');
+    const porG = 1.69 / toBase(1000, 'G');
+    expect(porKg).toBeCloseTo(porG, 12);
+    expect(formatCostPerUnit(porKg, 'G', eur)).toBe(
+      formatCostPerUnit(porG, 'G', eur),
+    );
+  });
+
+  it('nao explode com valores nao finitos', () => {
+    expect(formatCostPerUnit(Number.NaN, 'G', eur)).toBe('—');
   });
 });
 
@@ -67,12 +135,39 @@ describe('leitura de numeros digitados', () => {
     expect(parseDecimal('1.234')).toBe(1234);
     // Tres casas depois do ponto so podem ser milhar; duas sao decimais.
     expect(parseDecimal('1.23')).toBeCloseTo(1.23, 10);
+    expect(parseDecimal('1.234.567')).toBe(1234567);
+    // Virgula a agrupar e ponto a decidir, como em ingles.
+    expect(parseDecimal('1,234.56')).toBeCloseTo(1234.56, 10);
+  });
+
+  it('um grupo de milhar nunca comeca por zero', () => {
+    // Isto aconteceu a serio: 0,200 kg de fermento entraram como 200 kg, e o
+    // insumo passou a custar 0,01 EUR/kg em vez de 10,00.
+    expect(parseDecimal('0.200')).toBeCloseTo(0.2, 10);
+    expect(parseDecimal('0.395')).toBeCloseTo(0.395, 10);
+    expect(parseDecimal('0.360')).toBeCloseTo(0.36, 10);
+    expect(parseDecimal('0,200')).toBeCloseTo(0.2, 10);
+    // E os casos que ja funcionavam continuam iguais.
+    expect(parseDecimal('0.2')).toBeCloseTo(0.2, 10);
+    expect(parseDecimal('0.25')).toBeCloseTo(0.25, 10);
+  });
+
+  it('numa quantidade o ponto e sempre decimal', () => {
+    // Um quilo e meio, nao mil e quinhentos quilos. Ninguem escreve o tamanho
+    // de uma embalagem com separador de milhar.
+    expect(parseQty('1.500')).toBeCloseTo(1.5, 10);
+    expect(parseQty('0.200')).toBeCloseTo(0.2, 10);
+    expect(parseQty('12,5')).toBeCloseTo(12.5, 10);
+    // Em dinheiro a leitura contraria e que faz sentido.
+    expect(parseDecimal('1.500')).toBe(1500);
   });
 
   it('devolve zero para entrada vazia ou invalida', () => {
     expect(parseDecimal('')).toBe(0);
     expect(parseDecimal(null)).toBe(0);
     expect(parseDecimal('abc')).toBe(0);
+    expect(parseQty('')).toBe(0);
+    expect(parseQty(null)).toBe(0);
   });
 
   it('le percentagem como fracao', () => {
@@ -215,6 +310,15 @@ describe('importacao de insumos em CSV', () => {
 
   it('exige as colunas obrigatorias', () => {
     expect(() => parseIngredientCsv('nome;preco\nSal;1')).toThrow(/quantidade/i);
+  });
+
+  it('le 0.200 como dois decimos, nao como duzentos', () => {
+    // O mesmo engano do formulario: um CSV com a embalagem em "0.200" dava
+    // 200 kg e o insumo ficava mil vezes mais barato.
+    const { rows } = parseIngredientCsv(
+      'nome;preco;quantidade;unidade\nFermento;2;0.200;KG',
+    );
+    expect(rows[0].purchaseQty).toBeCloseTo(0.2, 10);
   });
 
   it('ficheiro vazio nao rebenta', () => {

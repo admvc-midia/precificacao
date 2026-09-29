@@ -183,3 +183,23 @@ promocional; para corrigir a passada, não há caminho automático — anote no 
 Em **Estoque**, use o botão de contagem ao lado do insumo. A app regista a **diferença**
 como um movimento de inventário — e é essa diferença que lhe interessa ver, não o número
 corrigido.
+
+**Em que unidade escrevo as quantidades?**
+Em **quilos** ou em **unidades**, sempre — não há gramas em lado nenhum. Uma lata de
+200 g escreve-se `0,2`, e 15 g de fermento escrevem-se `0,015`. O campo já mostra `kg`
+ou `un` do lado direito, por isso não há nada a escolher.
+
+Parece estranho no início, mas evita o engano que dá mais prejuízo: escrever `200`
+num campo que está em quilos. Duzentos quilos de fermento por 2 € passam despercebidos
+quando o custo aparece como 0,00001 por grama; em quilos lê-se `0,01 €/kg` e salta à
+vista.
+
+**Como cadastro um líquido — óleo, leite, xarope?**
+A peso, como tudo o resto. A app só mede peso e unidades: não há litros. É de propósito.
+Converter litros em quilos exige saber a densidade — 1 L de óleo são 920 g, de mel são
+1400 g — e a app não tem como adivinhar isso sem errar o custo. Ponha a embalagem na
+balança uma vez e escreva o peso.
+
+**A ficha mostra os custos, e eu só quero ver a receita.**
+Há um botão **Ver custos** por cima da tabela. Os custos começam escondidos, e a app
+lembra-se da sua escolha neste telemóvel ou computador.

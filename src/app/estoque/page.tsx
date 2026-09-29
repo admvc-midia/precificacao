@@ -14,14 +14,20 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Field, Select } from '@/components/ui/form-controls';
+import { QtyInput } from '@/components/ui/qty-input';
 import { Input, Textarea } from '@/components/ui/input';
 import { ActionForm, SubmitButton } from '@/components/action-form';
 import { countInventory, recordAdjustment, setCostBasis } from '@/lib/actions/stock';
 import { num } from '@/lib/mappers';
-import { formatMoney, formatUnitCost } from '@/lib/money';
+import { formatMoney } from '@/lib/money';
 import { MOVEMENT_LABEL, type MovementKind } from '@/lib/pricing/stock';
 import { getMovements, getSettings, getStockLines } from '@/lib/queries';
-import { BASE_UNIT_LABEL, compatibleUnits, formatBaseQty, UNIT_LABEL } from '@/lib/units';
+import {
+  displayUnitOf,
+  DISPLAY_UNIT_LABEL,
+  formatBaseQty,
+  formatCostPerUnit,
+} from '@/lib/units';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,7 +70,7 @@ export default async function EstoquePage() {
     const qty = num(row.stockBase);
     const medio = num(row.avgCostBase);
     const valor = qty * medio;
-    const unidade = BASE_UNIT_LABEL[row.baseUnit];
+    const unidade = DISPLAY_UNIT_LABEL[row.baseUnit];
 
     const saldo = (
       <span key="s" className={qty < 0 ? 'font-medium text-destructive' : 'font-medium'}>
@@ -88,7 +94,7 @@ export default async function EstoquePage() {
         </div>,
         saldo,
         <span key="m" className="text-muted-foreground">
-          {medio > 0 ? `${formatUnitCost(medio, currency)}/${unidade}` : '—'}
+          {medio > 0 ? formatCostPerUnit(medio, row.baseUnit, currency) : '—'}
         </span>,
         <span key="v" className="font-medium">
           {formatMoney(valor, currency)}
@@ -102,7 +108,7 @@ export default async function EstoquePage() {
       meta: (
         <>
           {formatMoney(valor, currency)}
-          {medio > 0 ? ` · ${formatUnitCost(medio, currency)}/${unidade}` : ''} ·{' '}
+          {medio > 0 ? ` · ${formatCostPerUnit(medio, row.baseUnit, currency)}` : ''} ·{' '}
           {ultimo}
         </>
       ),
@@ -125,20 +131,16 @@ export default async function EstoquePage() {
               A aplicacao diz{' '}
               <strong>{formatBaseQty(qty, row.baseUnit, currency.locale)}</strong>.
             </p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Contei" htmlFor={`c-${row.id}`}>
-                <Input id={`c-${row.id}`} name="counted" inputMode="decimal" required />
-              </Field>
-              <Field label="Unidade" htmlFor={`cu-${row.id}`}>
-                <Select id={`cu-${row.id}`} name="unit" defaultValue={row.baseUnit}>
-                  {compatibleUnits(row.baseUnit).map((u) => (
-                    <option key={u} value={u}>
-                      {UNIT_LABEL[u]}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
+            <Field label="Contei" htmlFor={`c-${row.id}`}>
+              <QtyInput
+                id={`c-${row.id}`}
+                name="counted"
+                unitLabel={unidade}
+                unitName="unit"
+                unitValue={displayUnitOf(row.baseUnit)}
+                required
+              />
+            </Field>
             <Field label="Nota" htmlFor={`cn-${row.id}`}>
               <Input id={`cn-${row.id}`} name="note" placeholder="Inventario de fim de mes" />
             </Field>
@@ -163,18 +165,16 @@ export default async function EstoquePage() {
                 <option value="ADJUSTMENT">Ajuste manual</option>
               </Select>
             </Field>
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Quantidade" htmlFor={`q-${row.id}`}>
-                <Input id={`q-${row.id}`} name="qty" inputMode="decimal" required />
-              </Field>
-              <Field label="Unidade" htmlFor={`u-${row.id}`}>
-                <Select id={`u-${row.id}`} name="unit" defaultValue={row.baseUnit}>
-                  {compatibleUnits(row.baseUnit).map((u) => (
-                    <option key={u} value={u}>
-                      {UNIT_LABEL[u]}
-                    </option>
-                  ))}
-                </Select>
+                <QtyInput
+                  id={`q-${row.id}`}
+                  name="qty"
+                  unitLabel={unidade}
+                  unitName="unit"
+                  unitValue={displayUnitOf(row.baseUnit)}
+                  required
+                />
               </Field>
               <Field
                 label="Sentido"

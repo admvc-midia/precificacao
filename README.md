@@ -256,6 +256,15 @@ tools/verify_pricing.py   segunda derivação das fórmulas, em Python
 **Uma ficha com erro não derruba a listagem.** Um ciclo ou uma unidade incompatível aparece marcada naquela linha; as outras continuam a mostrar o seu custo.
 
 **A embalagem de transporte não entra no custo do produto de balcão.** Ela só é cobrada nos canais marcados com `usesDeliveryPackaging`.
-#   p r e c i f i c a c a o 
- 
- 
+
+**Tudo se mede a peso ou a unidade — não há litros.** O formulário de insumo oferece duas famílias: peso (kg/g) e unidades. Os líquidos vão à balança. A razão é que converter volume em peso exige a densidade — 1 L de óleo são 920 g, de mel são 1400 g — e a app não tem como a saber; adivinhar 1,0 dava um custo errado em silêncio, que é a pior espécie de erro numa app de custos. `src/lib/units.ts` continua a converter L e ml, porque um CSV de fornecedor pode trazê-los e internamente funcionam: o que desapareceu foi a opção no ecrã.
+
+**Limpar os dados é um script com ensaio, não um botão.** `prisma/reset-dados.mts` esvazia insumos, fichas, produções, estoque e vendas, e **mantém** configurações e canais. Sem `--apply` não apaga nada, só diz o que apagaria. Apaga tabela a tabela pelo Prisma, na ordem de filho para pai, e nunca com `TRUNCATE` ou `--accept-data-loss`: este Postgres é partilhado com outro projeto, que vive no schema `public`. O script conta as linhas desse outro projeto no fim, para o provar. Há também `prisma/dump-dados.mts`, que grava tudo em JSON antes.
+
+**Uma unidade base para calcular, outra para mostrar.** A base de dados guarda tudo em gramas e unidades, porque um insumo a 1,69 EUR/kg custa 0,00169 por grama e arredondar isso a cada receita acumula erro. O ecrã nunca mostra gramas: quantidades leem-se `0,015 kg`, custos leem-se `1,69 EUR/kg`. A conversão vive toda em `src/lib/units.ts` (`toDisplay`/`fromDisplay`), e os formulários convertem nas duas pontas. Nada escala automaticamente conforme o valor — uma lista onde uma linha diz `900 g` e a de baixo diz `1,2 kg` não se compara de relance, que é para o que a lista serve.
+
+**Os menus de unidade desapareceram.** Sobrava uma opção por família, e um menu de uma opção é um clique que não decide nada — pior, sugere que havia escolha. O `QtyInput` põe `kg` ou `un` dentro do campo e submete a unidade num campo escondido, para as actions do servidor não terem de adivinhar a escala.
+
+**Os custos da ficha técnica começam escondidos.** Uma ficha serve a cozinha, que quer ler o que leva, e o escritório, que quer ver para onde vai o dinheiro. Um botão alterna, e a escolha guarda-se no browser. O total do lote esconde-se com as parcelas: uma soma sozinha só levanta a pergunta de onde vem.
+
+**O ponto decimal e ambiguo, e ja custou dinheiro.** Em pt-PT `1.234` sao mil duzentos e trinta e quatro; no teclado do telemovel `0.200` sao dois decimos. A regra antiga — "ponto seguido de tres digitos e milhar" — lia `0.200` como 200, e foi assim que 0,200 kg de fermento entraram na base como 200 kg, com o insumo a custar 0,01 EUR/kg em vez de 10,00. A regra nova acrescenta o que torna o caso inequivoco: **um grupo de milhar nunca comeca por zero**. Alem disso, ha agora duas funcoes: `parseDecimal` para dinheiro, onde o agrupamento faz sentido, e `parseQty` para quantidades, onde o ponto e sempre decimal — o tamanho de uma embalagem nunca se escreve com separador de milhar. O leitor de CSV usa as mesmas regras, porque sofria o mesmo engano.

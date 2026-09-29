@@ -12,7 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Field, Select } from '@/components/ui/form-controls';
+import { Field } from '@/components/ui/form-controls';
 import { Input } from '@/components/ui/input';
 import { saveIngredient } from '@/lib/actions/ingredients';
 import {
@@ -22,20 +22,23 @@ import {
   updateRecipeItem,
 } from '@/lib/actions/recipes';
 import { CompositionTable } from '@/components/composition-table';
+import { QtyInput } from '@/components/ui/qty-input';
 import { RecipeFields } from '@/components/forms/fields';
 import { IngredientForm } from '@/components/forms/ingredient-form';
 import { RecipeItemForm } from '@/components/forms/recipe-item-form';
 import { buildCostContext } from '@/lib/mappers';
-import { formatMoney, formatUnitCost } from '@/lib/money';
+import { formatMoney } from '@/lib/money';
 import { computeRecipeCost } from '@/lib/pricing/cost';
 import type { RecipeCost } from '@/lib/pricing/types';
 import { getPricingData, getRecipeDetail, getSuppliers } from '@/lib/queries';
 import {
-  BASE_UNIT_LABEL,
-  compatibleUnits,
-  formatBaseQty,
-  UNIT_LABEL,
   baseUnitOf,
+  displayQtyValue,
+  displayUnitOf,
+  DISPLAY_UNIT_LABEL,
+  formatBaseQty,
+  formatCostPerUnit,
+  toBase,
 } from '@/lib/units';
 
 export const dynamic = 'force-dynamic';
@@ -65,7 +68,7 @@ export default async function FichaPage({
   }
 
   const isProduct = recipe.kind === 'PRODUCT';
-  const yieldLabel = BASE_UNIT_LABEL[recipe.yieldUnit];
+  const yieldLabel = DISPLAY_UNIT_LABEL[recipe.yieldUnit];
 
   // Opcoes do seletor: insumos alimenticios + outras fichas (nunca esta).
   const foodOptions = data.ingredientRows.filter((i) => i.category === 'FOOD');
@@ -101,7 +104,7 @@ export default async function FichaPage({
           </FormDialog>
         </div>
         <p className="text-sm text-muted-foreground">
-          Rende {Number(recipe.yieldQty)} {yieldLabel}
+          Rende {formatBaseQty(Number(recipe.yieldQty), recipe.yieldUnit, currency.locale)}
           {recipe.description ? ` · ${recipe.description}` : ''}
         </p>
       </header>
@@ -144,12 +147,13 @@ export default async function FichaPage({
                         </span>
                       </span>
                     ),
-                    qtyAsEntered: `${Number(item.qty)} ${UNIT_LABEL[item.unit]}`,
-                    qtyScaled: line
-                      ? formatBaseQty(line.qtyBase, base, currency.locale)
-                      : `${Number(item.qty)} ${UNIT_LABEL[item.unit]}`,
+                    qty: formatBaseQty(
+                      line ? line.qtyBase : toBase(Number(item.qty), item.unit),
+                      base,
+                      currency.locale,
+                    ),
                     unitCost: line
-                      ? `${formatUnitCost(line.unitCost, currency)}/${BASE_UNIT_LABEL[base]}`
+                      ? formatCostPerUnit(line.unitCost, base, currency)
                       : '—',
                     cost: line ? formatMoney(line.cost, currency) : '—',
                     actions: (
@@ -157,34 +161,24 @@ export default async function FichaPage({
                         <FormDialog
                           action={updateRecipeItem}
                           title={`Alterar ${nome}`}
-                          description={`Quantidade usada no lote inteiro desta ficha (rende ${Number(recipe.yieldQty)} ${yieldLabel}).`}
+                          description={`Quantidade usada no lote inteiro desta ficha, nao na porcao (o lote rende ${formatBaseQty(Number(recipe.yieldQty), recipe.yieldUnit, currency.locale)}).`}
                           submitLabel="Guardar"
                         >
                           <input type="hidden" name="id" value={item.id} />
-                          <div className="grid gap-4 sm:grid-cols-2">
-                            <Field label="Quantidade" htmlFor={`q-${item.id}`}>
-                              <Input
-                                id={`q-${item.id}`}
-                                name="qty"
-                                inputMode="decimal"
-                                defaultValue={String(Number(item.qty))}
-                                required
-                              />
-                            </Field>
-                            <Field label="Unidade" htmlFor={`u-${item.id}`}>
-                              <Select
-                                id={`u-${item.id}`}
-                                name="unit"
-                                defaultValue={item.unit}
-                              >
-                                {compatibleUnits(base).map((u) => (
-                                  <option key={u} value={u}>
-                                    {UNIT_LABEL[u]}
-                                  </option>
-                                ))}
-                              </Select>
-                            </Field>
-                          </div>
+                          <Field label="Quantidade" htmlFor={`q-${item.id}`}>
+                            <QtyInput
+                              id={`q-${item.id}`}
+                              name="qty"
+                              unitLabel={DISPLAY_UNIT_LABEL[base]}
+                              unitName="unit"
+                              unitValue={displayUnitOf(base)}
+                              defaultValue={displayQtyValue(
+                                toBase(Number(item.qty), item.unit),
+                                base,
+                              )}
+                              required
+                            />
+                          </Field>
                           <Field label="Notas" htmlFor={`n-${item.id}`}>
                             <Input
                               id={`n-${item.id}`}
@@ -204,18 +198,13 @@ export default async function FichaPage({
                     ),
                   };
                 })}
-                footer={
-                  cost ? (
-                    <tr>
-                      <td className="px-3 py-2.5">Custo do lote</td>
-                      <td />
-                      <td />
-                      <td className="px-3 py-2.5 text-right tabular-nums font-medium">
-                        {formatMoney(cost.batchFoodCost, currency)}
-                      </td>
-                      <td />
-                    </tr>
-                  ) : null
+                total={
+                  cost
+                    ? {
+                        label: 'Custo do lote',
+                        value: formatMoney(cost.batchFoodCost, currency),
+                      }
+                    : undefined
                 }
               />
             )}
@@ -234,7 +223,7 @@ export default async function FichaPage({
                   value={
                     isProduct
                       ? formatMoney(cost.foodCostPerUnit, currency)
-                      : `${formatUnitCost(cost.foodCostPerUnit, currency)}/${yieldLabel}`
+                      : formatCostPerUnit(cost.foodCostPerUnit, recipe.yieldUnit, currency)
                   }
                 />
                 {isProduct ? (

@@ -23,7 +23,7 @@ import { Field, Select } from '@/components/ui/form-controls';
 import { Input } from '@/components/ui/input';
 import { saveRecipePricing } from '@/lib/actions/recipes';
 import { buildCostContext, num } from '@/lib/mappers';
-import { formatMoney, formatPercent, formatUnitCost } from '@/lib/money';
+import { formatMoney, formatPercent } from '@/lib/money';
 import { breakEvenPrice, channelContext } from '@/lib/pricing/channels';
 import { computeRecipeCost, flattenRecipe } from '@/lib/pricing/cost';
 import {
@@ -32,7 +32,7 @@ import {
   priceFromTargetMargin,
 } from '@/lib/pricing/price';
 import { getPricingData, getRecipeDetail } from '@/lib/queries';
-import { BASE_UNIT_LABEL, formatBaseQty, type BaseUnit } from '@/lib/units';
+import { formatBaseQty, formatCostPerUnit, type BaseUnit } from '@/lib/units';
 
 export const dynamic = 'force-dynamic';
 
@@ -122,7 +122,7 @@ export default async function PrecificarPage({
     plate: qtd(l.qtyBase, l.baseUnit),
     buy: qtd(l.qtyBaseWithFc, l.baseUnit),
     hasLoss: l.correctionFactor > 1.0001,
-    unitCost: `${formatUnitCost(l.unitCost, currency)}/${BASE_UNIT_LABEL[l.baseUnit]}`,
+    unitCost: formatCostPerUnit(l.unitCost, l.baseUnit, currency),
     cost: formatMoney(l.cost, currency),
     share: fatia(l.cost),
     shareLabel: formatPercent(fatia(l.cost), currency.locale, 0),
@@ -149,7 +149,7 @@ export default async function PrecificarPage({
         plate: qtd(l.qtyBase * porPorcao, base),
         buy: qtd(l.qtyBaseWithFc * porPorcao, base),
         hasLoss: l.correctionFactor > 1.0001,
-        unitCost: `${formatUnitCost(l.unitCost, currency)}/${BASE_UNIT_LABEL[base]}`,
+        unitCost: formatCostPerUnit(l.unitCost, base, currency),
         cost: formatMoney(custo, currency),
         share: fatia(custo),
         shareLabel: formatPercent(fatia(custo), currency.locale, 0),
@@ -176,7 +176,7 @@ export default async function PrecificarPage({
           : l.correctionFactor > 1
             ? `insumo · FC ${l.correctionFactor.toFixed(2)}`
             : 'insumo',
-      qty: item ? `${Number(item.qty)} ${BASE_UNIT_LABEL[base]}` : qtd(l.qtyBase, base),
+      qty: qtd(l.qtyBase, base),
       cost: formatMoney(l.cost, currency),
     };
   });
@@ -223,12 +223,12 @@ export default async function PrecificarPage({
         />
         <StatTile
           label="Rende"
-          value={`${cost.yieldQty} ${BASE_UNIT_LABEL[cost.yieldUnit]}`}
+          value={formatBaseQty(cost.yieldQty, cost.yieldUnit, currency.locale)}
           hint={
             <RecipeQuickView
               recipeId={id}
               recipeName={recipe.name}
-              yieldLabel={`${cost.yieldQty} ${BASE_UNIT_LABEL[cost.yieldUnit]}`}
+              yieldLabel={formatBaseQty(cost.yieldQty, cost.yieldUnit, currency.locale)}
               packagingLabel={recipe.packaging?.name ?? null}
               lines={quickLines}
               totalLabel={formatMoney(cost.batchFoodCost, currency)}

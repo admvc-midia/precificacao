@@ -88,6 +88,10 @@ export function PriceExplorer({
     [cost, settings, channels, preco],
   );
 
+  // O simbolo sai da propria formatacao, para acompanhar a moeda escolhida
+  // em vez de assumir euro.
+  const simbolo = formatMoney(0, currency).replace(/[\d\s.,]/g, '') || '€';
+
   const ref = atual.reference;
   const resultado =
     preco > 0
@@ -98,46 +102,64 @@ export function PriceExplorer({
     <div className="space-y-6">
       {/* -------------------------------------------------- o campo */}
       <div className="rounded-lg border bg-card p-4">
-        <div className="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-end">
+        {/* O sugerido e o campo lado a lado, do mesmo tamanho: sao a mesma
+            grandeza e comparam-se de relance. A caixa ocupava a largura toda
+            e parecia um campo de texto livre, nao um preco. */}
+        <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
           <div>
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
               Preco sugerido
             </p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums">
+            <p className="mt-1.5 text-2xl font-semibold tabular-nums">
               {precoSugerido.feasible
                 ? formatMoney(precoSugerido.price, currency)
                 : '—'}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="mt-0.5 text-xs text-muted-foreground">
               em {sugerido.reference.channel.name}
             </p>
           </div>
 
+          <div className="h-12 w-px self-center bg-border" aria-hidden />
+
           <div>
-            <Label htmlFor="preco-venda">Preco de venda a testar</Label>
-            <div className="mt-1.5 flex gap-2">
-              <Input
-                id="preco-venda"
-                inputMode="decimal"
-                value={texto}
-                onChange={(e) => setTexto(e.target.value)}
-                className="text-lg font-medium tabular-nums"
-              />
+            <Label
+              htmlFor="preco-venda"
+              className="text-xs uppercase tracking-wide text-muted-foreground"
+            >
+              Testar outro preco
+            </Label>
+            <div className="mt-1.5 flex items-center gap-2">
+              <div className="relative">
+                {/* Simbolo dentro do campo: deixa claro que se escreve um
+                    valor, e encurta a caixa para o tamanho de um preco. */}
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg text-muted-foreground">
+                  {simbolo}
+                </span>
+                <Input
+                  id="preco-venda"
+                  inputMode="decimal"
+                  value={texto}
+                  onChange={(e) => setTexto(e.target.value)}
+                  className="h-11 w-32 pl-8 text-lg font-semibold tabular-nums"
+                />
+              </div>
+
               {mexido ? (
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setTexto(String(precoSugerido.price))}
-                  title="Voltar ao sugerido"
+                  className="text-muted-foreground"
                 >
-                  <RotateCcw className="h-4 w-4" />
-                  <span className="sr-only sm:not-sr-only">Repor</span>
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Repor
                 </Button>
               ) : null}
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Escreva para ver o efeito. Nada e guardado enquanto nao clicar em
-              Guardar, mais abaixo.
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Nada e guardado enquanto nao clicar em Guardar.
             </p>
           </div>
         </div>

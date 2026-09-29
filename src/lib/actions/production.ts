@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache';
 
 import { prisma } from '@/lib/db';
 import { buildCostContext } from '@/lib/mappers';
-import { parseDecimal } from '@/lib/money';
+import { parseQty } from '@/lib/money';
 import { buildPurchaseList } from '@/lib/pricing/purchase';
 import { errorMessage, type ActionState } from './shared';
 
@@ -65,7 +65,7 @@ export async function addOrderLine(
   try {
     const orderId = String(form.get('orderId') ?? '');
     const recipeId = String(form.get('recipeId') ?? '');
-    const qty = parseDecimal(String(form.get('qty') ?? ''));
+    const qty = parseQty(String(form.get('qty') ?? ''));
 
     if (!orderId) throw new Error('Ordem nao informada.');
     if (!recipeId) throw new Error('Escolha um produto.');
@@ -107,7 +107,7 @@ export async function updateOrderLine(
 ): Promise<ActionState> {
   try {
     const id = String(form.get('id') ?? '');
-    const qty = parseDecimal(String(form.get('qty') ?? ''));
+    const qty = parseQty(String(form.get('qty') ?? ''));
 
     if (!id) throw new Error('Linha nao informada.');
     if (qty <= 0) {

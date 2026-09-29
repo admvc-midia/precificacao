@@ -11,8 +11,9 @@
  * e o clique no rotulo focava o campo errado.
  */
 
-import { WasteInput } from '@/components/forms/waste-input';
 import { Field, Select } from '@/components/ui/form-controls';
+import { QtyInput } from '@/components/ui/qty-input';
+import { displayQtyValue, DISPLAY_UNIT_LABEL } from '@/lib/units';
 import { Input, Textarea } from '@/components/ui/input';
 import { num } from '@/lib/mappers';
 
@@ -26,139 +27,6 @@ function dec(value: unknown): string {
 function pct(value: unknown): string {
   const n = num(value) * 100;
   return Number.isFinite(n) ? String(Number(n.toFixed(4))) : '';
-}
-
-// ---------------------------------------------------------------------------
-// Insumo / embalagem
-// ---------------------------------------------------------------------------
-
-export interface IngredientFormValues {
-  id: string;
-  name: string;
-  category: 'FOOD' | 'PACKAGING';
-  supplierId: string | null;
-  purchasePrice: unknown;
-  purchaseQty: unknown;
-  purchaseUnit: 'KG' | 'G' | 'L' | 'ML' | 'UN';
-  correctionFactor: unknown;
-  stockBase: unknown;
-  notes: string | null;
-}
-
-export function IngredientFields({
-  ingredient,
-  suppliers,
-  idPrefix,
-  defaultCategory = 'FOOD',
-}: {
-  ingredient?: IngredientFormValues;
-  suppliers: Array<{ id: string; name: string }>;
-  idPrefix: string;
-  defaultCategory?: 'FOOD' | 'PACKAGING';
-}) {
-  const id = (n: string) => `${idPrefix}-${n}`;
-
-  return (
-    <>
-      {ingredient ? <input type="hidden" name="id" value={ingredient.id} /> : null}
-
-      <Field label="Nome" htmlFor={id('name')}>
-        <Input
-          id={id('name')}
-          name="name"
-          defaultValue={ingredient?.name ?? ''}
-          placeholder="Carne picada 20% gordura"
-          required
-        />
-      </Field>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Categoria" htmlFor={id('category')}>
-          <Select
-            id={id('category')}
-            name="category"
-            defaultValue={ingredient?.category ?? defaultCategory}
-          >
-            <option value="FOOD">Insumo alimenticio</option>
-            <option value="PACKAGING">Embalagem / descartavel</option>
-          </Select>
-        </Field>
-        <Field label="Fornecedor" htmlFor={id('supplier')}>
-          <Select
-            id={id('supplier')}
-            name="supplierId"
-            defaultValue={ingredient?.supplierId ?? ''}
-          >
-            <option value="">— sem fornecedor —</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Preco pago" htmlFor={id('price')}>
-          <Input
-            id={id('price')}
-            name="purchasePrice"
-            inputMode="decimal"
-            defaultValue={ingredient ? dec(ingredient.purchasePrice) : ''}
-            placeholder="12,50"
-            required
-          />
-        </Field>
-        <Field label="Quantidade" htmlFor={id('qty')}>
-          <Input
-            id={id('qty')}
-            name="purchaseQty"
-            inputMode="decimal"
-            defaultValue={ingredient ? dec(ingredient.purchaseQty) : ''}
-            placeholder="5"
-            required
-          />
-        </Field>
-        <Field label="Unidade" htmlFor={id('unit')}>
-          <Select
-            id={id('unit')}
-            name="purchaseUnit"
-            defaultValue={ingredient?.purchaseUnit ?? 'KG'}
-          >
-            <option value="KG">kg</option>
-            <option value="G">g</option>
-            <option value="L">L</option>
-            <option value="ML">ml</option>
-            <option value="UN">unidade</option>
-          </Select>
-        </Field>
-      </div>
-
-      <WasteInput
-        idPrefix={idPrefix}
-        defaultFc={ingredient ? num(ingredient.correctionFactor) : 1}
-      />
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field
-          label="Estoque atual"
-          htmlFor={id('stock')}
-          hint="Na unidade base (g, ml ou un)."
-        >
-          <Input
-            id={id('stock')}
-            name="stockBase"
-            inputMode="decimal"
-            defaultValue={ingredient ? dec(ingredient.stockBase) : '0'}
-          />
-        </Field>
-        <Field label="Notas" htmlFor={id('notes')}>
-          <Input id={id('notes')} name="notes" defaultValue={ingredient?.notes ?? ''} />
-        </Field>
-      </div>
-    </>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -406,13 +274,15 @@ export function RecipeFields({
         <Field
           label="Rendimento"
           htmlFor={id('yield')}
-          hint="Produto: porcoes por lote. Base: total do lote."
+          hint="Produto: porcoes por lote. Base: quanto sai do lote."
         >
-          <Input
+          <QtyInput
             id={id('yield')}
             name="yieldQty"
-            inputMode="decimal"
-            defaultValue={recipe ? dec(recipe.yieldQty) : '1'}
+            unitLabel={DISPLAY_UNIT_LABEL[recipe?.yieldUnit ?? 'UN']}
+            defaultValue={
+              recipe ? displayQtyValue(num(recipe.yieldQty), recipe.yieldUnit) : '1'
+            }
             required
           />
         </Field>
@@ -426,9 +296,13 @@ export function RecipeFields({
             name="yieldUnit"
             defaultValue={recipe?.yieldUnit ?? 'G'}
           >
-            <option value="G">gramas</option>
-            <option value="ML">mililitros</option>
+            <option value="G">peso — kg</option>
             <option value="UN">unidades</option>
+            {/* A app mede a peso e a unidade, entao uma base nova nao se pede
+                em litros. A opcao so aparece para nao trocar em silencio o
+                rendimento de uma ficha antiga que ja o use: sem ela, o browser
+                escolhia a primeira e gravava peso. */}
+            {recipe?.yieldUnit === 'ML' ? <option value="ML">volume — L</option> : null}
           </Select>
         </Field>
       </div>

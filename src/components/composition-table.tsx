@@ -1,69 +1,78 @@
 'use client';
 
 /**
- * A composicao de uma ficha tecnica, com as quantidades em duas leituras.
+ * A composicao de uma ficha tecnica.
  *
- * **Como lancado** mostra o que foi escrito: 1500 g, porque foi assim que se
- * digitou. **Escala legivel** mostra 1,5 kg, que e como se fala.
+ * ---------------------------------------------------------------------------
+ * PORQUE OS CUSTOS COMECAM ESCONDIDOS
+ * ---------------------------------------------------------------------------
+ * Uma ficha tecnica serve duas pessoas. Na cozinha le-se o que leva e quanto
+ * leva, e o dinheiro so atrapalha; no escritorio quer-se ver para onde vai o
+ * custo. Como a mesma pagina serve as duas, o dinheiro fica atras de um
+ * botao, e a escolha guarda-se neste browser — ninguem quer carregar no
+ * mesmo botao todas as vezes.
  *
- * Nenhuma das duas e a certa sempre. Quem confere uma receita quer ver o que
- * escreveu; quem esta a ler a ficha em voz alta na cozinha quer quilos. Por
- * isso e um botao, e a escolha fica guardada neste browser — ninguem quer
- * carregar no mesmo botao todas as vezes.
+ * Esconde-se tambem o total do lote: mostrar a soma com as parcelas tapadas
+ * so levantaria a pergunta de onde e que ela vem.
  *
- * As duas versoes vem ja formatadas do servidor: a conversao depende da
- * unidade base do insumo, que so o servidor conhece.
+ * As quantidades vem ja formatadas do servidor, sempre em kg ou unidades — a
+ * conversao depende da unidade base do insumo, que so o servidor conhece.
  */
 
-import { Ruler } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { useStoredString } from '@/lib/use-stored-state';
-import { cn } from '@/lib/utils';
 
 export interface CompositionRow {
   id: string;
   /** Nome, com a etiqueta de sub-receita por baixo. */
   name: React.ReactNode;
-  /** "1500 g" — tal como foi lancado. */
-  qtyAsEntered: string;
-  /** "1,5 kg" — na escala que se le melhor. */
-  qtyScaled: string;
+  /** "0,015 kg" — sempre na unidade de exibicao. */
+  qty: string;
+  /** "1,69 €/kg" */
   unitCost: string;
+  /** Quanto esta linha custa no lote. */
   cost: string;
   actions: React.ReactNode;
 }
 
 export function CompositionTable({
   rows,
-  footer,
+  total,
 }: {
   rows: CompositionRow[];
-  /** Linha de total, ja formatada. */
-  footer?: React.ReactNode;
+  /**
+   * Total do lote, como dados e nao como `<tr>` pronto.
+   *
+   * Ja chegou aqui renderizado do servidor, mas com colunas que aparecem e
+   * desaparecem a contagem de celulas deixava de bater e a linha desalinhava.
+   */
+  total?: { label: string; value: string };
 }) {
-  const [modo, setModo] = useStoredString('composicao:escala', 'entrada');
-  const escalado = modo === 'escala';
+  const [modo, setModo] = useStoredString('composicao:custos', 'oculto');
+  const mostraCustos = modo === 'visivel';
 
-  // Se nenhuma linha muda com a conversao, o botao nao tem o que fazer.
-  const converteAlguma = rows.some((r) => r.qtyAsEntered !== r.qtyScaled);
+  const botao = (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={() => setModo(mostraCustos ? 'oculto' : 'visivel')}
+      className="text-muted-foreground"
+      aria-pressed={mostraCustos}
+    >
+      {mostraCustos ? (
+        <EyeOff className="h-4 w-4" />
+      ) : (
+        <Eye className="h-4 w-4" />
+      )}
+      {mostraCustos ? 'Ocultar custos' : 'Ver custos'}
+    </Button>
+  );
 
   return (
     <div>
-      {converteAlguma ? (
-        <div className="flex items-center justify-end px-4 pb-2 sm:px-6">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setModo(escalado ? 'entrada' : 'escala')}
-            className="text-muted-foreground"
-            aria-pressed={escalado}
-          >
-            <Ruler className="h-4 w-4" />
-            {escalado ? 'Ver como foi lancado' : 'Converter para kg, L'}
-          </Button>
-        </div>
-      ) : null}
+      <div className="flex items-center justify-end px-4 pb-2 sm:px-6">{botao}</div>
 
       {/* Ecra grande: tabela. */}
       <div className="hidden overflow-x-auto md:block">
@@ -72,8 +81,12 @@ export function CompositionTable({
             <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
               <th className="px-3 py-2.5 text-left font-medium">Item</th>
               <th className="px-3 py-2.5 text-right font-medium">Quantidade</th>
-              <th className="px-3 py-2.5 text-right font-medium">Custo unitario</th>
-              <th className="px-3 py-2.5 text-right font-medium">Custo no lote</th>
+              {mostraCustos ? (
+                <>
+                  <th className="px-3 py-2.5 text-right font-medium">Custo unitario</th>
+                  <th className="px-3 py-2.5 text-right font-medium">Custo no lote</th>
+                </>
+              ) : null}
               <th className="w-24" />
             </tr>
           </thead>
@@ -81,22 +94,36 @@ export function CompositionTable({
             {rows.map((r) => (
               <tr key={r.id} className="border-b last:border-0 hover:bg-muted/50">
                 <td className="px-3 py-2.5">{r.name}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">
-                  <Quantidade row={r} escalado={escalado} />
-                </td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
-                  {r.unitCost}
-                </td>
-                <td className="px-3 py-2.5 text-right tabular-nums font-medium">
-                  {r.cost}
-                </td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{r.qty}</td>
+                {mostraCustos ? (
+                  <>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
+                      {r.unitCost}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-medium">
+                      {r.cost}
+                    </td>
+                  </>
+                ) : null}
                 <td className="px-3 py-2.5">
                   <div className="flex items-center justify-end">{r.actions}</div>
                 </td>
               </tr>
             ))}
           </tbody>
-          {footer ? <tfoot className="border-t bg-muted/50">{footer}</tfoot> : null}
+          {total && mostraCustos ? (
+            <tfoot className="border-t bg-muted/50">
+              <tr>
+                <td className="px-3 py-2.5">{total.label}</td>
+                <td />
+                <td />
+                <td className="px-3 py-2.5 text-right tabular-nums font-medium">
+                  {total.value}
+                </td>
+                <td />
+              </tr>
+            </tfoot>
+          ) : null}
         </table>
       </div>
 
@@ -107,28 +134,26 @@ export function CompositionTable({
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-3">
                 <div className="min-w-0">{r.name}</div>
-                <span className="shrink-0 tabular-nums font-medium">{r.cost}</span>
+                {mostraCustos ? (
+                  <span className="shrink-0 tabular-nums font-medium">{r.cost}</span>
+                ) : null}
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                <Quantidade row={r} escalado={escalado} /> · {r.unitCost}
+                {r.qty}
+                {mostraCustos ? ` · ${r.unitCost}` : ''}
               </p>
             </div>
             <div className="flex shrink-0 items-center">{r.actions}</div>
           </li>
         ))}
       </ul>
+
+      {total && mostraCustos ? (
+        <div className="flex items-baseline justify-between border-t bg-muted/50 px-4 py-3 text-sm md:hidden">
+          <span>{total.label}</span>
+          <span className="tabular-nums font-medium">{total.value}</span>
+        </div>
+      ) : null}
     </div>
-  );
-}
-
-function Quantidade({ row, escalado }: { row: CompositionRow; escalado: boolean }) {
-  const mostra = escalado ? row.qtyScaled : row.qtyAsEntered;
-  const outra = escalado ? row.qtyAsEntered : row.qtyScaled;
-  const diferente = mostra !== outra;
-
-  return (
-    <span className={cn(diferente && 'cursor-help')} title={diferente ? outra : undefined}>
-      {mostra}
-    </span>
   );
 }

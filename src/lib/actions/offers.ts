@@ -21,7 +21,7 @@ import type { Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/db';
 import { num } from '@/lib/mappers';
-import { parseDecimal } from '@/lib/money';
+import { parseDecimal, parseQty } from '@/lib/money';
 import { rankOffers } from '@/lib/pricing/offers';
 import { baseUnitOf, type PurchaseUnit } from '@/lib/units';
 import { errorMessage, PURCHASE_UNIT, type ActionState } from './shared';
@@ -84,7 +84,7 @@ export interface DadosDePreco {
 /** Le e valida os campos de preco de um formulario. */
 export async function lerPreco(form: FormData): Promise<DadosDePreco> {
   const purchasePrice = parseDecimal(String(form.get('purchasePrice') ?? ''));
-  const purchaseQty = parseDecimal(String(form.get('purchaseQty') ?? ''));
+  const purchaseQty = parseQty(String(form.get('purchaseQty') ?? ''));
   const purchaseUnit = PURCHASE_UNIT.parse(
     String(form.get('purchaseUnit') ?? 'KG'),
   ) as PurchaseUnit;
@@ -104,6 +104,13 @@ export async function lerPreco(form: FormData): Promise<DadosDePreco> {
   };
 }
 
+/**
+ * Guarda um preco: novo, ou alteracao de um que ja existe.
+ *
+ * Com `id` no formulario altera aquela linha — e assim que se corrige um
+ * tamanho de embalagem mal escrito. Sem `id`, acrescenta; se ja houver preco
+ * desse fornecedor para este insumo, atualiza-o em vez de duplicar.
+ */
 export async function saveOffer(
   _prev: ActionState,
   form: FormData,
@@ -112,6 +119,7 @@ export async function saveOffer(
     const ingredientId = String(form.get('ingredientId') ?? '');
     if (!ingredientId) throw new Error('Insumo nao informado.');
 
+    const id = String(form.get('id') ?? '');
     const dados = await lerPreco(form);
 
     const insumo = await prisma.ingredient.findUnique({
@@ -130,49 +138,70 @@ export async function saveOffer(
       );
     }
 
-    // Um unico preco sem fornecedor por insumo: o Postgres trata NULLs como
-    // distintos, entao a restricao unica nao apanha este caso.
-    if (dados.supplierId === null) {
-      const jaSemFornecedor = await prisma.supplierOffer.findFirst({
-        where: { ingredientId, supplierId: null },
+    const mensagem = await prisma.$transaction(async (tx) => {
+      // A linha a alterar: a indicada por `id`, ou a que ja existe para este
+      // fornecedor.
+      let alvo = null;
+      if (id) {
+        alvo = await tx.supplierOffer.findUnique({ where: { id } });
+        if (!alvo || alvo.ingredientId !== ingredientId) {
+          throw new Error('Preco nao encontrado neste insumo.');
+        }
+      } else if (dados.supplierId) {
+        alvo = await tx.supplierOffer.findUnique({
+          where: {
+            ingredientId_supplierId: { ingredientId, supplierId: dados.supplierId },
+          },
+        });
+      }
+
+      // Um so preco por fornecedor, e um so sem fornecedor. O Postgres trata
+      // NULLs como distintos, por isso a restricao unica nao apanha o segundo
+      // caso — e nenhuma das duas apanha a troca de fornecedor numa edicao.
+      const colisao = await tx.supplierOffer.findFirst({
+        where: {
+          ingredientId,
+          supplierId: dados.supplierId,
+          ...(alvo ? { NOT: { id: alvo.id } } : {}),
+        },
+        include: { supplier: { select: { name: true } } },
       });
-      if (jaSemFornecedor) {
+      if (colisao) {
         throw new Error(
-          'Ja existe um preco sem fornecedor para este insumo. Edite esse, ou escolha um fornecedor.',
+          colisao.supplierId
+            ? `Ja existe um preco de ${colisao.supplier?.name} para este insumo. Altere esse em vez de criar outro.`
+            : 'Ja existe um preco sem fornecedor para este insumo. Altere esse, ou escolha um fornecedor.',
         );
       }
-    }
 
-    const mensagem = await prisma.$transaction(async (tx) => {
-      const existente = dados.supplierId
-        ? await tx.supplierOffer.findUnique({
-            where: {
-              ingredientId_supplierId: {
-                ingredientId,
-                supplierId: dados.supplierId,
-              },
-            },
-          })
-        : null;
-
-      const oferta = existente
-        ? await tx.supplierOffer.update({ where: { id: existente.id }, data: dados })
+      const oferta = alvo
+        ? await tx.supplierOffer.update({ where: { id: alvo.id }, data: dados })
         : await tx.supplierOffer.create({ data: { ingredientId, ...dados } });
 
-      // Se ainda nao ha nenhum em uso, o primeiro entra sozinho — senao o
-      // insumo ficava com uma lista de precos e nenhum a valer.
       const emUso = await tx.supplierOffer.findFirst({
         where: { ingredientId, inUse: true },
       });
 
-      if (!emUso || form.get('setInUse') === '1') {
+      // Tres razoes para copiar o preco para o insumo:
+      //  - ainda nao havia nenhum em uso (o primeiro entra sozinho, senao o
+      //    insumo ficava com uma lista de precos e nenhum a valer);
+      //  - foi pedido explicitamente;
+      //  - **alterou-se justamente o que estava em uso**. Sem isto, corrigir
+      //    a embalagem do preco em uso mudava a lista e deixava o custo das
+      //    fichas na cache antiga, sem nada a dizer.
+      const mexeuNoEmUso = emUso?.id === oferta.id;
+
+      if (!emUso || mexeuNoEmUso || form.get('setInUse') === '1') {
         await sincronizarEmUso(tx, ingredientId, oferta.id);
-        return existente
-          ? 'Preco atualizado e passou a ser o preco em uso.'
+        if (mexeuNoEmUso) {
+          return 'Preco alterado. O custo das fichas que usam este insumo foi recalculado.';
+        }
+        return alvo
+          ? 'Preco alterado e passou a ser o preco em uso.'
           : 'Preco guardado e passou a ser o preco em uso.';
       }
 
-      return existente ? 'Preco atualizado.' : 'Preco guardado.';
+      return alvo ? 'Preco alterado.' : 'Preco guardado.';
     });
 
     revalidar();

@@ -33,6 +33,7 @@ import { useState } from 'react';
 import { useActionFormState } from '@/components/action-form';
 import { Field, Select } from '@/components/ui/form-controls';
 import { Input, Textarea } from '@/components/ui/input';
+import { QtyInput } from '@/components/ui/qty-input';
 import { fcFromWastePercent, wastePercentFromFc } from '@/lib/pricing/cost';
 import type { PurchaseUnit } from '@/lib/units';
 
@@ -63,33 +64,44 @@ export const EMPTY_INGREDIENT: IngredientFormValues = {
   notes: '',
 };
 
-/** Rotulo da familia de medida do insumo. */
+/**
+ * Rotulo da familia de medida do insumo.
+ *
+ * ---------------------------------------------------------------------------
+ * PORQUE NAO HA LITROS AQUI
+ * ---------------------------------------------------------------------------
+ * Nesta casa tudo se compra e lanca a peso ou a unidade — os liquidos
+ * inclusive, que vao a balanca. Oferecer litros so criava a duvida de qual
+ * escolher, e pior: obrigaria a converter volume em peso algures, e essa
+ * conversao depende da densidade (1 L de oleo sao 920 g, de mel sao 1400 g).
+ * A aplicacao nao tem como saber isso e nao deve adivinhar.
+ *
+ * A biblioteca de unidades continua a saber converter L e ml — um CSV de
+ * fornecedor pode traze-los, e internamente funcionam. So nao se oferecem
+ * aqui.
+ */
 const MEDIDA: Record<PurchaseUnit, string> = {
-  KG: 'quilos / gramas',
-  G: 'quilos / gramas',
-  L: 'litros / mililitros',
-  ML: 'litros / mililitros',
+  KG: 'peso (kg)',
+  G: 'peso (kg)',
+  L: 'volume (L)',
+  ML: 'volume (L)',
   UN: 'unidades',
 };
 
-/** Tamanhos de embalagem possiveis dentro de cada familia. */
-const UNIDADES: Record<'KG' | 'L' | 'UN', Array<{ value: PurchaseUnit; label: string }>> =
-  {
-    KG: [
-      { value: 'KG', label: 'kg' },
-      { value: 'G', label: 'g' },
-    ],
-    L: [
-      { value: 'L', label: 'L' },
-      { value: 'ML', label: 'ml' },
-    ],
-    UN: [{ value: 'UN', label: 'unidade' }],
-  };
+/**
+ * Uma unidade por familia, e nao uma lista.
+ *
+ * Uma embalagem de 200 g escreve-se `0,2 kg`. Dar tambem "g" obrigaria a
+ * decidir a cada cadastro, e duas pessoas a cadastrar o mesmo acucar em
+ * escalas diferentes e como se aparecesse duas vezes na lista.
+ */
+const UNIDADE: Record<'KG' | 'UN', { value: PurchaseUnit; label: string }> = {
+  KG: { value: 'KG', label: 'kg' },
+  UN: { value: 'UN', label: 'un' },
+};
 
-function familia(u: PurchaseUnit): 'KG' | 'L' | 'UN' {
-  if (u === 'KG' || u === 'G') return 'KG';
-  if (u === 'L' || u === 'ML') return 'L';
-  return 'UN';
+function familia(u: PurchaseUnit): 'KG' | 'UN' {
+  return u === 'UN' ? 'UN' : 'KG';
 }
 
 function fmt(value: number, casas: number): string {
@@ -125,7 +137,7 @@ export function IngredientForm({
   // A familia so filtra as unidades de embalagem possiveis; nao e enviada.
   // O que o servidor recebe e a unidade da embalagem, e a familia deduz-se
   // dela. Dois campos a disputar o mesmo nome dariam a unidade errada.
-  const [fam, setFam] = useState<'KG' | 'L' | 'UN'>(() => familia(initial.purchaseUnit));
+  const [fam, setFam] = useState<'KG' | 'UN'>(() => familia(initial.purchaseUnit));
 
   const set = <K extends keyof IngredientFormValues>(
     campo: K,
@@ -197,7 +209,7 @@ export function IngredientForm({
           hint={
             aEditar
               ? 'Nao se altera: os precos ja registados dependem desta medida.'
-              : 'A familia de medida, nao o tamanho da embalagem.'
+              : 'Liquidos tambem vao a peso.'
           }
         >
           {aEditar ? (
@@ -212,13 +224,12 @@ export function IngredientForm({
               id={id('unit')}
               value={fam}
               onChange={(e) => {
-                const nova = e.target.value as 'KG' | 'L' | 'UN';
+                const nova = e.target.value as 'KG' | 'UN';
                 setFam(nova);
-                set('purchaseUnit', UNIDADES[nova][0].value);
+                set('purchaseUnit', UNIDADE[nova].value);
               }}
             >
-              <option value="KG">quilos / gramas</option>
-              <option value="L">litros / mililitros</option>
+              <option value="KG">peso — kg</option>
               <option value="UN">unidades</option>
             </Select>
           )}
@@ -249,7 +260,7 @@ export function IngredientForm({
             </Select>
           </Field>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <Field label="Preco pago" htmlFor={id('price')}>
               <Input
                 id={id('price')}
@@ -262,33 +273,25 @@ export function IngredientForm({
               />
             </Field>
             <Field
-              label="Embalagem"
+              label="Tamanho da embalagem"
               htmlFor={id('qty')}
-              hint="O tamanho que se compra."
+              hint={
+                fam === 'KG'
+                  ? 'Uma caixa de 200 g escreve-se 0,2.'
+                  : 'Quantas unidades vem no pacote.'
+              }
             >
-              <Input
+              <QtyInput
                 id={id('qty')}
                 name="purchaseQty"
-                inputMode="decimal"
+                unitLabel={UNIDADE[fam].label}
+                unitName="purchaseUnit"
+                unitValue={UNIDADE[fam].value}
                 value={v.purchaseQty}
                 onChange={(e) => set('purchaseQty', e.target.value)}
                 placeholder="1"
                 required
               />
-            </Field>
-            <Field label="Unidade" htmlFor={id('packunit')}>
-              <Select
-                id={id('packunit')}
-                name="purchaseUnit"
-                value={v.purchaseUnit}
-                onChange={(e) => set('purchaseUnit', e.target.value as PurchaseUnit)}
-              >
-                {UNIDADES[fam].map((u) => (
-                  <option key={u.value} value={u.value}>
-                    {u.label}
-                  </option>
-                ))}
-              </Select>
             </Field>
           </div>
         </div>
@@ -357,12 +360,12 @@ export function IngredientForm({
         <Field
           label="Estoque atual"
           htmlFor={id('stock')}
-          hint="Na unidade base (g, ml ou un)."
+          hint="O que tem no armazem agora."
         >
-          <Input
+          <QtyInput
             id={id('stock')}
             name="stockBase"
-            inputMode="decimal"
+            unitLabel={UNIDADE[fam].label}
             value={v.stockBase}
             onChange={(e) => set('stockBase', e.target.value)}
           />

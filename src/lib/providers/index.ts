@@ -3,6 +3,7 @@
  * Ver `types.ts` para a explicacao do desenho.
  */
 
+import { parseDecimal, parseQty } from '@/lib/money';
 import { toBase, type PurchaseUnit } from '@/lib/units';
 import type {
   PriceProvider,
@@ -58,7 +59,7 @@ export function parsePriceCsv(text: string): PriceQuoteResult[] {
     if (!label) continue;
 
     const price = csvNumber(cells[idx.price]);
-    const qty = idx.qty >= 0 ? csvNumber(cells[idx.qty]) || 1 : 1;
+    const qty = idx.qty >= 0 ? csvQty(cells[idx.qty]) || 1 : 1;
     const unit = normalizeUnit(idx.unit >= 0 ? cells[idx.unit] : 'UN');
     const source = normalizeSource(idx.source >= 0 ? cells[idx.source] : 'CSV');
 
@@ -176,7 +177,7 @@ export function parseIngredientCsv(text: string): IngredientCsvResult {
     }
 
     const preco = csvNumber(cells[idx.price]);
-    const qty = csvNumber(cells[idx.qty]);
+    const qty = csvQty(cells[idx.qty]);
 
     if (!Number.isFinite(preco) || preco <= 0) {
       errors.push({ line: numeroLinha, reason: `"${name}": preco invalido` });
@@ -207,7 +208,7 @@ export function parseIngredientCsv(text: string): IngredientCsvResult {
     const fornecedor =
       idx.supplier >= 0 ? (cells[idx.supplier] ?? '').trim() || null : null;
 
-    const estoque = idx.stock >= 0 ? csvNumber(cells[idx.stock]) : 0;
+    const estoque = idx.stock >= 0 ? csvQty(cells[idx.stock]) : 0;
 
     rows.push({
       name,
@@ -330,14 +331,33 @@ function findCol(header: string[], names: string[]): number {
   return header.findIndex((h) => names.includes(h));
 }
 
+/**
+ * Numero de uma celula de CSV, ou `NaN` se a celula nao tem numero nenhum.
+ *
+ * O `NaN` e de proposito: distingue "a coluna vinha vazia" de "a coluna dizia
+ * zero", e ha sitios que tratam os dois de maneira diferente.
+ *
+ * A leitura dos separadores e a mesma dos formularios, incluindo a regra de
+ * que um grupo de milhar nunca comeca por zero — um CSV com `0.200` na coluna
+ * da quantidade sofria exatamente o mesmo engano.
+ */
 function csvNumber(cell: string | undefined): number {
+  return csvLido(cell, parseDecimal);
+}
+
+/** Como `csvNumber`, mas para quantidades: o ponto e sempre decimal. */
+function csvQty(cell: string | undefined): number {
+  return csvLido(cell, parseQty);
+}
+
+function csvLido(
+  cell: string | undefined,
+  ler: (v: string) => number,
+): number {
   if (!cell) return NaN;
-  return Number(
-    cell
-      .replace(/[^\d,.\-]/g, '')
-      .replace(/\.(?=\d{3}(\D|$))/g, '')
-      .replace(',', '.'),
-  );
+  const limpo = cell.replace(/[^\d,.\-]/g, '');
+  if (!limpo || !/\d/.test(limpo)) return NaN;
+  return ler(cell);
 }
 
 function normalizeUnit(cell: string | undefined): PurchaseUnit {
