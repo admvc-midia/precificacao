@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Plus } from 'lucide-react';
 
 import { ActionForm, ConfirmDelete, FormDialog } from '@/components/action-form';
 import { Alert, Badge, Separator } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
@@ -13,30 +14,29 @@ import {
 } from '@/components/ui/card';
 import { Field, Select } from '@/components/ui/form-controls';
 import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableFooter,
-  TableHead,
-  TableHeader,
-  TableNum,
-  TableRow,
-} from '@/components/ui/table';
+import { saveIngredient } from '@/lib/actions/ingredients';
 import {
   addRecipeItem,
   deleteRecipeItem,
   saveRecipe,
   updateRecipeItem,
 } from '@/lib/actions/recipes';
+import { CompositionTable } from '@/components/composition-table';
 import { RecipeFields } from '@/components/forms/fields';
+import { IngredientForm } from '@/components/forms/ingredient-form';
 import { RecipeItemForm } from '@/components/forms/recipe-item-form';
 import { buildCostContext } from '@/lib/mappers';
 import { formatMoney, formatUnitCost } from '@/lib/money';
 import { computeRecipeCost } from '@/lib/pricing/cost';
 import type { RecipeCost } from '@/lib/pricing/types';
-import { getPricingData, getRecipeDetail } from '@/lib/queries';
-import { BASE_UNIT_LABEL, UNIT_LABEL, baseUnitOf } from '@/lib/units';
+import { getPricingData, getRecipeDetail, getSuppliers } from '@/lib/queries';
+import {
+  BASE_UNIT_LABEL,
+  compatibleUnits,
+  formatBaseQty,
+  UNIT_LABEL,
+  baseUnitOf,
+} from '@/lib/units';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,7 +46,11 @@ export default async function FichaPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [recipe, data] = await Promise.all([getRecipeDetail(id), getPricingData()]);
+  const [recipe, data, suppliers] = await Promise.all([
+    getRecipeDetail(id),
+    getPricingData(),
+    getSuppliers(),
+  ]);
   if (!recipe) notFound();
 
   const ctx = buildCostContext(data.ingredientRows, data.recipeRows);
@@ -118,120 +122,102 @@ export default async function FichaPage({
                 Ficha vazia. Adicione o primeiro ingrediente ao lado.
               </p>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Item</TableHead>
-                    <TableHead className="text-right">Quantidade</TableHead>
-                    <TableHead className="text-right">Custo unitario</TableHead>
-                    <TableHead className="text-right">Custo no lote</TableHead>
-                    <TableHead className="w-10" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recipe.items.map((item, index) => {
-                    // As linhas de custo sao construidas a partir de
-                    // recipe.items na mesma ordem (sortOrder), entao a
-                    // correspondencia e posicional. Procurar por refId daria
-                    // a linha errada quando o mesmo insumo aparece duas vezes
-                    // na ficha.
-                    const line = cost?.lines[index];
-                    const name =
-                      item.ingredient?.name ?? item.childRecipe?.name ?? '—';
-                    const base = item.ingredient
-                      ? baseUnitOf(item.ingredient.purchaseUnit)
-                      : (item.childRecipe?.yieldUnit ?? 'UN');
+              <CompositionTable
+                rows={recipe.items.map((item, index) => {
+                  // As linhas de custo seguem a mesma ordem dos itens.
+                  const line = cost?.lines[index];
+                  const nome = item.ingredient?.name ?? item.childRecipe?.name ?? '—';
+                  const base = item.ingredient
+                    ? baseUnitOf(item.ingredient.purchaseUnit)
+                    : (item.childRecipe?.yieldUnit ?? 'UN');
 
-                    return (
-                      <TableRow key={item.id}>
-                        <TableCell>
-                          <div className="font-medium">{name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {item.childRecipeId ? 'Preparacao base' : 'Insumo'}
-                            {line && line.correctionFactor > 1
-                              ? ` · FC ${line.correctionFactor.toFixed(2)}`
-                              : ''}
+                  return {
+                    id: item.id,
+                    name: (
+                      <span>
+                        <span className="font-medium">{nome}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {item.childRecipeId ? 'Preparacao base' : 'Insumo'}
+                          {line && line.correctionFactor > 1
+                            ? ` · FC ${line.correctionFactor.toFixed(2)}`
+                            : ''}
+                        </span>
+                      </span>
+                    ),
+                    qtyAsEntered: `${Number(item.qty)} ${UNIT_LABEL[item.unit]}`,
+                    qtyScaled: line
+                      ? formatBaseQty(line.qtyBase, base, currency.locale)
+                      : `${Number(item.qty)} ${UNIT_LABEL[item.unit]}`,
+                    unitCost: line
+                      ? `${formatUnitCost(line.unitCost, currency)}/${BASE_UNIT_LABEL[base]}`
+                      : '—',
+                    cost: line ? formatMoney(line.cost, currency) : '—',
+                    actions: (
+                      <>
+                        <FormDialog
+                          action={updateRecipeItem}
+                          title={`Alterar ${nome}`}
+                          description={`Quantidade usada no lote inteiro desta ficha (rende ${Number(recipe.yieldQty)} ${yieldLabel}).`}
+                          submitLabel="Guardar"
+                        >
+                          <input type="hidden" name="id" value={item.id} />
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <Field label="Quantidade" htmlFor={`q-${item.id}`}>
+                              <Input
+                                id={`q-${item.id}`}
+                                name="qty"
+                                inputMode="decimal"
+                                defaultValue={String(Number(item.qty))}
+                                required
+                              />
+                            </Field>
+                            <Field label="Unidade" htmlFor={`u-${item.id}`}>
+                              <Select
+                                id={`u-${item.id}`}
+                                name="unit"
+                                defaultValue={item.unit}
+                              >
+                                {compatibleUnits(base).map((u) => (
+                                  <option key={u} value={u}>
+                                    {UNIT_LABEL[u]}
+                                  </option>
+                                ))}
+                              </Select>
+                            </Field>
                           </div>
-                        </TableCell>
-                        <TableNum className="text-muted-foreground">
-                          {Number(item.qty)} {UNIT_LABEL[item.unit]}
-                        </TableNum>
-                        <TableNum className="text-muted-foreground">
-                          {line
-                            ? `${formatUnitCost(line.unitCost, currency)}/${BASE_UNIT_LABEL[base]}`
-                            : '—'}
-                        </TableNum>
-                        <TableNum className="font-medium">
-                          {line ? formatMoney(line.cost, currency) : '—'}
-                        </TableNum>
-                        <TableCell>
-                          <div className="flex items-center justify-end">
-                            <FormDialog
-                              action={updateRecipeItem}
-                              title={`Alterar ${name}`}
-                              description={`Quantidade usada no lote inteiro desta ficha (rende ${Number(recipe.yieldQty)} ${yieldLabel}).`}
-                              submitLabel="Guardar"
-                            >
-                              <input type="hidden" name="id" value={item.id} />
-                              <div className="grid gap-4 sm:grid-cols-2">
-                                <Field label="Quantidade" htmlFor={`q-${item.id}`}>
-                                  <Input
-                                    id={`q-${item.id}`}
-                                    name="qty"
-                                    inputMode="decimal"
-                                    defaultValue={String(Number(item.qty))}
-                                    required
-                                  />
-                                </Field>
-                                <Field
-                                  label="Unidade"
-                                  htmlFor={`u-${item.id}`}
-                                  hint="Tem de ser da mesma familia do item."
-                                >
-                                  <Select
-                                    id={`u-${item.id}`}
-                                    name="unit"
-                                    defaultValue={item.unit}
-                                  >
-                                    {(['G', 'KG', 'ML', 'L', 'UN'] as const).map((u) => (
-                                      <option key={u} value={u}>
-                                        {UNIT_LABEL[u]}
-                                      </option>
-                                    ))}
-                                  </Select>
-                                </Field>
-                              </div>
-                              <Field label="Notas" htmlFor={`n-${item.id}`}>
-                                <Input
-                                  id={`n-${item.id}`}
-                                  name="notes"
-                                  defaultValue={item.notes ?? ''}
-                                />
-                              </Field>
-                            </FormDialog>
-
-                            <ConfirmDelete
-                              action={deleteRecipeItem}
-                              fields={{ id: item.id, recipeId: id }}
-                              title={`Remover "${name}" da ficha?`}
-                              description="O custo da ficha e recalculado sem este item."
+                          <Field label="Notas" htmlFor={`n-${item.id}`}>
+                            <Input
+                              id={`n-${item.id}`}
+                              name="notes"
+                              defaultValue={item.notes ?? ''}
                             />
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-                {cost ? (
-                  <TableFooter>
-                    <TableRow>
-                      <TableCell colSpan={3}>Custo do lote</TableCell>
-                      <TableNum>{formatMoney(cost.batchFoodCost, currency)}</TableNum>
-                      <TableCell />
-                    </TableRow>
-                  </TableFooter>
-                ) : null}
-              </Table>
+                          </Field>
+                        </FormDialog>
+
+                        <ConfirmDelete
+                          action={deleteRecipeItem}
+                          fields={{ id: item.id, recipeId: id }}
+                          title={`Remover "${nome}" da ficha?`}
+                          description="O custo da ficha e recalculado sem este item."
+                        />
+                      </>
+                    ),
+                  };
+                })}
+                footer={
+                  cost ? (
+                    <tr>
+                      <td className="px-3 py-2.5">Custo do lote</td>
+                      <td />
+                      <td />
+                      <td className="px-3 py-2.5 text-right tabular-nums font-medium">
+                        {formatMoney(cost.batchFoodCost, currency)}
+                      </td>
+                      <td />
+                    </tr>
+                  ) : null
+                }
+              />
             )}
           </CardContent>
         </Card>
@@ -292,7 +278,8 @@ export default async function FichaPage({
             <CardHeader>
               <CardTitle>Adicionar item</CardTitle>
               <CardDescription>
-                Insumo ou outra preparacao base.
+                Insumo ou outra preparacao base. Se o que procura ainda nao
+                existe, crie-o aqui mesmo.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -315,6 +302,29 @@ export default async function FichaPage({
                   ]}
                 />
               </ActionForm>
+
+              <div className="mt-4 border-t pt-4">
+                <p className="mb-2 text-xs text-muted-foreground">
+                  Nao encontrou o insumo na lista?
+                </p>
+                <FormDialog
+                  action={saveIngredient}
+                  title="Novo insumo"
+                  description="Depois de guardar, ele aparece no seletor acima para ser adicionado a esta ficha."
+                  submitLabel="Guardar insumo"
+                  trigger={
+                    <Button variant="outline" className="w-full">
+                      <Plus className="h-4 w-4" />
+                      Criar insumo sem sair daqui
+                    </Button>
+                  }
+                >
+                  <IngredientForm
+                    suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
+                    idPrefix={`ficha-${id}`}
+                  />
+                </FormDialog>
+              </div>
             </CardContent>
           </Card>
         </div>

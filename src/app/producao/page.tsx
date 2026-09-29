@@ -60,6 +60,7 @@ export default async function ProducaoPage() {
         <div key="n">
           <div className="flex flex-wrap items-center gap-2">
             {nome}
+            {order.promotional ? <Badge variant="warning">para oferecer</Badge> : null}
             {order._count.listLines > 0 ? (
               <Badge variant="success">lista guardada</Badge>
             ) : null}
@@ -173,6 +174,22 @@ function NovaOrdem() {
           placeholder="Festa da rua. Comprar na quinta."
         />
       </Field>
+
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="promotional"
+          className="mt-0.5 h-4 w-4 rounded border-input"
+        />
+        <span>
+          E para oferecer
+          <span className="block text-xs text-muted-foreground">
+            Amostras, evento, caixa de correio. Sai do estoque na mesma, mas
+            entra como custo de divulgacao e nao no CMV — senao uma campanha de
+            amostras faria o CMV disparar sem haver problema nenhum.
+          </span>
+        </span>
+      </label>
     </FormDialog>
   );
 }

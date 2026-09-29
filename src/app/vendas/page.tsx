@@ -119,6 +119,9 @@ export default async function VendasPage({
     theoreticalCost: custoTeorico,
     actualProductionCost: movimentos.production,
     wasteCost: movimentos.waste,
+    // O que foi oferecido nao entra no CMV: saiu do armazem, mas nao houve
+    // venda a que o associar.
+    promoCost: movimentos.promo,
     netRevenue: receitaLiquida,
   });
 
@@ -228,6 +231,15 @@ export default async function VendasPage({
           }
         />
       </div>
+
+      {movimentos.promo > 0 ? (
+        <Alert tone="info">
+          <strong>{formatMoney(movimentos.promo, currency)}</strong> sairam do
+          armazem em amostras e divulgacao este mes. Esse valor fica{' '}
+          <strong>fora do CMV</strong> — e custo de marketing, nao custo do que
+          foi vendido. Somar os dois faria procurar desperdicio onde nao ha.
+        </Alert>
+      ) : null}
 
       {!temVendas || !temMovimentos ? (
         <Alert tone="info">

@@ -189,6 +189,30 @@ describe('CMV teorico x real', () => {
     expect(v.gap).toBeLessThan(0);
   });
 
+  it('o que foi oferecido nao entra no CMV', () => {
+    const semAmostras = computeVariance({
+      theoreticalCost: 1000,
+      actualProductionCost: 1000,
+      wasteCost: 0,
+      netRevenue: 4000,
+    });
+
+    const comAmostras = computeVariance({
+      theoreticalCost: 1000,
+      actualProductionCost: 1000,
+      wasteCost: 0,
+      promoCost: 300,
+      netRevenue: 4000,
+    });
+
+    // Uma campanha de amostras nao pode fazer o CMV disparar: saiu do
+    // armazem, mas nao houve venda a que associar o custo.
+    expect(comAmostras.actualCmv).toBeCloseTo(semAmostras.actualCmv, 10);
+    expect(comAmostras.gap).toBeCloseTo(semAmostras.gap, 10);
+    // Mas o valor continua a ser reportado.
+    expect(comAmostras.promoCost).toBeCloseTo(300, 10);
+  });
+
   it('sem receita nao inventa percentagens', () => {
     const v = computeVariance({
       theoreticalCost: 500,

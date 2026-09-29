@@ -254,6 +254,7 @@ export async function getMovementTotals(period: string) {
     purchase: total('PURCHASE'),
     production: total('PRODUCTION'),
     waste: total('WASTE'),
+    promo: total('PROMO'),
     inventory: total('INVENTORY'),
     adjustment: total('ADJUSTMENT'),
   };

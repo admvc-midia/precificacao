@@ -8,6 +8,7 @@ import {
   type BreakdownRow,
 } from '@/components/ingredient-breakdown';
 import { PriceExplorer } from '@/components/price-explorer';
+import { RecipeQuickView, type QuickViewLine } from '@/components/recipe-quick-view';
 import { ProductSwitcher } from '@/components/product-switcher';
 import { Alert, Separator } from '@/components/ui/badge';
 import {
@@ -17,6 +18,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Field, Select } from '@/components/ui/form-controls';
 import { Input } from '@/components/ui/input';
 import { saveRecipePricing } from '@/lib/actions/recipes';
@@ -157,6 +159,28 @@ export default async function PrecificarPage({
     ...embalagens(recipe, cost, currency, fatia, qtd),
   ].sort((a, b) => b.share - a.share);
 
+  // Vista rapida da ficha: o lote inteiro, como esta escrito nela.
+  const quickLines: QuickViewLine[] = cost.lines.map((l, i) => {
+    const item = recipe.items[i];
+    const base =
+      l.kind === 'RECIPE'
+        ? (ctx.recipes.get(l.refId)?.yieldUnit ?? 'UN')
+        : BASE_FROM_INGREDIENT(ctx, l.refId);
+
+    return {
+      id: item?.id ?? `${l.refId}-${i}`,
+      name: l.name,
+      detail:
+        l.kind === 'RECIPE'
+          ? 'preparacao base'
+          : l.correctionFactor > 1
+            ? `insumo · FC ${l.correctionFactor.toFixed(2)}`
+            : 'insumo',
+      qty: item ? `${Number(item.qty)} ${BASE_UNIT_LABEL[base]}` : qtd(l.qtyBase, base),
+      cost: formatMoney(l.cost, currency),
+    };
+  });
+
   const produtos = data.recipeRows
     .filter((r) => r.kind === 'PRODUCT')
     .map((r) => ({ id: r.id, name: r.name }));
@@ -201,9 +225,22 @@ export default async function PrecificarPage({
           label="Rende"
           value={`${cost.yieldQty} ${BASE_UNIT_LABEL[cost.yieldUnit]}`}
           hint={
-            <Link href={`/fichas/${id}`} className="text-primary hover:underline">
-              Ver ficha tecnica
-            </Link>
+            <RecipeQuickView
+              recipeId={id}
+              recipeName={recipe.name}
+              yieldLabel={`${cost.yieldQty} ${BASE_UNIT_LABEL[cost.yieldUnit]}`}
+              packagingLabel={recipe.packaging?.name ?? null}
+              lines={quickLines}
+              totalLabel={formatMoney(cost.batchFoodCost, currency)}
+              trigger={
+                <Button
+                  variant="link"
+                  className="h-auto p-0 text-xs text-primary"
+                >
+                  Ver ficha tecnica
+                </Button>
+              }
+            />
           }
         />
       </div>

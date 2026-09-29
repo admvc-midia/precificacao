@@ -196,6 +196,9 @@ export default async function OrdemPage({
           {order.dueAt ? (
             <Badge variant="secondary">{dateFmt.format(order.dueAt)}</Badge>
           ) : null}
+          {order.promotional ? (
+            <Badge variant="warning">para oferecer</Badge>
+          ) : null}
         </div>
         {order.notes ? (
           <p className="text-sm text-muted-foreground">{order.notes}</p>
@@ -467,13 +470,21 @@ O que voce ja tem no estoque chega para esta producao, entao estes
                     className="w-full"
                   >
                     <ChefHat className="h-4 w-4" />
-                    {order.producedAt ? 'Producao ja registada' : 'Produzi'}
+                    {order.producedAt
+                      ? order.promotional
+                        ? 'Amostras ja registadas'
+                        : 'Producao ja registada'
+                      : order.promotional
+                        ? 'Ofereci'
+                        : 'Produzi'}
                   </SubmitButton>
                 </ActionForm>
                 <p className="text-xs text-muted-foreground">
                   {order.producedAt
                     ? `Registada em ${dateFmt.format(order.producedAt)}.`
-                    : 'Tira do estoque o que as fichas dizem que esta producao consome, ja com o fator de correcao.'}
+                    : order.promotional
+                      ? 'Tira do estoque o que foi oferecido. Entra como custo de divulgacao, nao no CMV.'
+                      : 'Tira do estoque o que as fichas dizem que esta producao consome, ja com o fator de correcao.'}
                 </p>
               </div>
 

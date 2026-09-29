@@ -31,6 +31,7 @@ export async function createOrder(
         name,
         dueAt,
         notes: String(form.get('notes') ?? '').trim() || null,
+        promotional: form.get('promotional') === 'on',
       },
     });
 

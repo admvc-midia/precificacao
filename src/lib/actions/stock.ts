@@ -206,9 +206,13 @@ export async function recordProduction(
       buildCostContext(ingredients, recipes),
     );
 
+    // Uma producao para oferecer sai do estoque na mesma, mas com outro
+    // carimbo: o CMV real ignora-a e ela aparece como custo de divulgacao.
+    const tipo = order.promotional ? ('PROMO' as const) : ('PRODUCTION' as const);
+
     const entradas: PlanEntry[] = [...consumo.entries()].map(([id, qty]) => ({
       ingredientId: id,
-      kind: 'PRODUCTION' as const,
+      kind: tipo,
       qtyBase: -qty,
     }));
 
@@ -225,7 +229,9 @@ export async function recordProduction(
     revalidarTudo(orderId);
     return {
       ok: true,
-      message: `Producao registada: ${plano.length} insumo(s) sairam do estoque.`,
+      message: order.promotional
+        ? `Amostras registadas: ${plano.length} insumo(s) sairam do estoque, como custo de divulgacao.`
+        : `Producao registada: ${plano.length} insumo(s) sairam do estoque.`,
     };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };

@@ -96,6 +96,17 @@ Um desvio de 2 a 3 pontos percentuais de CMV já é dinheiro a sério: numa casa
 
 ---
 
+## Amostras e divulgação
+
+Se vai oferecer produto — num evento, na caixa de correio, para provar — crie a ordem de
+produção com **"É para oferecer"** marcado.
+
+Os insumos saem do estoque na mesma. A diferença é que esse custo **não entra no CMV**:
+é custo de marketing, não custo do que foi vendido. A página de Vendas mostra-o à parte.
+
+Se não marcar, uma campanha de amostras faz o CMV subir e você vai procurar desperdício
+que não existe — foi produto que saiu de propósito, sem receita associada.
+
 ## O aviso do "preço não registado"
 
 Na página **Estoque** pode aparecer: *"N insumos estão no estoque sem preço registado"*.
@@ -163,6 +174,10 @@ O CMV real fica baixo demais e o desvio fica negativo. Registe-a com a data cert
 **E se o estoque ficar negativo?**
 Significa que registou a produção antes da compra. A página de Estoque avisa. Receba a
 compra da ordem, ou faça uma contagem para acertar.
+
+**Ofereci produto sem criar ordem promocional. E agora?**
+Esse custo foi para o CMV e vai aparecer como desvio positivo. Registe a próxima como
+promocional; para corrigir a passada, não há caminho automático — anote no mês.
 
 **Contei o armazém e não bate com a app. E agora?**
 Em **Estoque**, use o botão de contagem ao lado do insumo. A app regista a **diferença**

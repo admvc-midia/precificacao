@@ -89,6 +89,10 @@ enum MovementKind {
   PRODUCTION
   /// Saida por quebra, estrago ou validade.
   WASTE
+  /// Saida para amostra, evento ou divulgacao: saiu do armazem mas nao houve
+  /// venda. Separado da producao normal porque somar isto ao CMV faria
+  /// procurar desperdicio onde ha marketing.
+  PROMO
   /// Correcao manual, sem contagem.
   ADJUSTMENT
   /// Correcao vinda de uma contagem de inventario.
@@ -343,6 +347,14 @@ model ProductionOrder {
   receivedAt DateTime?
   /// Quando a producao foi executada e os insumos sairam do estoque.
   producedAt DateTime?
+
+  /// Producao para oferecer: amostras, evento, caixa de correio.
+  ///
+  /// Sai do estoque como qualquer outra, mas os movimentos ficam marcados
+  /// como PROMO e nao entram no CMV real — entram como custo de divulgacao.
+  /// Sem esta separacao, uma campanha de amostras fazia o CMV disparar e
+  /// mandava procurar um problema que nao existe.
+  promotional Boolean @default(false)
 
   lines     ProductionOrderLine[]
   listLines PurchaseListLine[]

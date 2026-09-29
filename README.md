@@ -165,6 +165,10 @@ Duas regras que parecem detalhe e não são:
 - **Saldo com custo médio zero não dilui a entrada.** Zero ali significa "custo desconhecido" (estoque digitado à mão), não "de graça". Ponderar contra ele afundaria o preço do que acabou de entrar. O `/estoque` avisa quando isso acontece e oferece valorizar ao preço de compra atual — porque, enquanto não o fizer, as saídas desse saldo entram no CMV real a zero.
 - **Ler fora da transação, escrever dentro.** O plano de movimentos é calculado em memória por `planMovements` e a transação fica só com escritas. A primeira versão lia o estado de cada insumo *dentro* do laço e, contra o Supabase, estourava o limite das transações interativas do Prisma sem gravar nada — devolvendo sucesso na mesma.
 
+**Amostras e divulgação não entram no CMV.** Uma ordem de produção pode ser marcada como *para oferecer* — evento, caixa de correio, prova. Os insumos saem do estoque como em qualquer produção, mas os movimentos ficam com o carimbo `PROMO` e são reportados à parte, como custo de marketing. Somá-los ao custo do vendido faria o CMV disparar e mandava procurar desperdício onde não há: numa campanha de 20 amostras de hambúrguer, o CMV real saltava de 28,8% para 31,6% sem nada ter corrido mal.
+
+**Mexer no estoque à mão também é um movimento.** Editar o saldo na ficha do insumo regista um ajuste no livro. Sem isso o saldo mudava sem deixar rasto — e o livro existe precisamente para se poder perguntar *porque é que diz isto?*.
+
 **O resultado** é a comparação que justifica o resto da app: o que as fichas dizem que o vendido devia ter custado, contra o que saiu mesmo do armazém. A diferença é desperdício, porção a mais, ou ficha desatualizada.
 
 E as vendas que esse cálculo precisa são as mesmas que dão vida à **engenharia de cardápio** — a matriz Estrela/Cavalo/Quebra-cabeça/Abacaxi, que até aqui assumia que todos os produtos vendiam igual.

@@ -11,6 +11,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/db';
+import { num } from '@/lib/mappers';
 import { parseDecimal } from '@/lib/money';
 import { baseUnitOf, type PurchaseUnit } from '@/lib/units';
 import { findSimilarNames } from '@/lib/pricing/offers';
@@ -88,7 +89,29 @@ export async function saveIngredient(
     };
 
     if (id) {
+      // Mexer no estoque a mao tambem e um movimento. Sem isto, o saldo
+      // mudava sem deixar rasto no livro — e o livro existe precisamente
+      // para se poder perguntar "porque e que diz isto?".
+      const antes = await prisma.ingredient.findUnique({
+        where: { id },
+        select: { stockBase: true, avgCostBase: true },
+      });
+
       await prisma.ingredient.update({ where: { id }, data: payload });
+
+      const diferenca = data.stockBase - num(antes?.stockBase ?? 0);
+      if (Math.abs(diferenca) > 1e-9) {
+        await prisma.stockMovement.create({
+          data: {
+            ingredientId: id,
+            kind: 'ADJUSTMENT',
+            qtyBase: diferenca,
+            unitCost: num(antes?.avgCostBase ?? 0),
+            value: diferenca * num(antes?.avgCostBase ?? 0),
+            note: 'Ajuste ao editar o insumo',
+          },
+        });
+      }
     } else {
       // Ao criar, avisar se ja existe algo com nome parecido. Nao bloqueia:
       // "Tomate" e "Tomate cereja" sao produtos legitimos e diferentes. So
@@ -118,8 +141,11 @@ export async function saveIngredient(
     }
 
     revalidatePath('/insumos');
-    revalidatePath('/fichas');
-    revalidatePath('/precificacao');
+    // 'layout' apanha tambem as paginas de ficha individuais, onde o insumo
+    // novo tem de aparecer no seletor sem obrigar a recarregar.
+    revalidatePath('/fichas', 'layout');
+    revalidatePath('/precificacao', 'layout');
+    revalidatePath('/estoque');
     revalidatePath('/');
     return { ok: true, message: id ? 'Insumo atualizado.' : 'Insumo criado.' };
   } catch (err) {

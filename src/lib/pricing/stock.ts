@@ -28,16 +28,18 @@ export type MovementKind =
   | 'PURCHASE'
   | 'PRODUCTION'
   | 'WASTE'
+  | 'PROMO'
   | 'ADJUSTMENT'
   | 'INVENTORY';
 
 /** Movimentos que tiram do estoque. */
-export const OUTFLOW_KINDS: MovementKind[] = ['PRODUCTION', 'WASTE'];
+export const OUTFLOW_KINDS: MovementKind[] = ['PRODUCTION', 'WASTE', 'PROMO'];
 
 export const MOVEMENT_LABEL: Record<MovementKind, string> = {
   PURCHASE: 'Compra recebida',
   PRODUCTION: 'Producao',
   WASTE: 'Quebra',
+  PROMO: 'Amostra ou divulgacao',
   ADJUSTMENT: 'Ajuste manual',
   INVENTORY: 'Contagem de inventario',
 };
@@ -235,6 +237,14 @@ export interface VarianceInput {
   actualProductionCost: number;
   /** Valor perdido em quebras. */
   wasteCost: number;
+  /**
+   * Valor do que foi oferecido: amostras, eventos, divulgacao.
+   *
+   * **Nao entra no CMV real.** Saiu do armazem, mas nao houve venda a que o
+   * associar — somar isto ao custo do vendido faria o CMV disparar e mandava
+   * procurar desperdicio onde ha marketing. E custo, mas de outra natureza.
+   */
+  promoCost?: number;
   /** Receita liquida do periodo, para exprimir os CMV em percentagem. */
   netRevenue: number;
 }
@@ -243,6 +253,8 @@ export interface Variance {
   theoreticalCost: number;
   actualCost: number;
   wasteCost: number;
+  /** Custo do que foi oferecido, fora do CMV. */
+  promoCost: number;
   /** actual - theoretical. Positivo = gastou-se mais do que a ficha previa. */
   gap: number;
   /** O desvio como fracao do custo teorico. */
@@ -269,6 +281,7 @@ export function computeVariance(input: VarianceInput): Variance {
     theoreticalCost: input.theoreticalCost,
     actualCost,
     wasteCost: input.wasteCost,
+    promoCost: input.promoCost ?? 0,
     gap,
     gapRate: input.theoreticalCost > 0 ? gap / input.theoreticalCost : 0,
     theoreticalCmv: receita > 0 ? input.theoreticalCost / receita : 0,
