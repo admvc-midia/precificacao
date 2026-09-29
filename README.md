@@ -43,9 +43,17 @@ e defina `DIRECT_URL` com a connection string sem pooler. O schema não declara 
 ### Deploy na Vercel
 
 1. Importe o repositório.
-2. Defina `DATABASE_URL` (e `DIRECT_URL`) nas variáveis de ambiente.
+2. Defina as variáveis de ambiente: `DATABASE_URL` (e `DIRECT_URL`, se usar migrations) e **`APP_PASSWORD`**. Sem a segunda ninguém entra, nem você — ver "A aplicação fecha por omissão" mais abaixo.
 3. O `build` já corre `prisma generate`; o `postinstall` também, para o caso do cache de dependências da Vercel.
 4. Na primeira vez, corra `npm run db:push` apontando para o banco de produção.
+
+#### "No Output Directory named 'public' found after the Build completed"
+
+O build correu bem; o que falhou foi o reconhecimento do projeto. A Vercel achou que isto era um site estático e foi procurar uma pasta `public`.
+
+Acontece quando o projeto da Vercel é ligado a um repositório **vazio**, antes de haver código: sem `package.json` não há framework para detetar, o preset fica em *Other* — que espera ficheiros estáticos — e não se corrige sozinho quando o código chega. Foi o que aconteceu aqui: o primeiro commit deste repositório era só o README gerado pelo GitHub.
+
+O `vercel.json` na raiz fixa `"framework": "nextjs"` e resolve o caso normal. Se o erro persistir, é porque há uma substituição manual no painel, que ganha ao ficheiro: **Settings → Build and Deployment**, e em *Output Directory* desligue o override (o botão *Override*), deixando o valor por omissão. Na mesma página, *Framework Preset* deve dizer **Next.js**.
 
 ---
 
