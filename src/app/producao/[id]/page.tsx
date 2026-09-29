@@ -46,6 +46,7 @@ import {
   demandConsumptionCost,
   type PurchaseList,
 } from '@/lib/pricing/purchase';
+import { bestOfferForNeed } from '@/lib/pricing/offers';
 import { getPricingData, getProductionOrder, getSuppliers } from '@/lib/queries';
 import { formatBaseQty, UNIT_LABEL } from '@/lib/units';
 
@@ -96,6 +97,22 @@ export default async function OrdemPage({
   // que se quer no supermercado: onde ir e a quem ligar se faltar algo.
   const porFornecedor = new Map(suppliers.map((s) => [s.id, s]));
 
+  // Precos alternativos por insumo, para a lista dizer onde ficava mais barato.
+  const ofertasPorInsumo = new Map(
+    data.ingredientRows.map((i) => [
+      i.id,
+      i.offers.map((o) => ({
+        id: o.id,
+        supplierId: o.supplierId,
+        supplierName: o.supplier.name,
+        purchasePrice: num(o.purchasePrice),
+        purchaseQty: num(o.purchaseQty),
+        purchaseUnit: o.purchaseUnit,
+        preferred: o.preferred,
+      })),
+    ]),
+  );
+
   const checklistGroups: ChecklistGroup[] = (list?.bySupplier ?? []).map((group) => {
     const sup = group.supplierId ? porFornecedor.get(group.supplierId) : undefined;
     return {
@@ -125,9 +142,40 @@ export default async function OrdemPage({
           l.leftoverBase > 0
             ? `sobram ${formatBaseQty(l.leftoverBase, l.baseUnit, currency.locale)}`
             : undefined,
+        betterPrice: melhorPreco(l),
       })),
     };
   });
+
+  /**
+   * Onde esta compra ficava mais barata.
+   *
+   * Compara pelo **custo total desta necessidade**, nao pelo preco por grama:
+   * comprar 1 kg num pacote de 5 kg pode sair mais caro do que num pacote de
+   * 1 kg mais caro por grama.
+   */
+  function melhorPreco(l: {
+    ingredient: { id: string };
+    missingBase: number;
+    cost: number;
+  }) {
+    const ofertas = ofertasPorInsumo.get(l.ingredient.id) ?? [];
+    if (ofertas.length === 0) return undefined;
+
+    const melhor = bestOfferForNeed(l.missingBase, ofertas);
+    if (!melhor) return undefined;
+
+    const poupanca = l.cost - melhor.cheapest.cost;
+    // Menos de um centimo nao vale um aviso.
+    if (poupanca <= 0.005) return undefined;
+
+    const q = melhor.cheapest;
+    return {
+      supplier: q.offer.supplierName,
+      saving: formatMoney(poupanca, currency),
+      detail: `${q.packs}x ${num(q.offer.purchaseQty)} ${UNIT_LABEL[q.offer.purchaseUnit]} por ${formatMoney(q.cost, currency)}`,
+    };
+  }
 
   const dateFmt = new Intl.DateTimeFormat(currency.locale, {
     day: '2-digit',

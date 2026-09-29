@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { parseDecimal } from '@/lib/money';
 import { baseUnitOf, type PurchaseUnit } from '@/lib/units';
+import { findSimilarNames } from '@/lib/pricing/offers';
 import {
   CATEGORY,
   errorMessage,
@@ -89,6 +90,30 @@ export async function saveIngredient(
     if (id) {
       await prisma.ingredient.update({ where: { id }, data: payload });
     } else {
+      // Ao criar, avisar se ja existe algo com nome parecido. Nao bloqueia:
+      // "Tomate" e "Tomate cereja" sao produtos legitimos e diferentes. So
+      // pergunta, e a segunda tentativa traz a confirmacao.
+      if (form.get('confirmDuplicate') !== '1') {
+        const existentes = await prisma.ingredient.findMany({
+          select: { name: true },
+        });
+        const parecidos = findSimilarNames(
+          data.name,
+          existentes.map((i) => i.name),
+        );
+
+        if (parecidos.length > 0) {
+          return {
+            ok: false,
+            message:
+              parecidos.length === 1
+                ? 'Ja existe um insumo com nome muito parecido. Confirme que sao mesmo coisas diferentes.'
+                : 'Ja existem insumos com nomes muito parecidos. Confirme que sao mesmo coisas diferentes.',
+            similar: parecidos,
+          };
+        }
+      }
+
       await prisma.ingredient.create({ data: payload });
     }
 

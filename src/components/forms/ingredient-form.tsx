@@ -21,6 +21,7 @@
 
 import { useState } from 'react';
 
+import { useActionFormState } from '@/components/action-form';
 import { Field, Select } from '@/components/ui/form-controls';
 import { Input, Textarea } from '@/components/ui/input';
 import { fcFromWastePercent, wastePercentFromFc } from '@/lib/pricing/cost';
@@ -73,6 +74,8 @@ export function IngredientForm({
   idPrefix: string;
 }) {
   const [v, setV] = useState(initial);
+  const estado = useActionFormState();
+  const parecidos = estado.similar ?? [];
   const fcInicial = parse(initial.correctionFactor) || 1;
   const [perda, setPerda] = useState(() => fmt(wastePercentFromFc(fcInicial) * 100, 2));
 
@@ -100,6 +103,30 @@ export function IngredientForm({
           required
         />
       </Field>
+
+      {parecidos.length > 0 ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
+          <p className="font-medium">Ja existe algo parecido:</p>
+          <ul className="mt-1 list-disc pl-5">
+            {parecidos.map((n) => (
+              <li key={n}>{n}</li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs">
+            Se for o mesmo insumo, feche esta janela e edite o que ja existe em vez
+            de criar outro.
+          </p>
+          <label className="mt-2 flex items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              name="confirmDuplicate"
+              value="1"
+              className="h-4 w-4 rounded border-input"
+            />
+            Sao coisas diferentes, criar mesmo assim
+          </label>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Categoria" htmlFor={id('category')}>

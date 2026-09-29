@@ -107,6 +107,7 @@ O termo entre colchetes é o **denominador**. Se for ≤ 0, as taxas somadas con
 | 5 · Configurações e painel | `/configuracoes`, `/` | pronto |
 | 6 · Estoque com livro de movimentos | `/estoque` | pronto |
 | 7 · Vendas, CMV real e engenharia de cardápio | `/vendas` | pronto |
+| 8 · Preços por fornecedor e melhor preço | `/insumos`, `/producao` | pronto |
 
 ### Consulta de preços de supermercados (Módulo 1b)
 
@@ -134,6 +135,24 @@ Num lote pequeno o primeiro fica bem acima do segundo, e essa diferença (**Fica
 **Estoque e fornecedor.** Só entra na lista o que falta, e a lista sai dividida por loja, na ordem da volta das compras.
 
 A lista mostrada é sempre recalculada ao vivo. **Guardar lista** congela os preços e o estoque do dia do planeamento; se depois um insumo mudar de preço, a aplicação diz quanto a mesma compra passou a custar.
+
+### Preços por fornecedor
+
+Um insumo pode ter o preço de vários fornecedores. O preço **do insumo** continua a ser um só — é esse que alimenta o custo de todas as fichas — e as ofertas são alternativas para comparar. Adotar uma é um clique explícito: se a app trocasse sozinha pelo mais barato, o custo dos produtos mudava porque alguém anotou um preço só para consultar.
+
+**O preço por grama não chega para decidir onde comprar.** É o instinto, e falha quando se precisa de pouco, porque não se compra fração de embalagem:
+
+```
+Preciso de 1 kg de carne.
+  Talho     12,50 € / 5 kg  →  0,0025/g, mas levo 5 kg  =  12,50 €
+  Mercado    3,20 € / 1 kg  →  0,0032/g, e levo 1 kg    =   3,20 €
+```
+
+O "mais barato por grama" custava quatro vezes mais nesta compra. Por isso há duas funções em `offers.ts`: `rankOffers` para a ficha do insumo ("quem vende mais barato") e `bestOfferForNeed` para a lista de compras ("onde é que *esta* compra fica mais barata"). A lista mostra a poupança em euros, já contando embalagens inteiras.
+
+Um fornecedor pode ser marcado como **preferido** — por qualidade, prazo ou confiança. A app respeita a escolha e diz quanto ela custa em relação ao mais barato, em vez de a discutir.
+
+**Nomes parecidos** dão aviso ao criar, não recusa: `findSimilarNames` apanha acentos, maiúsculas, um nome contido no outro e gralhas de uma ou duas letras. Recusar impediria "Tomate" e "Tomate cereja" de coexistirem, que é legítimo.
 
 ### Estoque e CMV real (Módulos 6 e 7)
 
@@ -176,6 +195,8 @@ src/lib/
     channels.ts           simulador multicanal, break-even, engenharia de cardápio
     purchase.ts           lista de compras: estoque, embalagem inteira, fornecedor
     stock.ts              custo médio ponderado, plano de movimentos, variância
+    offers.ts             comparar fornecedores, melhor preço por necessidade,
+                          deteção de nomes parecidos
 
 src/app/                  páginas (App Router)
 src/components/

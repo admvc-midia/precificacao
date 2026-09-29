@@ -53,7 +53,13 @@ export const getAllChannels = cache(async () =>
 
 export const getIngredients = cache(async () =>
   prisma.ingredient.findMany({
-    include: { supplier: true },
+    include: {
+      supplier: true,
+      offers: {
+        where: { active: true },
+        include: { supplier: { select: { id: true, name: true } } },
+      },
+    },
     orderBy: [{ category: 'asc' }, { name: 'asc' }],
   }),
 );

@@ -154,6 +154,7 @@ model Supplier {
   phone   String?
 
   ingredients Ingredient[]
+  offers      SupplierOffer[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -204,6 +205,7 @@ model Ingredient {
   quotes               PriceQuote[]
   purchaseLines        PurchaseListLine[]
   movements            StockMovement[]
+  offers               SupplierOffer[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -456,4 +458,46 @@ model SalesRecord {
 
   @@unique([recipeId, period])
   @@index([period])
+}
+
+// ---------------------------------------------------------------------------
+// Precos por fornecedor
+// ---------------------------------------------------------------------------
+
+/// Quanto um fornecedor cobra por um insumo.
+///
+/// O `Ingredient` continua a ter o seu proprio preco: e esse que alimenta
+/// todos os custos da aplicacao, e e o preco que a casa esta de facto a
+/// pagar. Estas ofertas sao alternativas para comparar — adotar uma copia o
+/// preco para o insumo, num gesto explicito.
+///
+/// Separar as duas coisas evita a armadilha de o custo de todas as fichas
+/// mudar sozinho porque alguem anotou um preco de outro fornecedor.
+model SupplierOffer {
+  id           String     @id @default(cuid())
+  ingredientId String
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  supplierId   String
+  supplier     Supplier   @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  /// Preco da embalagem inteira neste fornecedor.
+  purchasePrice Decimal      @db.Decimal(12, 4)
+  /// Tamanho da embalagem **deste** fornecedor, que pode nao ser o mesmo.
+  purchaseQty   Decimal      @db.Decimal(12, 4)
+  purchaseUnit  PurchaseUnit
+
+  /// Referencia do produto no fornecedor.
+  sku   String?
+  notes String?
+
+  /// Preferido por outra razao que nao o preco: qualidade, prazo, confianca.
+  /// A lista de compras respeita esta escolha e diz quanto ela custa.
+  preferred Boolean @default(false)
+  active    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ingredientId, supplierId])
+  @@index([ingredientId])
 }

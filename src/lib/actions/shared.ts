@@ -11,6 +11,11 @@ import { z } from 'zod';
 export interface ActionState {
   ok: boolean;
   message?: string;
+  /**
+   * Nomes ja existentes parecidos com o que se tentou gravar. Nao e um erro:
+   * e a aplicacao a perguntar antes de deixar criar um duplicado por gralha.
+   */
+  similar?: string[];
 }
 
 export const PURCHASE_UNIT = z.enum(['KG', 'G', 'L', 'ML', 'UN']);

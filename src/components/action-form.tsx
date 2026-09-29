@@ -14,7 +14,7 @@
  * aconteceu.
  */
 
-import { useActionState, useState } from 'react';
+import { createContext, use, useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { CheckCircle2, Loader2, Pencil, Trash2, XCircle } from 'lucide-react';
 
@@ -42,6 +42,22 @@ import { cn } from '@/lib/utils';
 export interface ActionState {
   ok: boolean;
   message?: string;
+  /** Nomes existentes parecidos, quando a action quer confirmar antes de criar. */
+  similar?: string[];
+}
+
+/**
+ * O estado da action, disponivel aos campos do formulario.
+ *
+ * Existe porque os campos sao criados no servidor e passados como filhos:
+ * nao ha como lhes dar o estado por prop. Como sao componentes de cliente,
+ * podem ler um contexto que o formulario a volta deles fornece — e e assim
+ * que o formulario de insumo sabe que o servidor encontrou um nome parecido.
+ */
+const EstadoDaAction = createContext<ActionState>({ ok: true });
+
+export function useActionFormState(): ActionState {
+  return use(EstadoDaAction);
 }
 
 export type ActionFn = (state: ActionState, form: FormData) => Promise<ActionState>;
@@ -92,7 +108,7 @@ export function ActionForm({
 
   return (
     <form action={formAction} className={cn('space-y-4', className)}>
-      {children}
+      <EstadoDaAction.Provider value={state}>{children}</EstadoDaAction.Provider>
       <FormMessage state={state} showSuccess={showSuccess} />
     </form>
   );
@@ -175,7 +191,7 @@ export function FormDialog({
         </DialogHeader>
 
         <form action={formAction} className="space-y-4">
-          {children}
+          <EstadoDaAction.Provider value={state}>{children}</EstadoDaAction.Provider>
           {/* So o erro aparece aqui: o sucesso fecha a janela, e a lista
               atras ja mostra o valor novo. */}
           <FormMessage state={state} showSuccess={false} />

@@ -20,7 +20,7 @@
  */
 
 import { useMemo } from 'react';
-import { Check, MapPin, Phone, Store } from 'lucide-react';
+import { Check, MapPin, Phone, Store, Tag } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { formatMoney, type CurrencyConfig } from '@/lib/money';
@@ -40,6 +40,11 @@ export interface ChecklistItem {
   detail: string;
   /** "sobram 3,4 kg" quando a embalagem obriga a levar a mais. */
   leftover?: string;
+  /**
+   * Dica de onde ficava mais barato, quando ha outro fornecedor com melhor
+   * preco **para esta quantidade** — que nem sempre e o mais barato por grama.
+   */
+  betterPrice?: { supplier: string; saving: string; detail: string };
 }
 
 export interface ChecklistGroup {
@@ -237,6 +242,17 @@ export function PurchaseChecklist({
                           {item.detail}
                           {item.leftover ? ` · ${item.leftover}` : ''}
                         </p>
+
+                        {item.betterPrice && !feito ? (
+                          <p className="mt-1 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                            <Tag className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+                            <span>
+                              Em <strong>{item.betterPrice.supplier}</strong> poupava{' '}
+                              <strong>{item.betterPrice.saving}</strong> —{' '}
+                              {item.betterPrice.detail}
+                            </span>
+                          </p>
+                        ) : null}
                       </div>
                     </label>
                   </li>

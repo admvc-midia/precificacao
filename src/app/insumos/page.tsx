@@ -1,12 +1,14 @@
-import { Plus, Upload } from 'lucide-react';
+import { Plus, Store, Upload } from 'lucide-react';
 
 import { ConfirmDelete, FormDialog } from '@/components/action-form';
 import { GroupedList, type ListColumn, type ListRow } from '@/components/data-list';
 import { CsvImport } from '@/components/forms/csv-import';
 import { IngredientForm } from '@/components/forms/ingredient-form';
+import { OffersDialog, type OfferRow } from '@/components/forms/offers-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { importIngredientsCsv } from '@/lib/actions/import';
+import { adoptOffer, deleteOffer, saveOffer } from '@/lib/actions/offers';
 import { deleteIngredient, saveIngredient } from '@/lib/actions/ingredients';
 import { num, toIngredientFormValues, toIngredientInput } from '@/lib/mappers';
 import { formatMoney, formatPercent, formatUnitCost } from '@/lib/money';
@@ -16,7 +18,8 @@ import {
   wastePercentFromFc,
 } from '@/lib/pricing/cost';
 import { getIngredients, getSettings, getSuppliers } from '@/lib/queries';
-import { BASE_UNIT_LABEL, UNIT_LABEL } from '@/lib/units';
+import { rankOffers } from '@/lib/pricing/offers';
+import { BASE_UNIT_LABEL, compatibleUnits, UNIT_LABEL } from '@/lib/units';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,8 +60,72 @@ export default async function InsumosPage() {
         <span key="p" className="text-muted-foreground">—</span>
       );
 
+    // Precos de outros fornecedores, ja ordenados do mais barato ao mais caro.
+    const ranked = rankOffers(
+      row.offers.map((o) => ({
+        id: o.id,
+        supplierId: o.supplierId,
+        supplierName: o.supplier.name,
+        purchasePrice: num(o.purchasePrice),
+        purchaseQty: num(o.purchaseQty),
+        purchaseUnit: o.purchaseUnit,
+        preferred: o.preferred,
+      })),
+    );
+
+    const offerRows: OfferRow[] = ranked.map((o) => ({
+      id: o.id,
+      supplierId: o.supplierId,
+      supplierName: o.supplierName,
+      packLabel: `${formatMoney(o.purchasePrice, currency)} / ${o.purchaseQty} ${UNIT_LABEL[o.purchaseUnit]}`,
+      unitCostLabel: `${formatUnitCost(o.unitCost, currency)}/${unit}`,
+      cheapest: o.cheapest,
+      preferred: o.preferred,
+      premiumLabel: o.premium > 0.0001
+        ? formatPercent(o.premium, currency.locale, 0)
+        : null,
+      // "Em uso" e o fornecedor e o preco que o insumo tem hoje.
+      inUse:
+        o.supplierId === row.supplierId &&
+        Math.abs(o.unitCost - raw) < 1e-9,
+    }));
+
+    const maisBarato = ranked.find((o) => o.cheapest);
+    const poupanca =
+      maisBarato && raw > 0 && maisBarato.unitCost < raw ? 1 - maisBarato.unitCost / raw : 0;
+
     const acoes = (
       <>
+        <OffersDialog
+          ingredientId={row.id}
+          ingredientName={row.name}
+          baseUnitLabel={unit}
+          unitOptions={compatibleUnits(row.baseUnit).map((u) => ({
+            value: u,
+            label: UNIT_LABEL[u],
+          }))}
+          offers={offerRows}
+          suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
+          currentLabel={`${formatMoney(num(row.purchasePrice), currency)} / ${num(row.purchaseQty)} ${UNIT_LABEL[row.purchaseUnit]}`}
+          saveOffer={saveOffer}
+          deleteOffer={deleteOffer}
+          adoptOffer={adoptOffer}
+          trigger={
+            <Button
+              variant="ghost"
+              size="sm"
+              className={
+                poupanca > 0
+                  ? 'text-amber-700 dark:text-amber-400'
+                  : 'text-muted-foreground hover:text-foreground'
+              }
+            >
+              <Store className="h-4 w-4" />
+              <span className="sr-only">Precos por fornecedor</span>
+            </Button>
+          }
+        />
+
         <FormDialog
           action={saveIngredient}
           title={`Editar ${row.name}`}
@@ -114,6 +181,13 @@ export default async function InsumosPage() {
           {row.supplier ? <>{row.supplier.name} · </> : null}
           {compra}
           {waste > 0 ? <> · {perdaBadge}</> : null}
+          {poupanca > 0 ? (
+            <span className="text-amber-700 dark:text-amber-400">
+              {' '}
+              · ha {formatPercent(poupanca, currency.locale, 0)} mais barato em{' '}
+              {maisBarato!.supplierName}
+            </span>
+          ) : null}
         </span>
       ),
       actions: acoes,
