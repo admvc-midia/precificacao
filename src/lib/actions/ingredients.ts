@@ -11,9 +11,8 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/db';
-import { parseDecimal, parsePercent } from '@/lib/money';
+import { parseDecimal } from '@/lib/money';
 import { baseUnitOf, type PurchaseUnit } from '@/lib/units';
-import { fcFromWastePercent } from '@/lib/pricing/cost';
 import {
   CATEGORY,
   errorMessage,
@@ -39,20 +38,15 @@ const ingredientSchema = z.object({
 });
 
 /**
- * O utilizador pode informar a perda de duas maneiras — o FC direto (1,25)
- * ou a percentagem de perda (20%). Aceitamos as duas e convertemos aqui,
- * porque quem limpa carne pensa em "perdi 20%", nao em "FC 1,25".
+ * A perda chega como fator de correcao. O formulario mostra tambem a
+ * percentagem, mas os dois campos estao sincronizados no cliente e e o FC que
+ * e enviado — ver `components/forms/waste-input.tsx`.
  */
 function readCorrectionFactor(form: FormData): number {
-  const mode = String(form.get('fcMode') ?? 'FC');
-  if (mode === 'WASTE') {
-    const waste = parsePercent(String(form.get('wastePercent') ?? '0'));
-    if (waste <= 0) return 1;
-    if (waste >= 1) throw new Error('A perda tem de ser menor que 100%.');
-    return fcFromWastePercent(waste);
-  }
   const fc = parseDecimal(String(form.get('correctionFactor') ?? '1'));
-  return fc > 0 ? fc : 1;
+  if (fc > 0) return fc;
+  // Campo vazio ou invalido significa "sem perda", nao "zero".
+  return 1;
 }
 
 function readIngredient(form: FormData) {
@@ -194,6 +188,8 @@ export async function saveSupplier(
     const payload = {
       name,
       url: String(form.get('url') ?? '').trim() || null,
+      address: String(form.get('address') ?? '').trim() || null,
+      phone: String(form.get('phone') ?? '').trim() || null,
       notes: String(form.get('notes') ?? '').trim() || null,
     };
 

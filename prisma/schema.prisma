@@ -81,6 +81,20 @@ enum RoundingStrategy {
   ENDING_95
 }
 
+/// O que fez o estoque mexer.
+enum MovementKind {
+  /// Entrada por compra recebida.
+  PURCHASE
+  /// Saida por producao executada.
+  PRODUCTION
+  /// Saida por quebra, estrago ou validade.
+  WASTE
+  /// Correcao manual, sem contagem.
+  ADJUSTMENT
+  /// Correcao vinda de uma contagem de inventario.
+  INVENTORY
+}
+
 /// Origem de uma cotacao de preco de insumo.
 enum QuoteSource {
   MANUAL
@@ -134,6 +148,10 @@ model Supplier {
   notes String?
   /// Loja/URL de referencia para consulta de precos.
   url   String?
+  /// Morada da loja. Serve para ordenar a volta das compras.
+  address String?
+  /// Telefone de contacto para encomendas.
+  phone   String?
 
   ingredients Ingredient[]
 
@@ -161,8 +179,21 @@ model Ingredient {
   /// Ex: 1.25 significa 20% de perda na limpeza.
   correctionFactor Decimal @default(1) @db.Decimal(12, 4)
 
-  /// Estoque atual na unidade base. Usado pelo Modulo 4.
+  /// Estoque atual na unidade base.
+  ///
+  /// E a soma dos movimentos, mantida em cache: recalcular somando a tabela
+  /// de movimentos a cada leitura seria caro numa pagina que mostra 80
+  /// insumos. Escreve-se sempre na mesma transacao do movimento, e a
+  /// contagem de inventario serve justamente para o reconciliar com o mundo.
   stockBase Decimal @default(0) @db.Decimal(12, 4)
+
+  /// Custo medio ponderado por unidade base do que esta em estoque.
+  ///
+  /// Diferente de `purchasePrice / purchaseQty`: aquele e o preco da proxima
+  /// compra, este e o custo do que ja esta no armazem. Quando entra carne
+  /// mais cara, o custo do que la estava dilui-se no novo — e e por este
+  /// valor que se mede o que saiu.
+  avgCostBase Decimal @default(0) @db.Decimal(12, 6)
 
   sku   String?
   notes String?
@@ -172,6 +203,7 @@ model Ingredient {
   deliveryPackagingFor Recipe[]           @relation("DeliveryPackaging")
   quotes               PriceQuote[]
   purchaseLines        PurchaseListLine[]
+  movements            StockMovement[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -231,6 +263,7 @@ model Recipe {
   /// Sobrescreve Settings.targetMargin para este produto.
   targetMargin Decimal? @db.Decimal(12, 4)
 
+  sales      SalesRecord[]
   items      RecipeItem[]          @relation("RecipeOwner")
   /// Onde esta receita e usada como sub-receita.
   usedIn     RecipeItem[]          @relation("RecipeChild")
@@ -302,8 +335,16 @@ model ProductionOrder {
   /// Data alvo da producao.
   dueAt DateTime?
 
+  /// Quando a compra desta ordem deu entrada no estoque. Enquanto for nulo,
+  /// o botao de receber continua disponivel; depois de preenchido, receber
+  /// outra vez duplicaria o estoque.
+  receivedAt DateTime?
+  /// Quando a producao foi executada e os insumos sairam do estoque.
+  producedAt DateTime?
+
   lines     ProductionOrderLine[]
   listLines PurchaseListLine[]
+  movements StockMovement[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -344,4 +385,75 @@ model PurchaseListLine {
   estimatedCost Decimal @db.Decimal(12, 4)
 
   @@index([orderId])
+}
+
+// ---------------------------------------------------------------------------
+// Estoque — livro de movimentos
+// ---------------------------------------------------------------------------
+
+/// Cada mexida no estoque, com o seu porque.
+///
+/// O `Ingredient.stockBase` e a soma destes registos. Guardar o livro e nao
+/// so o saldo e o que permite responder a "porque e que diz 3 kg?" — sem
+/// isto, um numero errado no armazem nao tem como ser investigado.
+model StockMovement {
+  id           String     @id @default(cuid())
+  ingredientId String
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  kind MovementKind
+
+  /// Quantidade na unidade base, **com sinal**: positiva entra, negativa sai.
+  qtyBase Decimal @db.Decimal(12, 4)
+
+  /// Custo por unidade base no momento do movimento. Nas entradas e o preco
+  /// pago; nas saidas e o custo medio de entao. Guardado porque o custo medio
+  /// muda a cada compra e um relatorio de ontem nao pode mudar hoje.
+  unitCost Decimal @db.Decimal(12, 6)
+  /// `qtyBase * unitCost`. Denormalizado para somar periodos sem multiplicar.
+  value    Decimal @db.Decimal(12, 4)
+
+  /// Ordem de producao que originou o movimento, quando houve uma.
+  orderId String?
+  order   ProductionOrder? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  note String?
+
+  /// Quando aconteceu no mundo, que pode nao ser quando foi registado.
+  occurredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([ingredientId, occurredAt])
+  @@index([kind, occurredAt])
+  @@index([orderId])
+}
+
+// ---------------------------------------------------------------------------
+// Vendas — o que faltava para fechar o ciclo
+// ---------------------------------------------------------------------------
+
+/// Quanto cada produto vendeu num periodo.
+///
+/// Entrada manual por mes: e o minimo que permite a engenharia de cardapio
+/// (o eixo da popularidade) e a comparacao entre o CMV teorico e o real.
+model SalesRecord {
+  id       String @id @default(cuid())
+  recipeId String
+  recipe   Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  /// Mes no formato "2026-09". Texto e nao data porque a granularidade e o
+  /// mes, e uma data obrigaria a escolher um dia arbitrario.
+  period String
+
+  /// Unidades vendidas no periodo.
+  qty Decimal @db.Decimal(12, 4)
+
+  /// Receita bruta realizada, se souber. Vazio usa o preco calculado.
+  revenue Decimal? @db.Decimal(12, 4)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([recipeId, period])
+  @@index([period])
 }

@@ -93,6 +93,39 @@ export async function addOrderLine(
   }
 }
 
+/**
+ * Define a quantidade de uma linha da ordem.
+ *
+ * Repare que **define**, nao soma — ao contrario do `addOrderLine`. Sem isto
+ * nao havia forma de baixar uma quantidade: so apagando a linha e voltando a
+ * cria-la.
+ */
+export async function updateOrderLine(
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const id = String(form.get('id') ?? '');
+    const qty = parseDecimal(String(form.get('qty') ?? ''));
+
+    if (!id) throw new Error('Linha nao informada.');
+    if (qty <= 0) {
+      throw new Error('A quantidade tem de ser maior que zero. Para tirar o produto, remova a linha.');
+    }
+
+    const line = await prisma.productionOrderLine.update({
+      where: { id },
+      data: { qty },
+    });
+
+    revalidatePath(`/producao/${line.orderId}`);
+    revalidatePath('/producao');
+    return { ok: true, message: 'Quantidade atualizada.' };
+  } catch (err) {
+    return { ok: false, message: errorMessage(err) };
+  }
+}
+
 export async function deleteOrderLine(
   _prev: ActionState,
   form: FormData,

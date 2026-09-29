@@ -4,10 +4,11 @@
  * Funcoes puras. Nenhum acesso a banco, nenhuma dependencia de React.
  */
 
-import { baseUnitOf, toBase, UnitMismatchError } from '@/lib/units';
+import { baseUnitOf, toBase, UnitMismatchError, type BaseUnit } from '@/lib/units';
 import type {
   CostContext,
   CostLine,
+  IngredientCategory,
   IngredientInput,
   RecipeCost,
   RecipeInput,
@@ -153,7 +154,7 @@ function resolve(
     foodCostPerUnit,
     packagingCost,
     deliveryPackagingCost,
-    primeCost: foodCostPerUnit + packagingCost,
+    productCost: foodCostPerUnit + packagingCost,
   };
 
   memo.set(recipeId, result);
@@ -286,16 +287,104 @@ export function explodeIngredients(
   const totals = new Map<string, number>();
 
   for (const { recipeId, qty } of demand) {
-    accumulate(recipeId, qty, ctx, totals, []);
+    for (const line of flattenRecipe(recipeId, qty, ctx)) {
+      totals.set(
+        line.ingredientId,
+        (totals.get(line.ingredientId) ?? 0) + line.qtyBaseWithFc,
+      );
+    }
   }
   return totals;
 }
 
-function accumulate(
+/**
+ * Uma linha da composicao ja achatada ate ao insumo basico.
+ *
+ * Separa duas quantidades que a aplicacao costumava confundir: o que vai no
+ * prato e o que e preciso comprar. Num insumo com fator de correcao elas
+ * nunca sao iguais, e e a segunda que se leva ao supermercado.
+ */
+export interface FlatLine {
+  ingredientId: string;
+  name: string;
+  baseUnit: BaseUnit;
+  category: IngredientCategory;
+  /**
+   * Por onde se chegou a este insumo. Vazio quando entra direto na ficha;
+   * ["Maionese da casa"] quando vem de uma sub-receita.
+   */
+  via: string[];
+  /** O que vai no prato, na unidade base. Sem fator de correcao. */
+  qtyBase: number;
+  correctionFactor: number;
+  /** O que e preciso comprar, na unidade base. Ja com o fator de correcao. */
+  qtyBaseWithFc: number;
+  /** Custo por unidade base, ja com o fator de correcao. */
+  unitCost: number;
+  cost: number;
+}
+
+/**
+ * Desce a ficha ate aos insumos basicos, resolvendo as sub-receitas.
+ *
+ * O mesmo insumo alcancado por caminhos diferentes — sal na maionese e sal
+ * direto na ficha — junta-se numa linha so, porque a pergunta e "quanto sal
+ * gasto", e os caminhos ficam listados em `via`.
+ *
+ * @param portions quantas porcoes do produto (ou quantas unidades base, se
+ *                 for uma preparacao base)
+ */
+export function flattenRecipe(
   recipeId: string,
   portions: number,
   ctx: CostContext,
-  totals: Map<string, number>,
+): FlatLine[] {
+  const acc = new Map<string, FlatLine>();
+  walk(recipeId, portions, ctx, acc, [], []);
+
+  return [...acc.values()].sort(
+    (a, b) => b.cost - a.cost || a.name.localeCompare(b.name),
+  );
+}
+
+function addTo(
+  acc: Map<string, FlatLine>,
+  ing: IngredientInput,
+  qtyBase: number,
+  via: string[],
+): void {
+  const fc = normalizeCorrectionFactor(ing);
+  const unitCost = effectiveCostPerBaseUnit(ing);
+  const existing = acc.get(ing.id);
+
+  if (existing) {
+    existing.qtyBase += qtyBase;
+    existing.qtyBaseWithFc += qtyBase * fc;
+    existing.cost += qtyBase * unitCost;
+    for (const v of via) if (!existing.via.includes(v)) existing.via.push(v);
+    return;
+  }
+
+  acc.set(ing.id, {
+    ingredientId: ing.id,
+    name: ing.name,
+    baseUnit: baseUnitOf(ing.purchaseUnit),
+    category: ing.category,
+    via: [...via],
+    qtyBase,
+    correctionFactor: fc,
+    qtyBaseWithFc: qtyBase * fc,
+    unitCost,
+    cost: qtyBase * unitCost,
+  });
+}
+
+function walk(
+  recipeId: string,
+  portions: number,
+  ctx: CostContext,
+  acc: Map<string, FlatLine>,
+  via: string[],
   stack: string[],
 ): void {
   const recipe = ctx.recipes.get(recipeId);
@@ -323,8 +412,7 @@ function accumulate(
         );
       }
       const qtyBase = toBase(item.qty, item.unit, baseUnitOf(ing.purchaseUnit));
-      const withFc = qtyBase * normalizeCorrectionFactor(ing) * batches;
-      totals.set(ing.id, (totals.get(ing.id) ?? 0) + withFc);
+      addTo(acc, ing, qtyBase * batches, via);
     } else {
       const child = ctx.recipes.get(item.childRecipeId);
       if (!child) {
@@ -333,13 +421,26 @@ function accumulate(
         );
       }
       const qtyBase = toBase(item.qty, item.unit, child.yieldUnit);
-      accumulate(item.childRecipeId, qtyBase * batches, ctx, totals, nextStack);
+      walk(item.childRecipeId, qtyBase * batches, ctx, acc, [...via, child.name], nextStack);
     }
   }
 
-  // Embalagens: uma por porcao produzida.
+  // Embalagens: uma por porcao produzida, mais a perda por quebra.
+  //
+  // O fator de correcao tem de ser aplicado aqui tambem. O custo da ficha ja
+  // o aplicava (ver `packagingUnitCost`), entao sem isto a lista de compras
+  // mandava comprar menos embalagens do que o custo dizia gastar — e as duas
+  // contas discordavam em silencio.
   for (const packId of [recipe.packagingId, recipe.deliveryPackagingId]) {
     if (!packId) continue;
-    totals.set(packId, (totals.get(packId) ?? 0) + portions);
+    const pack = ctx.ingredients.get(packId);
+    if (!pack) {
+      throw new PricingError(
+        `Ficha "${recipe.name}": embalagem nao encontrada (${packId}).`,
+      );
+    }
+    // A embalagem conta-se por porcao, nao por lote: `portions` ja e o que
+    // se quer, sem passar pelos `batches`.
+    addTo(acc, pack, portions, via);
   }
 }

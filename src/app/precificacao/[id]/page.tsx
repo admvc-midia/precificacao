@@ -1,11 +1,15 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Info } from 'lucide-react';
 
 import { ActionForm, SubmitButton } from '@/components/action-form';
-import { CmvBadge } from '@/components/cmv-badge';
-import { DreBreakdown, StatTile } from '@/components/dre-breakdown';
-import { Alert, Badge, Separator } from '@/components/ui/badge';
+import { StatTile } from '@/components/dre-breakdown';
+import {
+  IngredientBreakdown,
+  type BreakdownRow,
+} from '@/components/ingredient-breakdown';
+import { PriceExplorer } from '@/components/price-explorer';
+import { ProductSwitcher } from '@/components/product-switcher';
+import { Alert, Separator } from '@/components/ui/badge';
 import {
   Card,
   CardContent,
@@ -15,21 +19,18 @@ import {
 } from '@/components/ui/card';
 import { Field, Select } from '@/components/ui/form-controls';
 import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableNum,
-  TableRow,
-} from '@/components/ui/table';
 import { saveRecipePricing } from '@/lib/actions/recipes';
 import { buildCostContext, num } from '@/lib/mappers';
-import { formatMoney, formatPercent } from '@/lib/money';
-import { breakEvenPrice, simulateChannels } from '@/lib/pricing/channels';
-import { computeRecipeCost } from '@/lib/pricing/cost';
+import { formatMoney, formatPercent, formatUnitCost } from '@/lib/money';
+import { breakEvenPrice, channelContext } from '@/lib/pricing/channels';
+import { computeRecipeCost, flattenRecipe } from '@/lib/pricing/cost';
+import {
+  analyzeManualPrice,
+  priceFromTargetCmv,
+  priceFromTargetMargin,
+} from '@/lib/pricing/price';
 import { getPricingData, getRecipeDetail } from '@/lib/queries';
+import { BASE_UNIT_LABEL, formatBaseQty, type BaseUnit } from '@/lib/units';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,27 +70,104 @@ export default async function PrecificarPage({
     );
   }
 
-  const sim = simulateChannels({
-    cost,
-    settings,
-    channels,
+  const saved = {
     mode: recipe.pricingMode,
     manualPrice: recipe.manualPrice === null ? null : num(recipe.manualPrice),
     targetCmv: recipe.targetCmv === null ? null : num(recipe.targetCmv),
     targetMargin: recipe.targetMargin === null ? null : num(recipe.targetMargin),
-  });
+  };
 
-  const ref = sim.reference;
-  const refPrice = ref.suggested;
-  const be = breakEvenPrice(ref.costs, ref.params);
+  const reference = channels.find((c) => c.kind === 'COUNTER') ?? channels[0];
+  const { params: refParams, costs: refCosts } = channelContext(
+    cost,
+    reference,
+    settings,
+  );
+  const opts = { rounding: settings.rounding };
+
+  const sugerido =
+    saved.mode === 'MANUAL'
+      ? analyzeManualPrice(saved.manualPrice ?? 0, refCosts, refParams)
+      : saved.mode === 'TARGET_MARGIN'
+        ? priceFromTargetMargin(
+            refCosts,
+            refParams,
+            saved.targetMargin ?? settings.targetMargin,
+            opts,
+          )
+        : priceFromTargetCmv(
+            refCosts,
+            refParams,
+            saved.targetCmv ?? settings.targetCmv,
+            opts,
+          );
+
+  const be = breakEvenPrice(refCosts, refParams);
+
+  // ---------------------------------------------------------------------
+  // Composicao por porcao: as duas vistas, ja formatadas para o cliente.
+  // ---------------------------------------------------------------------
+  const totalPorcao =
+    cost.foodCostPerUnit + cost.packagingCost + cost.deliveryPackagingCost;
+
+  const qtd = (v: number, u: BaseUnit) => formatBaseQty(v, u, currency.locale);
+  const fatia = (c: number) => (totalPorcao > 0 ? c / totalPorcao : 0);
+
+  const flat: BreakdownRow[] = flattenRecipe(id, 1, ctx).map((l) => ({
+    id: l.ingredientId,
+    name: l.name,
+    via: l.via.length > 0 ? `via ${l.via.join(' › ')}` : undefined,
+    plate: qtd(l.qtyBase, l.baseUnit),
+    buy: qtd(l.qtyBaseWithFc, l.baseUnit),
+    hasLoss: l.correctionFactor > 1.0001,
+    unitCost: `${formatUnitCost(l.unitCost, currency)}/${BASE_UNIT_LABEL[l.baseUnit]}`,
+    cost: formatMoney(l.cost, currency),
+    share: fatia(l.cost),
+    shareLabel: formatPercent(fatia(l.cost), currency.locale, 0),
+    isPackaging: l.category === 'PACKAGING',
+  }));
+
+  // "Como na ficha": as linhas tal como escritas, mas por porcao em vez de
+  // por lote — quem le quer saber o que vai num prato.
+  const porPorcao = cost.yieldQty > 0 ? 1 / cost.yieldQty : 1;
+
+  const asRecipe: BreakdownRow[] = [
+    ...cost.lines.map((l) => {
+      const base: BaseUnit =
+        l.kind === 'RECIPE'
+          ? (ctx.recipes.get(l.refId)?.yieldUnit ?? 'UN')
+          : (ctx.ingredients.get(l.refId)
+              ? BASE_FROM_INGREDIENT(ctx, l.refId)
+              : 'UN');
+      const custo = l.cost * porPorcao;
+      return {
+        id: l.refId,
+        name: l.name,
+        via: l.kind === 'RECIPE' ? 'preparacao base' : undefined,
+        plate: qtd(l.qtyBase * porPorcao, base),
+        buy: qtd(l.qtyBaseWithFc * porPorcao, base),
+        hasLoss: l.correctionFactor > 1.0001,
+        unitCost: `${formatUnitCost(l.unitCost, currency)}/${BASE_UNIT_LABEL[base]}`,
+        cost: formatMoney(custo, currency),
+        share: fatia(custo),
+        shareLabel: formatPercent(fatia(custo), currency.locale, 0),
+        isPackaging: false,
+      };
+    }),
+    ...embalagens(recipe, cost, currency, fatia, qtd),
+  ].sort((a, b) => b.share - a.share);
+
+  const produtos = data.recipeRows
+    .filter((r) => r.kind === 'PRODUCT')
+    .map((r) => ({ id: r.id, name: r.name }));
 
   const pctValue = (v: number | null) =>
     v === null ? '' : (v * 100).toFixed(2).replace(/\.?0+$/, '');
 
   return (
-    <div className="space-y-8">
-      <header className="space-y-1">
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-6">
+      <header className="space-y-3">
+        <div className="flex flex-wrap items-baseline gap-2">
           <Link
             href="/precificacao"
             className="text-sm text-muted-foreground hover:underline"
@@ -99,141 +177,63 @@ export default async function PrecificarPage({
           <span className="text-muted-foreground">/</span>
           <h1 className="text-2xl font-semibold tracking-tight">{recipe.name}</h1>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Canal de referencia: <strong>{ref.channel.name}</strong>. Os outros canais
-          replicam o mesmo lucro em {currency.currency}, nao a mesma percentagem.
-        </p>
+        <ProductSwitcher current={id} products={produtos} />
       </header>
 
-      {refPrice.warnings.map((w) => (
-        <Alert key={w} tone={refPrice.feasible ? 'warning' : 'destructive'}>
+      {sugerido.warnings.map((w) => (
+        <Alert key={w} tone={sugerido.feasible ? 'warning' : 'destructive'}>
           {w}
         </Alert>
       ))}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-3">
         <StatTile
-          label="Custo primo"
-          value={formatMoney(cost.primeCost, currency)}
+          label="Custo do produto"
+          value={formatMoney(cost.productCost, currency)}
           hint={`Alimento ${formatMoney(cost.foodCostPerUnit, currency)} + embalagem ${formatMoney(cost.packagingCost, currency)}`}
         />
         <StatTile
-          label={`Preco em ${ref.channel.name}`}
-          value={refPrice.feasible ? formatMoney(refPrice.price, currency) : '—'}
+          label="Break-even"
+          value={be !== null ? formatMoney(be, currency) : '—'}
+          hint={`Abaixo disto, ${reference.name} da prejuizo`}
+        />
+        <StatTile
+          label="Rende"
+          value={`${cost.yieldQty} ${BASE_UNIT_LABEL[cost.yieldUnit]}`}
           hint={
-            refPrice.rawPrice !== refPrice.price
-              ? `Sem arredondamento: ${formatMoney(refPrice.rawPrice, currency)}`
-              : undefined
+            <Link href={`/fichas/${id}`} className="text-primary hover:underline">
+              Ver ficha tecnica
+            </Link>
           }
-        />
-        <StatTile
-          label="CMV"
-          value={refPrice.feasible ? formatPercent(refPrice.cmv, currency.locale) : '—'}
-          tone={refPrice.cmv <= 0.3 ? 'good' : refPrice.cmv <= 0.4 ? 'warning' : 'critical'}
-          hint={`Alvo ${formatPercent(recipe.targetCmv === null ? settings.targetCmv : num(recipe.targetCmv), currency.locale, 0)}`}
-        />
-        <StatTile
-          label="Lucro por unidade"
-          value={refPrice.feasible ? formatMoney(refPrice.profit, currency) : '—'}
-          tone={refPrice.profit < 0 ? 'critical' : 'good'}
-          hint={be !== null ? `Break-even: ${formatMoney(be, currency)}` : undefined}
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Simulador multi-canal</CardTitle>
-              <CardDescription>
-                &quot;Preco para o mesmo lucro&quot; e quanto cobrar em cada canal
-                para levar para casa o mesmo dinheiro do balcao.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Canal</TableHead>
-                    <TableHead className="text-right">Comissao</TableHead>
-                    <TableHead className="text-right">Preco sugerido</TableHead>
-                    <TableHead className="text-right">Mesmo lucro</TableHead>
-                    <TableHead className="text-right">CMV</TableHead>
-                    <TableHead className="text-right">Lucro</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sim.results.map((r) => {
-                    const isRef = r.channel.id === ref.channel.id;
-                    const shown = r.profitMatched ?? r.suggested;
-                    return (
-                      <TableRow key={r.channel.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{r.channel.name}</span>
-                            {isRef ? (
-                              <Badge variant="secondary">referencia</Badge>
-                            ) : null}
-                          </div>
-                          {r.channel.deliveryCost > 0 ? (
-                            <div className="text-xs text-muted-foreground">
-                              frete {formatMoney(r.channel.deliveryCost, currency)}
-                              {r.channel.usesDeliveryPackaging
-                                ? ' · embalagem de transporte'
-                                : ''}
-                            </div>
-                          ) : null}
-                        </TableCell>
-                        <TableNum className="text-muted-foreground">
-                          {r.channel.commissionRate > 0
-                            ? formatPercent(r.channel.commissionRate, currency.locale, 0)
-                            : '—'}
-                        </TableNum>
-                        <TableNum className="text-muted-foreground">
-                          {r.suggested.feasible
-                            ? formatMoney(r.suggested.price, currency)
-                            : 'inviavel'}
-                        </TableNum>
-                        <TableNum className="font-medium">
-                          {r.profitMatchedPrice !== null
-                            ? formatMoney(r.profitMatchedPrice, currency)
-                            : 'inviavel'}
-                        </TableNum>
-                        <TableNum>
-                          <CmvBadge cmv={shown.cmv} locale={currency.locale} />
-                        </TableNum>
-                        <TableNum
-                          className={shown.profit < 0 ? 'text-destructive' : undefined}
-                        >
-                          {formatMoney(shown.profit, currency)}
-                        </TableNum>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+      <PriceExplorer
+        cost={cost}
+        settings={settings}
+        channels={channels}
+        saved={saved}
+        currency={currency}
+      />
 
-              <div className="flex items-start gap-2 border-t px-6 py-3 text-xs text-muted-foreground">
-                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                <p>
-                  Repare que o CMV cai nos canais de comissao: o custo do produto nao
-                  mudou, o preco e que subiu para absorver a taxa. E por isso que
-                  comparar CMV entre canais engana — compare o lucro em{' '}
-                  {currency.currency}.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>DRE do produto — {ref.channel.name}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <DreBreakdown result={refPrice} currency={currency} />
-            </CardContent>
-          </Card>
-        </div>
+      <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Composicao de uma porcao</CardTitle>
+            <CardDescription>
+              Quanto de cada insumo vai no prato, quanto e preciso comprar, e que
+              fatia do custo cada um come.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <IngredientBreakdown
+              flat={flat}
+              asRecipe={asRecipe}
+              totalLabel={formatMoney(totalPorcao, currency)}
+              productCostLabel={formatMoney(cost.productCost, currency)}
+            />
+          </CardContent>
+        </Card>
 
         <div className="space-y-6">
           <Card>
@@ -249,15 +249,11 @@ export default async function PrecificarPage({
 
                 <Field label="Modo" htmlFor="mode">
                   <Select id="mode" name="pricingMode" defaultValue={recipe.pricingMode}>
-                    <option value="TARGET_CMV">
-                      CMV alvo — parto do custo do produto
-                    </option>
+                    <option value="TARGET_CMV">CMV alvo — parto do custo</option>
                     <option value="TARGET_MARGIN">
                       Margem alvo — parto do lucro que quero
                     </option>
-                    <option value="MANUAL">
-                      Preco manual — ja sei quanto cobro
-                    </option>
+                    <option value="MANUAL">Preco manual — ja sei quanto cobro</option>
                   </Select>
                 </Field>
 
@@ -270,9 +266,7 @@ export default async function PrecificarPage({
                     id="targetCmv"
                     name="targetCmv"
                     inputMode="decimal"
-                    defaultValue={pctValue(
-                      recipe.targetCmv === null ? null : num(recipe.targetCmv),
-                    )}
+                    defaultValue={pctValue(saved.targetCmv)}
                     placeholder={(settings.targetCmv * 100).toFixed(0)}
                   />
                 </Field>
@@ -286,9 +280,7 @@ export default async function PrecificarPage({
                     id="targetMargin"
                     name="targetMargin"
                     inputMode="decimal"
-                    defaultValue={pctValue(
-                      recipe.targetMargin === null ? null : num(recipe.targetMargin),
-                    )}
+                    defaultValue={pctValue(saved.targetMargin)}
                     placeholder={(settings.targetMargin * 100).toFixed(0)}
                   />
                 </Field>
@@ -302,9 +294,7 @@ export default async function PrecificarPage({
                     id="manualPrice"
                     name="manualPrice"
                     inputMode="decimal"
-                    defaultValue={
-                      recipe.manualPrice === null ? '' : String(num(recipe.manualPrice))
-                    }
+                    defaultValue={saved.manualPrice === null ? '' : String(saved.manualPrice)}
                   />
                 </Field>
 
@@ -318,29 +308,25 @@ export default async function PrecificarPage({
               <CardTitle>Premissas em uso</CardTitle>
             </CardHeader>
             <CardContent className="space-y-1.5 text-sm">
-              <Line
+              <Linha
                 label="IVA"
                 value={`${formatPercent(settings.vatRate, currency.locale, 0)} ${
-                  settings.vatMode === 'INCLUDED' ? '(incluido no preco)' : '(acrescido)'
+                  settings.vatMode === 'INCLUDED' ? '(incluido)' : '(acrescido)'
                 }`}
               />
-              <Line
+              <Linha
                 label="Custos fixos"
                 value={formatPercent(settings.fixedCostRate, currency.locale, 0)}
               />
-              <Line
+              <Linha
                 label="Cartao"
-                value={formatPercent(ref.params.cardFeeRate, currency.locale, 1)}
+                value={formatPercent(refParams.cardFeeRate, currency.locale, 1)}
               />
               <Separator className="my-2" />
-              <Line
-                label="Receita liquida"
-                value={formatMoney(refPrice.net, currency)}
-              />
-              <Line label="Markup" value={`${refPrice.markup.toFixed(2)}x`} />
-              <Line
+              <Linha label="Markup" value={`${sugerido.markup.toFixed(2)}x`} />
+              <Linha
                 label="Margem de contribuicao"
-                value={formatMoney(refPrice.contributionMargin, currency)}
+                value={formatMoney(sugerido.contributionMargin, currency)}
               />
               <p className="pt-2 text-xs text-muted-foreground">
                 Custos fixos e lucro incidem sobre a receita liquida; cartao e
@@ -354,7 +340,62 @@ export default async function PrecificarPage({
   );
 }
 
-function Line({ label, value }: { label: string; value: string }) {
+/** Unidade base de um insumo referido por id. */
+function BASE_FROM_INGREDIENT(
+  ctx: ReturnType<typeof buildCostContext>,
+  id: string,
+): BaseUnit {
+  const ing = ctx.ingredients.get(id);
+  if (!ing) return 'UN';
+  if (ing.purchaseUnit === 'KG' || ing.purchaseUnit === 'G') return 'G';
+  if (ing.purchaseUnit === 'L' || ing.purchaseUnit === 'ML') return 'ML';
+  return 'UN';
+}
+
+/** As embalagens nao estao em `cost.lines`; entram por porcao. */
+function embalagens(
+  recipe: NonNullable<Awaited<ReturnType<typeof getRecipeDetail>>>,
+  cost: ReturnType<typeof computeRecipeCost>,
+  currency: { currency: string; locale: string },
+  fatia: (c: number) => number,
+  qtd: (v: number, u: BaseUnit) => string,
+): BreakdownRow[] {
+  const linhas: BreakdownRow[] = [];
+
+  const juntar = (
+    nome: string | undefined,
+    custo: number,
+    sufixo: string,
+    chave: string,
+  ) => {
+    if (!nome || custo <= 0) return;
+    linhas.push({
+      id: chave,
+      name: nome,
+      via: sufixo,
+      plate: qtd(1, 'UN'),
+      buy: qtd(1, 'UN'),
+      hasLoss: false,
+      unitCost: `${formatMoney(custo, currency)}/un`,
+      cost: formatMoney(custo, currency),
+      share: fatia(custo),
+      shareLabel: `${(fatia(custo) * 100).toFixed(0)}%`,
+      isPackaging: true,
+    });
+  };
+
+  juntar(recipe.packaging?.name, cost.packagingCost, 'embalagem principal', 'pack');
+  juntar(
+    recipe.deliveryPackaging?.name,
+    cost.deliveryPackagingCost,
+    'embalagem de transporte',
+    'dpack',
+  );
+
+  return linhas;
+}
+
+function Linha({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-4">
       <span className="text-muted-foreground">{label}</span>

@@ -102,10 +102,10 @@ export interface RecipeCost {
   /** Embalagem extra de transporte, por porcao. */
   deliveryPackagingCost: number;
   /**
-   * Custo primo por porcao no balcao: alimento + embalagem principal.
+   * Custo do produto por porcao no balcao: alimento + embalagem principal.
    * A embalagem de transporte entra apenas nos canais que a usam.
    */
-  primeCost: number;
+  productCost: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -145,7 +145,7 @@ export const DEFAULT_PARAMS: PricingParams = {
 
 /**
  * Autopsia de um preco: para onde vai cada centimo.
- * Vale a identidade: `net = fixedCost + cardFee + platformFee + primeCost +
+ * Vale a identidade: `net = fixedCost + cardFee + platformFee + productCost +
  * deliveryCost + profit` (todos os campos ja em moeda).
  */
 export interface PriceBreakdown {
@@ -160,7 +160,7 @@ export interface PriceBreakdown {
   foodCost: number;
   packagingCost: number;
   /** foodCost + packagingCost. */
-  primeCost: number;
+  productCost: number;
   deliveryCost: number;
 
   fixedCost: number;
@@ -170,11 +170,11 @@ export interface PriceBreakdown {
   /** Sobra depois de tudo. Pode ser negativo. */
   profit: number;
 
-  /** primeCost / net. O CMV do produto. */
+  /** productCost / net. O CMV do produto. */
   cmv: number;
   /** profit / net. */
   netMargin: number;
-  /** price / primeCost. */
+  /** price / productCost. */
   markup: number;
   /** price - (custos variaveis diretos). Usado em engenharia de cardapio. */
   contributionMargin: number;

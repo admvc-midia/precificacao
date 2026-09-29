@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   computeRecipeCost,
+  flattenRecipe,
   correctionFactorFromWeights,
   costPerBaseUnit,
   effectiveCostPerBaseUnit,
@@ -135,6 +136,19 @@ describe('fator de correcao', () => {
     expect(fcFromWastePercent(wastePercentFromFc(1.6667))).toBeCloseTo(1.6667, 6);
   });
 
+  it('sobrevive ao round-trip na precisao que o ecra usa', () => {
+    // O formulario mostra o FC com 4 casas e a perda com 2. Se a ida e volta
+    // nao fechasse, reabrir um insumo de 26% mostraria 25,99% e o valor
+    // andava sozinho a cada edicao.
+    const arredonda = (v: number, casas: number) => Number(v.toFixed(casas));
+
+    for (const perda of [0.05, 0.125, 0.2, 0.26, 0.3333, 0.5, 0.667, 0.9]) {
+      const fc = arredonda(fcFromWastePercent(perda), 4);
+      const volta = arredonda(wastePercentFromFc(fc) * 100, 2);
+      expect(Math.abs(volta - perda * 100)).toBeLessThanOrEqual(0.01);
+    }
+  });
+
   it('recusa peso liquido maior que o bruto', () => {
     expect(() => correctionFactorFromWeights(800, 1000)).toThrow(PricingError);
     expect(() => correctionFactorFromWeights(1000, 0)).toThrow(PricingError);
@@ -161,11 +175,11 @@ describe('ficha tecnica', () => {
     expect(cost.foodCostPerUnit).toBeCloseTo(2.8 / 1200, 10);
   });
 
-  it('deixa a embalagem de transporte fora do custo primo de balcao', () => {
+  it('deixa a embalagem de transporte fora do custo do produto de balcao', () => {
     const cost = computeRecipeCost('burger', buildCtx());
     expect(cost.packagingCost).toBeCloseTo(0.12, 10);
     expect(cost.deliveryPackagingCost).toBeCloseTo(0.08, 10);
-    expect(cost.primeCost).toBeCloseTo(cost.foodCostPerUnit + 0.12, 10);
+    expect(cost.productCost).toBeCloseTo(cost.foodCostPerUnit + 0.12, 10);
   });
 
   it('divide o custo do lote pelo rendimento', () => {
@@ -233,6 +247,105 @@ describe('ficha tecnica', () => {
   });
 });
 
+describe('composicao achatada (quantidades por porcao)', () => {
+  it('desce ate aos insumos basicos e diz por onde passou', () => {
+    const linhas = flattenRecipe('burger', 1, buildCtx());
+    const por = (id: string) => linhas.find((l) => l.ingredientId === id)!;
+
+    expect(por('carne').via).toEqual([]);
+    expect(por('ovo').via).toEqual(['Maionese da casa']);
+    expect(por('oleo').via).toEqual(['Maionese da casa']);
+  });
+
+  it('separa o que vai no prato do que e preciso comprar', () => {
+    const ctx = buildCtx();
+    ctx.recipes.set('bife', {
+      id: 'bife',
+      name: 'Bife',
+      kind: 'PRODUCT',
+      yieldQty: 1,
+      yieldUnit: 'UN',
+      items: [{ kind: 'INGREDIENT', ingredientId: 'alcatra', qty: 200, unit: 'G' }],
+    });
+
+    const [linha] = flattenRecipe('bife', 1, ctx);
+    expect(linha.qtyBase).toBeCloseTo(200, 8); // no prato
+    expect(linha.qtyBaseWithFc).toBeCloseTo(250, 8); // a comprar, com FC 1,25
+    expect(linha.correctionFactor).toBeCloseTo(1.25, 8);
+  });
+
+  it('junta o mesmo insumo alcancado por caminhos diferentes', () => {
+    const ctx = buildCtx();
+    // Oleo entra na maionese e tambem direto na ficha do hamburguer.
+    ctx.recipes.get('burger')!.items.push({
+      kind: 'INGREDIENT',
+      ingredientId: 'oleo',
+      qty: 5,
+      unit: 'ML',
+    });
+
+    const linhas = flattenRecipe('burger', 1, ctx);
+    const oleo = linhas.filter((l) => l.ingredientId === 'oleo');
+
+    expect(oleo).toHaveLength(1);
+    // 25 ml vindos da maionese (30 ml de um lote de 1200 que leva 1 L) + 5 diretos
+    expect(oleo[0].qtyBase).toBeCloseTo((30 / 1200) * 1000 + 5, 8);
+    expect(oleo[0].via).toEqual(['Maionese da casa']);
+  });
+
+  it('inclui as embalagens, uma por porcao', () => {
+    const linhas = flattenRecipe('burger', 10, buildCtx());
+    const caixa = linhas.find((l) => l.ingredientId === 'caixa')!;
+
+    expect(caixa.category).toBe('PACKAGING');
+    expect(caixa.qtyBaseWithFc).toBeCloseTo(10, 8);
+  });
+
+  it('a soma das linhas e o custo da ficha', () => {
+    const ctx = buildCtx();
+    const linhas = flattenRecipe('burger', 1, ctx);
+    const soma = linhas.reduce((a, l) => a + l.cost, 0);
+
+    const cost = computeRecipeCost('burger', ctx);
+    expect(soma).toBeCloseTo(
+      cost.foodCostPerUnit + cost.packagingCost + cost.deliveryPackagingCost,
+      8,
+    );
+  });
+
+  it('escala linearmente com as porcoes', () => {
+    const ctx = buildCtx();
+    const uma = flattenRecipe('burger', 1, ctx);
+    const dez = flattenRecipe('burger', 10, ctx);
+
+    for (const l of uma) {
+      const outra = dez.find((x) => x.ingredientId === l.ingredientId)!;
+      expect(outra.qtyBase).toBeCloseTo(l.qtyBase * 10, 8);
+      expect(outra.cost).toBeCloseTo(l.cost * 10, 8);
+    }
+  });
+
+  it('vem ordenada pelo que custa mais', () => {
+    const linhas = flattenRecipe('burger', 1, buildCtx());
+    for (let i = 0; i < linhas.length - 1; i++) {
+      expect(linhas[i].cost).toBeGreaterThanOrEqual(linhas[i + 1].cost);
+    }
+  });
+
+  it('deteta ciclo', () => {
+    const ctx = buildCtx();
+    ctx.recipes.set('a', {
+      id: 'a', name: 'A', kind: 'BASE', yieldQty: 100, yieldUnit: 'G',
+      items: [{ kind: 'RECIPE', childRecipeId: 'b', qty: 10, unit: 'G' }],
+    });
+    ctx.recipes.set('b', {
+      id: 'b', name: 'B', kind: 'BASE', yieldQty: 100, yieldUnit: 'G',
+      items: [{ kind: 'RECIPE', childRecipeId: 'a', qty: 10, unit: 'G' }],
+    });
+    expect(() => flattenRecipe('a', 1, ctx)).toThrow(RecipeCycleError);
+  });
+});
+
 describe('explosao de insumos (MRP)', () => {
   it('desce pelas sub-receitas ate aos insumos basicos', () => {
     const totals = explodeIngredients([{ recipeId: 'burger', qty: 100 }], buildCtx());
@@ -264,6 +377,35 @@ describe('explosao de insumos (MRP)', () => {
     const totals = explodeIngredients([{ recipeId: 'bife', qty: 10 }], ctx);
     // 10 x 200 g usados, mas com 20% de perda e preciso comprar 2500 g.
     expect(totals.get('alcatra')).toBeCloseTo(2500, 8);
+  });
+
+  it('aplica o FC tambem as embalagens', () => {
+    const ctx = buildCtx();
+    // Uma em cada dez caixas chega amassada: FC 1,10.
+    ctx.ingredients.get('caixa')!.correctionFactor = 1.1;
+
+    const totals = explodeIngredients([{ recipeId: 'burger', qty: 100 }], ctx);
+    expect(totals.get('caixa')).toBeCloseTo(110, 8);
+  });
+
+  it('bate com o custo da ficha mesmo com perda na embalagem', () => {
+    // O custo da ficha ja aplicava o FC da embalagem; se a lista de compras
+    // nao o aplicasse, as duas contas discordavam em silencio.
+    const ctx = buildCtx();
+    ctx.ingredients.get('caixa')!.correctionFactor = 1.1;
+    ctx.ingredients.get('saco')!.correctionFactor = 1.25;
+
+    const totals = explodeIngredients([{ recipeId: 'burger', qty: 100 }], ctx);
+    const viaMrp = [...totals.entries()].reduce(
+      (acc, [id, qty]) => acc + qty * costPerBaseUnit(ctx.ingredients.get(id)!),
+      0,
+    );
+
+    const cost = computeRecipeCost('burger', ctx);
+    const viaFicha =
+      100 * (cost.foodCostPerUnit + cost.packagingCost + cost.deliveryPackagingCost);
+
+    expect(viaMrp).toBeCloseTo(viaFicha, 8);
   });
 
   it('bate com o custo calculado pela ficha tecnica', () => {

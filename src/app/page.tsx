@@ -23,7 +23,7 @@ import {
 import { prisma } from '@/lib/db';
 import { num } from '@/lib/mappers';
 import { formatMoney, formatPercent } from '@/lib/money';
-import { channelContext, classifyMenuItem, MENU_CLASS_LABEL } from '@/lib/pricing/channels';
+import { channelContext } from '@/lib/pricing/channels';
 import {
   analyzeManualPrice,
   priceFromTargetCmv,
@@ -168,7 +168,12 @@ export default async function DashboardPage() {
           <CardHeader>
             <CardTitle>Maior margem de contribuicao</CardTitle>
             <CardDescription>
-              O que cada venda deixa para pagar a casa, em {currency.currency}.
+              O que cada venda deixa para pagar a casa, em {currency.currency}. A
+              matriz Estrela/Abacaxi vive em{' '}
+              <Link href="/vendas" className="text-primary hover:underline">
+                Vendas
+              </Link>
+              , onde ha dados de popularidade.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -230,15 +235,11 @@ function ProductTable({
       </TableHeader>
       <TableBody>
         {rows.map(({ recipe, result }) => {
-          // Sem dados de venda ainda, a popularidade e assumida igual para
-          // todos: a classificacao reduz-se ao eixo da margem, que e o unico
-          // que a aplicacao conhece hoje com honestidade.
-          const klass = classifyMenuItem(
-            result.contributionMargin,
-            avgContribution,
-            1,
-            1,
-          );
+          // A classificacao de engenharia de cardapio precisa do eixo da
+          // popularidade, que vive nas vendas lancadas. Aqui so se diz se a
+          // margem esta acima ou abaixo da media — inventar a popularidade
+          // dava uma etiqueta bonita e errada.
+          const acimaDaMedia = result.contributionMargin >= avgContribution;
           return (
             <TableRow key={recipe.id}>
               <TableCell>
@@ -249,7 +250,7 @@ function ProductTable({
                   {recipe.name}
                 </Link>
                 <div className="text-xs text-muted-foreground">
-                  {MENU_CLASS_LABEL[klass]}
+                  margem {acimaDaMedia ? 'acima' : 'abaixo'} da media
                 </div>
               </TableCell>
               <TableNum>{formatMoney(result.price, currency)}</TableNum>

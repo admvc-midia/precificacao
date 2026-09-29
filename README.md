@@ -16,15 +16,21 @@ npm run db:seed               # dados de exemplo (lanchonete em Portugal)
 npm run dev
 ```
 
-Testes da matemática de precificação:
+Verificação:
 
 ```bash
-npm test
+npm test      # 126 testes da matemática de custos, preços e estoque
+npm run lint  # ESLint com as regras do Next — apanha o que o tsc não vê
+npx tsc --noEmit
 ```
+
+O `lint` corre o ESLint diretamente: o `next lint` foi removido no Next 16. Ele apanha uma classe de problemas que o TypeScript ignora e que só apareceria no browser — listas sem `key`, `setState` dentro de efeitos, hooks mal usados.
 
 Um banco Postgres qualquer serve — [Neon](https://neon.tech), Supabase ou Vercel Postgres. **`DATABASE_URL` é a única variável obrigatória**; no Neon, use a *pooled connection string*.
 
-#### Migrations
+#> **Nesta máquina:** uma política de Controlo de Aplicações do Windows bloqueia o binário nativo do SWC, e o Turbopack não corre sem ele. Por isso o script `dev` usa `--webpack`. Onde o binário carregue normalmente, `npm run dev:turbo` é mais rápido.
+
+### Migrations
 
 O caminho recomendado é `npm run db:push`, que funciona através do pooler. Se preferir migrations versionadas (`npm run db:migrate`), o Prisma precisa de uma ligação direta, porque migrations usam advisory locks que o pooler não suporta. Nesse caso, acrescente ao `datasource db` do schema:
 
@@ -43,6 +49,9 @@ e defina `DIRECT_URL` com a connection string sem pooler. O schema não declara 
 
 ---
 
+> **Para usar a app**, e não para mexer nela, leia o [GUIA.md](GUIA.md): explica em
+> linguagem de dono de lanchonete o que lançar, em que ordem, e como ler o CMV real.
+
 ## As premissas de cálculo
 
 Esta é a parte que decide se o preço está certo. Tudo isto está em `src/lib/pricing/` e é verificado por `npm test` e por `tools/verify_pricing.py`.
@@ -57,9 +66,9 @@ Esta é a parte que decide se o preço está certo. Tudo isto está em `src/lib/
 | Lucro alvo | receita líquida | idem |
 | Taxa de cartão | valor bruto pago pelo cliente | é sobre esse valor que a rede cobra |
 | Comissão de plataforma | valor bruto | é sobre esse valor que a Uber Eats cobra |
-| Custo primo e frete | valor absoluto | não são percentagens |
+| Custo do produto e frete | valor absoluto | não são percentagens |
 
-**A equação.** Com `P` = preço de menu, `C` = custo primo, `D` = frete, `f` = custos fixos, `m` = lucro alvo, `c` = cartão, `k` = comissão, `iva` = alíquota:
+**A equação.** Com `P` = preço de menu, `C` = custo do produto, `D` = frete, `f` = custos fixos, `m` = lucro alvo, `c` = cartão, `k` = comissão, `iva` = alíquota:
 
 ```
 receita_líquida × (1 − f − m)  −  bruto × (c + k)  =  C + D
@@ -73,6 +82,8 @@ IVA acrescido:  P × [ (1 − f − m) − (1 + iva) × (c + k) ] = C + D
 ```
 
 O termo entre colchetes é o **denominador**. Se for ≤ 0, as taxas somadas consomem toda a receita e **não existe preço viável** — a aplicação diz isso em vez de devolver um número absurdo.
+
+**Custo do produto.** Insumos + embalagem de uma porção. Não inclui mão de obra nem custos fixos — esses entram depois, como percentagem da receita. Chamava-se "custo primo" até 2026-09-29, e esse nome estava errado: em gestão de restaurantes americana *prime cost* é CMV **+ mão de obra**, e na contabilidade de custos brasileira *custo primo* é matéria-prima **+ mão de obra direta**. As duas incluem trabalho; este número não. O nome dizia mais do que o número continha.
 
 **Fator de correção.** `FC = peso bruto / peso líquido`. Se 1 kg de alcatra rende 800 g limpos, `FC = 1,25`: cada grama no prato custa 25% mais do que o preço de compra sugere, porque foi preciso comprar 1,25 g para ter 1 g. A aplicação aceita o FC ou a percentagem de perda — são a mesma informação vista de dois lados.
 
@@ -94,6 +105,8 @@ O termo entre colchetes é o **denominador**. Se for ≤ 0, as taxas somadas con
 | 3 · Motor de precificação e DRE | `/precificacao` | pronto |
 | 4 · Produção e lista de compras (MRP) | `/producao` | pronto |
 | 5 · Configurações e painel | `/configuracoes`, `/` | pronto |
+| 6 · Estoque com livro de movimentos | `/estoque` | pronto |
+| 7 · Vendas, CMV real e engenharia de cardápio | `/vendas` | pronto |
 
 ### Consulta de preços de supermercados (Módulo 1b)
 
@@ -122,6 +135,21 @@ Num lote pequeno o primeiro fica bem acima do segundo, e essa diferença (**Fica
 
 A lista mostrada é sempre recalculada ao vivo. **Guardar lista** congela os preços e o estoque do dia do planeamento; se depois um insumo mudar de preço, a aplicação diz quanto a mesma compra passou a custar.
 
+### Estoque e CMV real (Módulos 6 e 7)
+
+O saldo de cada insumo é a **soma de um livro de movimentos**, não um número digitado. Entradas vêm de *Recebi esta compra* numa ordem de produção; saídas de *Produzi*, pela explosão das fichas. Quebras e contagens de inventário entram pelo `/estoque`. Guardar o livro e não só o saldo é o que permite responder a "porque é que diz 3 kg?".
+
+**Valorização: custo médio ponderado.** O resto da app calcula a partir de `purchasePrice`, que é o preço da *próxima* compra — isso não serve para saber quanto valeu o que saiu do armazém. Cada entrada dilui o custo do que já existia; cada saída é valorizada ao médio do momento. É o padrão em alimentação e o único método que faz o CMV real significar alguma coisa.
+
+Duas regras que parecem detalhe e não são:
+
+- **Saldo com custo médio zero não dilui a entrada.** Zero ali significa "custo desconhecido" (estoque digitado à mão), não "de graça". Ponderar contra ele afundaria o preço do que acabou de entrar. O `/estoque` avisa quando isso acontece e oferece valorizar ao preço de compra atual — porque, enquanto não o fizer, as saídas desse saldo entram no CMV real a zero.
+- **Ler fora da transação, escrever dentro.** O plano de movimentos é calculado em memória por `planMovements` e a transação fica só com escritas. A primeira versão lia o estado de cada insumo *dentro* do laço e, contra o Supabase, estourava o limite das transações interativas do Prisma sem gravar nada — devolvendo sucesso na mesma.
+
+**O resultado** é a comparação que justifica o resto da app: o que as fichas dizem que o vendido devia ter custado, contra o que saiu mesmo do armazém. A diferença é desperdício, porção a mais, ou ficha desatualizada.
+
+E as vendas que esse cálculo precisa são as mesmas que dão vida à **engenharia de cardápio** — a matriz Estrela/Cavalo/Quebra-cabeça/Abacaxi, que até aqui assumia que todos os produtos vendiam igual.
+
 ---
 
 ## Estrutura
@@ -142,13 +170,25 @@ src/lib/
   providers/              contrato de consulta de preços + CSV
   pricing/
     types.ts              estruturas de dados puras
-    cost.ts               custo por unidade base, FC, sub-receitas, MRP
+    cost.ts               custo por unidade base, FC, sub-receitas,
+                          flattenRecipe (composição achatada) e MRP
     price.ts              os três modos de cálculo e a autópsia do preço
     channels.ts           simulador multicanal, break-even, engenharia de cardápio
     purchase.ts           lista de compras: estoque, embalagem inteira, fornecedor
+    stock.ts              custo médio ponderado, plano de movimentos, variância
 
 src/app/                  páginas (App Router)
-src/components/           shadcn/ui vendorizado + DRE + formulários
+src/components/
+  action-form.tsx         formulários ligados a Server Actions: página,
+                          janela (FormDialog) e confirmação (ConfirmDelete)
+  data-list.tsx           tabela/cartão responsivo, busca, secções colapsáveis
+  site-nav.tsx            barra de topo e barra inferior do telemóvel
+  purchase-checklist.tsx  a lista de compras para levar à loja
+  price-explorer.tsx      preço editável com CMV e lucro ao vivo
+  ingredient-breakdown.tsx  quantidades por porção, nas duas vistas
+  product-switcher.tsx    trocar de produto sem voltar à lista
+  forms/fields.tsx        campos partilhados entre criar e editar
+  ui/                     shadcn/ui vendorizado
 
 tests/                    Vitest sobre a matemática
 tools/verify_pricing.py   segunda derivação das fórmulas, em Python
@@ -164,6 +204,22 @@ tools/verify_pricing.py   segunda derivação das fórmulas, em Python
 
 ## Decisões que podem surpreender
 
+**Uma só travessia da árvore de receitas.** `flattenRecipe` desce pelas sub-receitas e devolve, por insumo básico, quanto vai no prato e quanto é preciso comprar. A explosão de insumos do Módulo 4 é construída em cima dela — antes eram duas implementações da mesma recursão, e duas oportunidades de divergirem.
+
+**O preço testa-se no browser, sem ir ao servidor.** Escrever um preço recalcula CMV, lucro, margem, a tabela de canais e o gráfico de DRE enquanto se digita. Isto só é possível porque `src/lib/pricing/` não importa React, Prisma nem Next — foi a primeira decisão do projeto e é aqui que ela se paga.
+
+**Tabela no ecrã grande, cartão no telemóvel.** As listas declaram as colunas uma vez em `src/components/data-list.tsx` e ele decide a forma. As linhas chegam do servidor **já renderizadas** em vez de `cell: (item) => …`: o componente precisa de estado (busca, secções abertas) e por isso é de cliente, e funções não atravessam a fronteira servidor→cliente. Nodes de React atravessam.
+
+**A barra de navegação inferior no telemóvel** tem cinco destinos, não sete. Sete a fazer scroll horizontal no topo não se alcançam com o polegar, e é no telemóvel — dentro do supermercado — que esta app se usa a sério. Fornecedores e Configurações ficam como ícones no canto superior, onde se mexe pouco.
+
+**A lista de compras risca-se com o dedo.** O alvo de toque é a linha inteira, não o quadradinho: 16px não se acerta a andar com um carrinho na outra mão. O progresso vive no `localStorage` deste telemóvel, não no servidor — é conveniência de quem está a fazer a volta, não um dado do negócio, e não faz sentido sincronizá-lo entre dispositivos.
+
+**Preferências do browser passam por `useSyncExternalStore`, não por um efeito.** Secções colapsadas e itens riscados na lista de compras vivem no `localStorage`. Lê-los num `useEffect` e chamar `setState` funciona, mas provoca um render em cascata a cada montagem; `useSyncExternalStore` tem um retrato separado para o servidor e resolve a hidratação sem o segundo render. Está tudo em `src/lib/use-stored-state.ts`, com uma cópia em memória para o caso de o armazenamento estar bloqueado.
+
+**Modal para editar, rota para partilhar.** Editar um registo — insumo, fornecedor, canal, uma linha de ficha — abre uma janela, para não perder a lista de vista. O que se quer imprimir, mandar por link ou abrir num separador tem rota própria: ficha técnica, precificação, ordem de produção. Uma ficha completa dentro de uma janelinha fica apertada e deixa de se poder partilhar.
+
+**As janelas de edição e de remoção só fecham quando a ação corre bem.** Se fechassem ao clicar, uma recusa do servidor — "este insumo é usado em 3 fichas técnicas" — desaparecia antes de ser lida e o utilizador ficava sem perceber por que nada aconteceu. Por isso o botão de confirmar não é o `AlertDialogAction` do Radix (que fecha sozinho), mas um `submit` normal.
+
 **`<select>` nativo em vez do Select do Radix.** Quase todos os formulários são `<form action={serverAction}>` sem JavaScript de cliente, e o `<select>` nativo submete o seu valor sozinho. O Radix obrigaria a transformar cada formulário num componente de cliente com estado e input escondido — mais código para o mesmo resultado, e pior no telemóvel. O visual é o do shadcn/ui.
 
 **Decimal no banco, `number` no cálculo.** Dinheiro é `Decimal(12,4)` no Postgres. O `Decimal` do Prisma não atravessa a fronteira servidor/cliente do Next.js nem entra nas funções puras, então a conversão acontece toda em `src/lib/mappers.ts`.
@@ -172,6 +228,7 @@ tools/verify_pricing.py   segunda derivação das fórmulas, em Python
 
 **Uma ficha com erro não derruba a listagem.** Um ciclo ou uma unidade incompatível aparece marcada naquela linha; as outras continuam a mostrar o seu custo.
 
-**A embalagem de transporte não entra no custo primo de balcão.** Ela só é cobrada nos canais marcados com `usesDeliveryPackaging`.
-#   p r e c i f i c a c a o  
+**A embalagem de transporte não entra no custo do produto de balcão.** Ela só é cobrada nos canais marcados com `usesDeliveryPackaging`.
+#   p r e c i f i c a c a o 
+ 
  

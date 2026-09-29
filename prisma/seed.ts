@@ -162,9 +162,17 @@ async function main() {
       stockBase: 0,
     })),
   ]) {
+    const qtyBase =
+      row.purchaseUnit === 'KG' || row.purchaseUnit === 'L'
+        ? row.purchaseQty * 1000
+        : row.purchaseQty;
+
     const data = {
       ...row,
       baseUnit: baseUnitOf(row.purchaseUnit),
+      // Estoque inicial com base de custo. Sem isto, as saidas desse saldo
+      // valeriam zero no CMV real e o custo pareceria menor do que foi.
+      avgCostBase: row.stockBase > 0 && qtyBase > 0 ? row.purchasePrice / qtyBase : 0,
     };
     const saved = await prisma.ingredient.upsert({
       where: { name_supplierId: { name: row.name, supplierId: row.supplierId } },

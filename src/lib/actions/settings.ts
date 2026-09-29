@@ -94,7 +94,11 @@ export async function saveChannel(
       // Vazio = herda a taxa global; "0" = o canal nao cobra cartao.
       cardFeeRate: cardRaw ? rate(cardRaw, 'Taxa de cartao', 0.2) : null,
       usesDeliveryPackaging: form.get('usesDeliveryPackaging') === 'on',
-      active: form.get('active') !== 'off',
+      // Um checkbox so e enviado quando esta marcado, entao "desmarcado" e
+      // "ausente do formulario" chegam aqui iguais. O marcador escondido
+      // desempata — sem ele nunca se conseguia desativar um canal, porque
+      // ausente era sempre lido como ativo.
+      active: form.has('activeSubmitted') ? form.get('active') === 'on' : true,
     };
 
     if (id) {

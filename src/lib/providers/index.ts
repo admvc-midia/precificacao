@@ -94,6 +94,138 @@ export function csvProvider(csvText: string): PriceProvider {
 }
 
 // ---------------------------------------------------------------------------
+// Importacao de insumos
+// ---------------------------------------------------------------------------
+
+export interface IngredientCsvRow {
+  name: string;
+  purchasePrice: number;
+  purchaseQty: number;
+  unit: PurchaseUnit;
+  category: 'FOOD' | 'PACKAGING';
+  supplierName: string | null;
+  /** Fator de correcao. 1 quando nao ha perda. */
+  correctionFactor: number;
+  stockBase: number;
+  /** Numero da linha no ficheiro, para o utilizador saber onde corrigir. */
+  line: number;
+}
+
+export interface IngredientCsvResult {
+  rows: IngredientCsvRow[];
+  /** Linhas recusadas, com a razao. */
+  errors: Array<{ line: number; reason: string }>;
+}
+
+/**
+ * Le uma lista de insumos em CSV.
+ *
+ * Cabecalho aceite (a ordem nao importa, os acentos tambem nao):
+ *
+ *   nome;preco;quantidade;unidade;fornecedor;categoria;perda;estoque
+ *
+ * Obrigatorias sao `nome`, `preco` e `quantidade`. `categoria` aceita
+ * "alimento"/"embalagem"; `perda` e a percentagem (20 = 20%).
+ *
+ * Linhas mas nao interrompem a importacao: sao devolvidas em `errors` para o
+ * utilizador ver o que ficou de fora e porque. Rejeitar o ficheiro inteiro
+ * por causa de uma linha seria a pior forma de tratar um ficheiro de 80
+ * insumos.
+ */
+export function parseIngredientCsv(text: string): IngredientCsvResult {
+  const linhas = text.split(/\r?\n/);
+  const primeira = linhas.findIndex((l) => l.trim().length > 0);
+  if (primeira < 0) return { rows: [], errors: [] };
+
+  const cabecalho = linhas[primeira];
+  const delimiter = countOf(cabecalho, ';') >= countOf(cabecalho, ',') ? ';' : ',';
+  const cols = splitRow(cabecalho, delimiter).map((h) => normalizeText(h));
+
+  const idx = {
+    name: findCol(cols, ['nome', 'insumo', 'produto', 'name']),
+    price: findCol(cols, ['preco', 'price', 'valor', 'custo']),
+    qty: findCol(cols, ['quantidade', 'qtd', 'qty', 'tamanho']),
+    unit: findCol(cols, ['unidade', 'unit', 'un']),
+    supplier: findCol(cols, ['fornecedor', 'supplier', 'loja', 'fonte']),
+    category: findCol(cols, ['categoria', 'category', 'tipo']),
+    waste: findCol(cols, ['perda', 'desperdicio', 'waste']),
+    fc: findCol(cols, ['fc', 'fator', 'fator de correcao']),
+    stock: findCol(cols, ['estoque', 'stock', 'saldo']),
+  };
+
+  if (idx.name < 0 || idx.price < 0 || idx.qty < 0) {
+    throw new Error(
+      'CSV invalido: sao obrigatorias as colunas "nome", "preco" e "quantidade".',
+    );
+  }
+
+  const rows: IngredientCsvRow[] = [];
+  const errors: Array<{ line: number; reason: string }> = [];
+
+  for (let i = primeira + 1; i < linhas.length; i++) {
+    const bruta = linhas[i];
+    if (!bruta.trim()) continue;
+
+    const numeroLinha = i + 1;
+    const cells = splitRow(bruta, delimiter);
+    const name = (cells[idx.name] ?? '').trim();
+
+    if (!name) {
+      errors.push({ line: numeroLinha, reason: 'sem nome' });
+      continue;
+    }
+
+    const preco = csvNumber(cells[idx.price]);
+    const qty = csvNumber(cells[idx.qty]);
+
+    if (!Number.isFinite(preco) || preco <= 0) {
+      errors.push({ line: numeroLinha, reason: `"${name}": preco invalido` });
+      continue;
+    }
+    if (!Number.isFinite(qty) || qty <= 0) {
+      errors.push({ line: numeroLinha, reason: `"${name}": quantidade invalida` });
+      continue;
+    }
+
+    // A perda pode vir como percentagem ou como fator; o fator manda.
+    let fc = 1;
+    if (idx.fc >= 0 && (cells[idx.fc] ?? '').trim()) {
+      const v = csvNumber(cells[idx.fc]);
+      if (Number.isFinite(v) && v >= 1) fc = v;
+    } else if (idx.waste >= 0 && (cells[idx.waste] ?? '').trim()) {
+      const perda = csvNumber(cells[idx.waste]);
+      if (Number.isFinite(perda) && perda > 0 && perda < 100) {
+        fc = 1 / (1 - perda / 100);
+      }
+    }
+
+    const categoriaTexto = normalizeText(
+      idx.category >= 0 ? (cells[idx.category] ?? '') : '',
+    );
+    const category = /embal|descart|pack/.test(categoriaTexto) ? 'PACKAGING' : 'FOOD';
+
+    const fornecedor =
+      idx.supplier >= 0 ? (cells[idx.supplier] ?? '').trim() || null : null;
+
+    const estoque = idx.stock >= 0 ? csvNumber(cells[idx.stock]) : 0;
+
+    rows.push({
+      name,
+      purchasePrice: preco,
+      purchaseQty: qty,
+      unit: normalizeUnit(idx.unit >= 0 ? cells[idx.unit] : 'UN'),
+      category,
+      supplierName: fornecedor,
+      correctionFactor: fc,
+      stockBase: Number.isFinite(estoque) && estoque > 0 ? estoque : 0,
+      line: numeroLinha,
+    });
+  }
+
+  return { rows, errors };
+}
+
+// ---------------------------------------------------------------------------
 // Adapters de supermercado (por ligar)
 // ---------------------------------------------------------------------------
 

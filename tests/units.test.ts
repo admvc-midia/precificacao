@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { formatMoney, formatPercent, parseDecimal, parsePercent } from '@/lib/money';
-import { parsePriceCsv, quoteUnitCost, compareQuote } from '@/lib/providers';
+import {
+  compareQuote,
+  parseIngredientCsv,
+  parsePriceCsv,
+  quoteUnitCost,
+} from '@/lib/providers';
 import {
   baseUnitOf,
   compatibleUnits,
@@ -138,5 +143,81 @@ describe('importacao de precos em CSV', () => {
     const cmp = compareQuote(carne, 0.002);
     expect(cmp.delta).toBeCloseTo(0.25, 10);
     expect(cmp.cheaper).toBe(false);
+  });
+});
+
+describe('importacao de insumos em CSV', () => {
+  const csv = [
+    'nome;preco;quantidade;unidade;fornecedor;categoria;perda',
+    'Carne picada 20%;12,50;5;KG;Talho do Bairro;alimento;0',
+    'Alcatra;18,00;1;kg;Talho do Bairro;alimento;20',
+    'Caixa de hamburguer;12,00;100;UN;Makro;embalagem;',
+  ].join('\n');
+
+  it('le nome, preco, quantidade e unidade', () => {
+    const { rows, errors } = parseIngredientCsv(csv);
+    expect(errors).toHaveLength(0);
+    expect(rows).toHaveLength(3);
+    expect(rows[0].name).toBe('Carne picada 20%');
+    expect(rows[0].purchasePrice).toBeCloseTo(12.5, 10);
+    expect(rows[0].purchaseQty).toBe(5);
+    expect(rows[0].unit).toBe('KG');
+  });
+
+  it('converte a percentagem de perda em fator de correcao', () => {
+    const { rows } = parseIngredientCsv(csv);
+    expect(rows[0].correctionFactor).toBeCloseTo(1, 10);
+    // 20% de perda = FC 1,25
+    expect(rows[1].correctionFactor).toBeCloseTo(1.25, 10);
+  });
+
+  it('reconhece embalagens pela categoria', () => {
+    const { rows } = parseIngredientCsv(csv);
+    expect(rows[0].category).toBe('FOOD');
+    expect(rows[2].category).toBe('PACKAGING');
+  });
+
+  it('guarda o nome do fornecedor', () => {
+    const { rows } = parseIngredientCsv(csv);
+    expect(rows[0].supplierName).toBe('Talho do Bairro');
+    expect(rows[2].supplierName).toBe('Makro');
+  });
+
+  it('aceita cabecalho com acentos e maiusculas', () => {
+    const { rows } = parseIngredientCsv('Nome;Preço;Quantidade\nSal;0,45;1');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe('Sal');
+  });
+
+  it('o fator de correcao explicito manda sobre a percentagem', () => {
+    const { rows } = parseIngredientCsv(
+      'nome;preco;quantidade;perda;fc\nAlcatra;18;1;50;1,25',
+    );
+    expect(rows[0].correctionFactor).toBeCloseTo(1.25, 10);
+  });
+
+  it('recusa a linha ma sem perder as boas', () => {
+    const { rows, errors } = parseIngredientCsv(
+      [
+        'nome;preco;quantidade',
+        'Bom;1,00;1',
+        ';2,00;1',
+        'SemPreco;;1',
+        'Outro;3,00;2',
+      ].join('\n'),
+    );
+    // Um ficheiro de 80 insumos nao pode ser rejeitado por causa de uma linha.
+    expect(rows.map((r) => r.name)).toEqual(['Bom', 'Outro']);
+    expect(errors).toHaveLength(2);
+    expect(errors[0].line).toBe(3);
+    expect(errors[1].reason).toMatch(/preco invalido/);
+  });
+
+  it('exige as colunas obrigatorias', () => {
+    expect(() => parseIngredientCsv('nome;preco\nSal;1')).toThrow(/quantidade/i);
+  });
+
+  it('ficheiro vazio nao rebenta', () => {
+    expect(parseIngredientCsv('')).toEqual({ rows: [], errors: [] });
   });
 });

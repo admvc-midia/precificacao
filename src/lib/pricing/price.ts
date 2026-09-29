@@ -17,7 +17,7 @@
  *        VALOR BRUTO pago pelo cliente, porque e sobre esse valor que a
  *        Uber Eats e a rede de cartoes cobram.
  *
- * 3. Custos em moeda. O custo primo (C) e o frete proprio (D) sao valores
+ * 3. Custos em moeda. O custo do produto (C) e o frete proprio (D) sao valores
  *    absolutos, nao percentuais.
  *
  * Com P = preco de menu, a equacao de equilibrio e:
@@ -95,13 +95,13 @@ export function breakdown(
   const net = vatMode === 'INCLUDED' ? price / (1 + vatRate) : price;
   const vatAmount = gross - net;
 
-  const primeCost = costs.foodCost + costs.packagingCost;
+  const productCost = costs.foodCost + costs.packagingCost;
   const fixedCost = net * fixedCostRate;
   const cardFee = gross * cardFeeRate;
   const platformFee = gross * platformFeeRate;
 
   const profit =
-    net - fixedCost - cardFee - platformFee - primeCost - params.deliveryCost;
+    net - fixedCost - cardFee - platformFee - productCost - params.deliveryCost;
 
   return {
     price,
@@ -110,17 +110,17 @@ export function breakdown(
     vatAmount,
     foodCost: costs.foodCost,
     packagingCost: costs.packagingCost,
-    primeCost,
+    productCost,
     deliveryCost: params.deliveryCost,
     fixedCost,
     cardFee,
     platformFee,
     profit,
-    cmv: net > 0 ? primeCost / net : 0,
+    cmv: net > 0 ? productCost / net : 0,
     netMargin: net > 0 ? profit / net : 0,
-    markup: primeCost > 0 ? price / primeCost : 0,
+    markup: productCost > 0 ? price / productCost : 0,
     contributionMargin:
-      net - primeCost - cardFee - platformFee - params.deliveryCost,
+      net - productCost - cardFee - platformFee - params.deliveryCost,
   };
 }
 
@@ -144,7 +144,7 @@ export function priceFromTargetCmv(
   opts: PriceOptions = {},
 ): PriceResult {
   const warnings: string[] = [];
-  const primeCost = costs.foodCost + costs.packagingCost;
+  const productCost = costs.foodCost + costs.packagingCost;
 
   if (targetCmv <= 0 || targetCmv >= 1) {
     return infeasible(costs, params, [
@@ -152,7 +152,7 @@ export function priceFromTargetCmv(
     ]);
   }
 
-  const net = primeCost / targetCmv;
+  const net = productCost / targetCmv;
   const rawPrice = params.vatMode === 'INCLUDED' ? net * (1 + params.vatRate) : net;
   const price = applyRounding(rawPrice, opts.rounding ?? 'NONE');
 
@@ -160,7 +160,7 @@ export function priceFromTargetCmv(
 
   if (result.profit < 0) {
     warnings.push(
-      `Com CMV de ${pct(targetCmv)} este produto da prejuizo: as taxas e os custos fixos consomem mais do que sobra. Baixe o CMV alvo ou reduza o custo primo.`,
+      `Com CMV de ${pct(targetCmv)} este produto da prejuizo: as taxas e os custos fixos consomem mais do que sobra. Baixe o CMV alvo ou reduza o custo do produto.`,
     );
   }
   if (params.deliveryCost > 0 && result.profit < params.deliveryCost) {
@@ -184,7 +184,7 @@ export function priceFromTargetMargin(
   opts: PriceOptions = {},
 ): PriceResult {
   const warnings: string[] = [];
-  const primeCost = costs.foodCost + costs.packagingCost;
+  const productCost = costs.foodCost + costs.packagingCost;
   const denom = priceDenominator(params, targetMargin);
 
   if (denom <= 0) {
@@ -195,7 +195,7 @@ export function priceFromTargetMargin(
     ]);
   }
 
-  const rawPrice = (primeCost + params.deliveryCost) / denom;
+  const rawPrice = (productCost + params.deliveryCost) / denom;
   const price = applyRounding(rawPrice, opts.rounding ?? 'NONE');
   const result = breakdown(price, costs, params);
 

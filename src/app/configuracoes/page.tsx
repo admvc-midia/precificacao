@@ -1,6 +1,12 @@
-import { Trash2 } from 'lucide-react';
+import { Plus } from 'lucide-react';
 
-import { ActionForm, DeleteButton, SubmitButton } from '@/components/action-form';
+import {
+  ActionForm,
+  ConfirmDelete,
+  FormDialog,
+  SubmitButton,
+} from '@/components/action-form';
+import { ChannelFields } from '@/components/forms/fields';
 import { Alert, Badge, Separator } from '@/components/ui/badge';
 import {
   Card,
@@ -9,13 +15,14 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Field, Select } from '@/components/ui/form-controls';
 import { Input } from '@/components/ui/input';
 import { deleteChannel, saveChannel, saveSettings } from '@/lib/actions/settings';
 import { num } from '@/lib/mappers';
 import { formatMoney, SUPPORTED_CURRENCIES } from '@/lib/money';
 import { priceDenominator } from '@/lib/pricing/price';
-import { getChannels, getSettings } from '@/lib/queries';
+import { getAllChannels, getSettings } from '@/lib/queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +33,7 @@ const CHANNEL_KIND_LABEL: Record<string, string> = {
 };
 
 export default async function ConfiguracoesPage() {
-  const [s, channels] = await Promise.all([getSettings(), getChannels()]);
+  const [s, channels] = await Promise.all([getSettings(), getAllChannels()]);
   const currency = { currency: s.currency, locale: s.locale };
 
   const pct = (v: unknown) => (num(v) * 100).toFixed(2).replace(/\.?0+$/, '');
@@ -214,12 +221,27 @@ export default async function ConfiguracoesPage() {
 
         <div className="space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Canais de venda</CardTitle>
-              <CardDescription>
-                Cada canal tem as suas taxas. O canal de balcao serve de referencia
-                de lucro para os outros.
-              </CardDescription>
+            <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+              <div className="space-y-1.5">
+                <CardTitle>Canais de venda</CardTitle>
+                <CardDescription>
+                  Cada canal tem as suas taxas. O canal de balcao serve de
+                  referencia de lucro para os outros.
+                </CardDescription>
+              </div>
+              <FormDialog
+                action={saveChannel}
+                title="Novo canal de venda"
+                submitLabel="Adicionar canal"
+                trigger={
+                  <Button size="sm" className="shrink-0">
+                    <Plus className="h-4 w-4" />
+                    Novo
+                  </Button>
+                }
+              >
+                <ChannelFields idPrefix="novo" />
+              </FormDialog>
             </CardHeader>
             <CardContent className="space-y-3">
               {channels.length === 0 ? (
@@ -238,6 +260,7 @@ export default async function ConfiguracoesPage() {
                         <Badge variant="secondary">
                           {CHANNEL_KIND_LABEL[c.kind] ?? c.kind}
                         </Badge>
+                        {c.active ? null : <Badge variant="outline">inativo</Badge>}
                       </div>
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         Comissao {(num(c.commissionRate) * 100).toFixed(1)}%
@@ -250,76 +273,29 @@ export default async function ConfiguracoesPage() {
                         {c.usesDeliveryPackaging ? ' · embalagem de transporte' : ''}
                       </p>
                     </div>
-                    <ActionForm action={deleteChannel} showSuccess={false}>
-                      <input type="hidden" name="id" value={c.id} />
-                      <DeleteButton confirmMessage={`Remover o canal "${c.name}"?`}>
-                        <Trash2 className="h-4 w-4" />
-                      </DeleteButton>
-                    </ActionForm>
+                    <div className="flex shrink-0 items-center">
+                      <FormDialog
+                        action={saveChannel}
+                        title={`Editar ${c.name}`}
+                        description="As taxas deste canal entram no preco de todos os produtos nele."
+                        submitLabel="Guardar alteracoes"
+                      >
+                        <ChannelFields channel={c} idPrefix={`edit-${c.id}`} />
+                      </FormDialog>
+
+                      <ConfirmDelete
+                        action={deleteChannel}
+                        fields={{ id: c.id }}
+                        title={`Remover o canal "${c.name}"?`}
+                        description="Os precos calculados para este canal deixam de aparecer. Para o esconder sem perder as taxas, desmarque antes a opcao Canal ativo na edicao."
+                      />
+                    </div>
                   </div>
                 ))
               )}
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Novo canal</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ActionForm action={saveChannel}>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Nome" htmlFor="ch-name">
-                    <Input id="ch-name" name="name" placeholder="Uber Eats" required />
-                  </Field>
-                  <Field label="Tipo" htmlFor="ch-kind">
-                    <Select id="ch-kind" name="kind" defaultValue="PLATFORM">
-                      <option value="COUNTER">Balcao / consumo local</option>
-                      <option value="OWN_DELIVERY">Entrega propria</option>
-                      <option value="PLATFORM">Plataforma de delivery</option>
-                    </Select>
-                  </Field>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <Field label="Comissao (%)" htmlFor="ch-commission">
-                    <Input
-                      id="ch-commission"
-                      name="commissionRate"
-                      inputMode="decimal"
-                      defaultValue="0"
-                    />
-                  </Field>
-                  <Field label="Frete por pedido" htmlFor="ch-delivery">
-                    <Input
-                      id="ch-delivery"
-                      name="deliveryCost"
-                      inputMode="decimal"
-                      defaultValue="0"
-                    />
-                  </Field>
-                  <Field
-                    label="Cartao (%)"
-                    htmlFor="ch-card"
-                    hint="Vazio = usa a taxa global."
-                  >
-                    <Input id="ch-card" name="cardFeeRate" inputMode="decimal" />
-                  </Field>
-                </div>
-
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    name="usesDeliveryPackaging"
-                    className="h-4 w-4 rounded border-input"
-                  />
-                  Cobra a embalagem extra de transporte
-                </label>
-
-                <SubmitButton>Adicionar canal</SubmitButton>
-              </ActionForm>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>

@@ -89,6 +89,32 @@ export function toRecipeInput(row: RecipeRow): RecipeInput {
   };
 }
 
+/**
+ * Linha do banco para os valores do formulario de insumo.
+ *
+ * Tudo em texto e tudo simples: o formulario e um componente de cliente, e
+ * `Decimal` do Prisma nao atravessa essa fronteira.
+ */
+export function toIngredientFormValues(row: IngredientRow) {
+  const dec = (v: unknown) => {
+    const n = num(v);
+    return Number.isFinite(n) ? String(Number(n.toFixed(4))) : '';
+  };
+
+  return {
+    id: row.id,
+    name: row.name,
+    category: row.category,
+    supplierId: row.supplierId ?? '',
+    purchasePrice: dec(row.purchasePrice),
+    purchaseQty: dec(row.purchaseQty),
+    purchaseUnit: row.purchaseUnit,
+    correctionFactor: dec(row.correctionFactor),
+    stockBase: dec(row.stockBase),
+    notes: row.notes ?? '',
+  };
+}
+
 export function toChannelInput(row: PrismaChannel): ChannelInput {
   return {
     id: row.id,

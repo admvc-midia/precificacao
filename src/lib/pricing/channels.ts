@@ -108,7 +108,8 @@ export interface SimulationResult {
  * o mesmo dinheiro no bolso.
  */
 export function simulateChannels(input: SimulationInput): SimulationResult {
-  const { cost, settings, channels, mode } = input;
+  // `mode` nao e extraido aqui: `priceInChannel` recebe o `input` inteiro.
+  const { cost, settings, channels } = input;
 
   if (channels.length === 0) {
     throw new Error('Nenhum canal de venda configurado.');
@@ -125,10 +126,10 @@ export function simulateChannels(input: SimulationInput): SimulationResult {
         : priceInChannel(cost, channel, settings, input);
 
     const { params, costs } = base;
-    const primeCost = costs.foodCost + costs.packagingCost;
+    const productCost = costs.foodCost + costs.packagingCost;
 
     // Mesmo lucro em moeda: trata o lucro alvo como mais um custo a cobrir.
-    const raw = solvePrice(primeCost + params.deliveryCost + targetProfit, params, 0);
+    const raw = solvePrice(productCost + params.deliveryCost + targetProfit, params, 0);
     const matchedPrice = raw === null ? null : applyRounding(raw, settings.rounding);
 
     return {
@@ -199,7 +200,7 @@ export const MENU_CLASS_LABEL: Record<MenuClass, string> = {
  * cruza popularidade com margem de contribuicao.
  *
  * - Estrela: vende muito e da margem. Proteger, nunca baixar preco.
- * - Cavalo de batalha: vende muito, margem fraca. Atacar o custo primo.
+ * - Cavalo de batalha: vende muito, margem fraca. Atacar o custo do produto.
  * - Quebra-cabeca: margem boa, vende pouco. Reposicionar no menu.
  * - Abacaxi: nao vende e nao da margem. Candidato a sair.
  */
@@ -226,8 +227,8 @@ export function breakEvenPrice(
   costs: BreakdownCosts,
   params: PricingParams,
 ): number | null {
-  const primeCost = costs.foodCost + costs.packagingCost;
-  const raw = solvePrice(primeCost + params.deliveryCost, params, 0);
+  const productCost = costs.foodCost + costs.packagingCost;
+  const raw = solvePrice(productCost + params.deliveryCost, params, 0);
   return raw === null ? null : Math.ceil(raw * 100) / 100;
 }
 

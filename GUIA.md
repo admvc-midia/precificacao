@@ -1,0 +1,170 @@
+# Guia rápido — Vendas e CMV real
+
+Escrito para: o dono da lanchonete que vai usar a app, não para quem programa.
+
+O `README.md` explica como a app foi construída. Este explica **como usá-la** na parte
+que mais dá trabalho de entender: saber se o custo que você calcula é o custo que você
+tem de facto.
+
+---
+
+## A pergunta que isto responde
+
+A app diz que o seu Hambúrguer da Casa custa **1,24 €** de insumos. Esse número sai da
+ficha técnica: 160 g de carne, um pão, 40 g de queijo, e por aí.
+
+Mas a ficha é uma promessa. No fim do mês, a pergunta que interessa é outra:
+
+> **Saiu do armazém aquilo que a ficha dizia que ia sair?**
+
+Se saiu mais, há dinheiro a escorrer por algum lado — e há três suspeitos, sempre os
+mesmos:
+
+- **Porção maior do que a ficha diz.** Alguém põe 180 g de carne em vez de 160 g.
+- **Desperdício que ninguém registou.** Caiu, estragou, passou a validade.
+- **Ficha desatualizada.** Mudou a receita e ninguém mudou a ficha.
+
+A app não adivinha qual dos três é. Mas diz-lhe **quanto** e **quando**, que é o que
+faz a diferença entre desconfiar e saber.
+
+---
+
+## O que é preciso lançar
+
+Três coisas, e elas só funcionam juntas. Se faltar uma, a conta não fecha.
+
+### 1. Receber as compras
+
+Em **Produção**, abra a ordem e carregue em **"Recebi esta compra"**.
+
+Isso põe no estoque as embalagens que a lista mandou comprar — as **inteiras**, não só o
+que faltava. Se faltavam 1,6 kg de carne e o pacote é de 5 kg, entram 5 kg. Os 3,4 kg
+que sobram ficam no armazém, como na vida real.
+
+> Enquanto não fizer isto, o estoque não sabe que você comprou, e a coluna **"Falta"**
+> da próxima lista de compras vai estar errada.
+
+### 2. Registar a produção
+
+Na mesma ordem, **"Produzi"**.
+
+Isso tira do estoque tudo o que as fichas dizem que aquela produção consome, descendo
+pelas sub-receitas — o ovo e o óleo dentro da maionese saem também. Sai a quantidade
+**com fator de correção**: se a alcatra perde 20% na limpeza, saem do armazém 250 g para
+cada 200 g que vão ao prato.
+
+### 3. Lançar as vendas
+
+Em **Vendas**, escolha o mês e escreva quantas unidades de cada produto saíram. Dois
+minutos por mês.
+
+A receita é opcional: em branco, a app usa o preço que ela própria calculou. Preencha
+se quiser a receita real, que costuma ser diferente por causa de promoções.
+
+> **Deixar a quantidade em branco apaga o lançamento** desse produto. Não é o mesmo que
+> lançar zero — "não vendi" e "não lancei" são coisas diferentes, e a engenharia de
+> cardápio precisa de as distinguir.
+
+---
+
+## Como ler o resultado
+
+No topo da página de **Vendas** ficam quatro números:
+
+| | O que é |
+|---|---|
+| **Receita líquida** | O que faturou, já sem IVA |
+| **CMV teórico** | O que as fichas dizem que o vendido devia ter custado |
+| **CMV real** | O que de facto saiu do armazém, mais as quebras |
+| **Desvio** | A diferença entre os dois |
+
+**CMV** é *Custo da Mercadoria Vendida*: a fatia da sua receita que foi para o produto.
+Quanto menor, mais sobra para pagar renda, salários e o seu lucro. Numa lanchonete,
+abaixo de 30% é bom; acima de 40% acende a luz vermelha.
+
+### O desvio
+
+- **Desvio positivo** — gastou mais do que a ficha previa. Vá pelos três suspeitos, por
+  esta ordem: pese uma porção, confira se as quebras estão a ser registadas, releia a
+  ficha do produto que mais vende.
+- **Desvio negativo** — gastou menos. Quase sempre significa que **faltou registar uma
+  produção**, não que a cozinha poupou.
+- **Desvio perto de zero** — as suas fichas descrevem a realidade. É o objetivo.
+
+Um desvio de 2 a 3 pontos percentuais de CMV já é dinheiro a sério: numa casa que fatura
+10.000 € por mês, são 200 a 300 € que desapareceram.
+
+---
+
+## O aviso do "preço não registado"
+
+Na página **Estoque** pode aparecer: *"N insumos estão no estoque sem preço registado"*.
+
+Isso acontece com o que você digitou à mão e nunca comprou pela app: ela sabe a
+quantidade, mas não sabe o que aquilo custou. Enquanto for assim, **o gasto com esses
+insumos não entra nas contas** e o seu CMV real aparece mais baixo do que é.
+
+Carregue em **"Usar o preço atual"** ao lado de cada um. É preciso fazer isto uma vez
+só, no arranque.
+
+---
+
+## Engenharia de cardápio
+
+Mais abaixo na página de Vendas, a matriz cruza **o que vende** com **o que dá margem**.
+Cada ponto é um produto, e a posição diz tudo:
+
+```
+  margem ↑
+        │  Quebra-cabeça    │    Estrela
+        │  (reposicionar)   │    (proteger)
+        ├───────────────────┼──────────────────
+        │  Abacaxi          │    Cavalo
+        │  (cortar)         │    (atacar o custo)
+        └───────────────────┴─────→ vende mais
+```
+
+- **Estrela** — vende e dá margem. Não mexa no preço. Ponha em destaque no menu.
+- **Cavalo de batalha** — vende muito, margem fraca. Não suba o preço: **ataque o custo**.
+  Abra a precificação do produto e veja que insumo come a maior fatia.
+- **Quebra-cabeça** — margem boa, vende pouco. Problema de posição no menu ou de nome,
+  não de preço. Sugira-o.
+- **Abacaxi** — não vende nem dá margem. Candidato a sair, a menos que esteja lá por
+  outra razão (o refrigerante que acompanha, o prato da criança).
+
+As linhas de corte são as médias da sua própria casa, não um padrão de fora.
+
+---
+
+## A ordem, resumida
+
+```
+1. Planeie a produção        →  Produção → Nova ordem, adicione os produtos
+2. Compre                     →  a lista sai dividida por loja, risque no telemóvel
+3. Recebi esta compra         →  entra no estoque
+4. Produzi                    →  sai do estoque
+5. No fim do mês, Vendas      →  lance as unidades
+6. Leia o desvio              →  e vá atrás dele
+```
+
+Os passos 3 e 4 são os que se esquecem, e são os que fazem tudo o resto funcionar.
+
+---
+
+## Perguntas rápidas
+
+**Preciso de uma ordem de produção para tudo o que faço?**
+Para o CMV real fazer sentido, sim — é ela que tira do estoque. Uma ordem por semana,
+com as quantidades da semana, já chega.
+
+**E se eu esquecer de registar uma produção?**
+O CMV real fica baixo demais e o desvio fica negativo. Registe-a com a data certa.
+
+**E se o estoque ficar negativo?**
+Significa que registou a produção antes da compra. A página de Estoque avisa. Receba a
+compra da ordem, ou faça uma contagem para acertar.
+
+**Contei o armazém e não bate com a app. E agora?**
+Em **Estoque**, use o botão de contagem ao lado do insumo. A app regista a **diferença**
+como um movimento de inventário — e é essa diferença que lhe interessa ver, não o número
+corrigido.

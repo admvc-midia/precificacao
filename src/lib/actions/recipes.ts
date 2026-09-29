@@ -150,6 +150,54 @@ export async function addRecipeItem(
   }
 }
 
+/**
+ * Altera a quantidade ou a unidade de uma linha da ficha.
+ *
+ * Como no `addRecipeItem`, a validacao acontece depois da escrita: se a
+ * alteracao tornar a ficha impossivel de calcular (unidade de outra familia,
+ * por exemplo), repomos os valores anteriores.
+ */
+export async function updateRecipeItem(
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  const id = String(form.get('id') ?? '');
+  let previous: { qty: number; unit: 'KG' | 'G' | 'L' | 'ML' | 'UN' } | null = null;
+
+  try {
+    if (!id) throw new Error('Linha nao informada.');
+
+    const qty = parseDecimal(String(form.get('qty') ?? ''));
+    const unit = PURCHASE_UNIT.parse(String(form.get('unit') ?? 'G'));
+    if (qty <= 0) throw new Error('A quantidade tem de ser maior que zero.');
+
+    const current = await prisma.recipeItem.findUnique({ where: { id } });
+    if (!current) throw new Error('Linha nao encontrada.');
+    previous = { qty: Number(current.qty), unit: current.unit };
+
+    await prisma.recipeItem.update({
+      where: { id },
+      data: { qty, unit, notes: String(form.get('notes') ?? '').trim() || null },
+    });
+
+    await assertRecipeIsComputable(current.recipeId);
+
+    revalidatePath(`/fichas/${current.recipeId}`);
+    revalidatePath('/fichas');
+    revalidatePath('/precificacao');
+    revalidatePath(`/precificacao/${current.recipeId}`);
+    revalidatePath('/');
+    return { ok: true, message: 'Linha atualizada.' };
+  } catch (err) {
+    if (previous && id) {
+      await prisma.recipeItem
+        .update({ where: { id }, data: previous })
+        .catch(() => {});
+    }
+    return { ok: false, message: errorMessage(err) };
+  }
+}
+
 export async function deleteRecipeItem(
   _prev: ActionState,
   form: FormData,

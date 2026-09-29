@@ -191,7 +191,8 @@ export function StatTile({
 }: {
   label: string;
   value: string;
-  hint?: string;
+  /** Aceita um node para o cartao poder levar um link. */
+  hint?: React.ReactNode;
   tone?: 'default' | 'good' | 'warning' | 'critical';
 }) {
   const tones = {

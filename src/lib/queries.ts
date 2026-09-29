@@ -32,10 +32,22 @@ export async function getCurrencyConfig(): Promise<CurrencyConfig> {
   return { currency: s.currency, locale: s.locale };
 }
 
+/** Apenas os canais ativos — e com estes que se calculam precos. */
 export const getChannels = cache(async () =>
   prisma.salesChannel.findMany({
     where: { active: true },
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+  }),
+);
+
+/**
+ * Todos os canais, ativos ou nao. Serve o ecra de configuracoes: se ele
+ * usasse `getChannels`, desativar um canal fa-lo-ia desaparecer da lista e
+ * nao haveria forma de o voltar a ligar.
+ */
+export const getAllChannels = cache(async () =>
+  prisma.salesChannel.findMany({
+    orderBy: [{ active: 'desc' }, { sortOrder: 'asc' }, { name: 'asc' }],
   }),
 );
 
@@ -178,6 +190,97 @@ export async function getProductionOrder(id: string) {
       listLines: { include: { ingredient: { select: { name: true } } } },
     },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Estoque e vendas
+// ---------------------------------------------------------------------------
+
+/** Insumos com saldo, custo medio e o ultimo movimento de cada um. */
+export const getStockLines = cache(async () => {
+  const [rows, ultimos] = await Promise.all([
+    prisma.ingredient.findMany({
+      include: { supplier: { select: { name: true } } },
+      orderBy: [{ category: 'asc' }, { name: 'asc' }],
+    }),
+    prisma.stockMovement.findMany({
+      distinct: ['ingredientId'],
+      orderBy: { occurredAt: 'desc' },
+      select: { ingredientId: true, occurredAt: true, kind: true },
+    }),
+  ]);
+
+  const porInsumo = new Map(ultimos.map((m) => [m.ingredientId, m]));
+  return rows.map((r) => ({ row: r, last: porInsumo.get(r.id) ?? null }));
+});
+
+export async function getMovements(limit = 60, ingredientId?: string) {
+  return prisma.stockMovement.findMany({
+    where: ingredientId ? { ingredientId } : undefined,
+    include: {
+      ingredient: { select: { name: true, baseUnit: true } },
+      order: { select: { id: true, name: true } },
+    },
+    orderBy: { occurredAt: 'desc' },
+    take: limit,
+  });
+}
+
+/**
+ * Soma os movimentos de um periodo por tipo.
+ *
+ * O periodo vem como "2026-09" e traduz-se para o intervalo do mes em UTC —
+ * a mesma convencao com que as vendas sao registadas.
+ */
+export async function getMovementTotals(period: string) {
+  const { start, end } = monthRange(period);
+
+  const grupos = await prisma.stockMovement.groupBy({
+    by: ['kind'],
+    where: { occurredAt: { gte: start, lt: end } },
+    _sum: { value: true },
+  });
+
+  const total = (kind: string) =>
+    Math.abs(num(grupos.find((g) => g.kind === kind)?._sum.value ?? 0));
+
+  return {
+    purchase: total('PURCHASE'),
+    production: total('PRODUCTION'),
+    waste: total('WASTE'),
+    inventory: total('INVENTORY'),
+    adjustment: total('ADJUSTMENT'),
+  };
+}
+
+export async function getSales(period: string) {
+  return prisma.salesRecord.findMany({
+    where: { period },
+    include: { recipe: { select: { id: true, name: true, kind: true } } },
+  });
+}
+
+export async function getSalesPeriods(): Promise<string[]> {
+  const rows = await prisma.salesRecord.findMany({
+    distinct: ['period'],
+    select: { period: true },
+    orderBy: { period: 'desc' },
+  });
+  return rows.map((r) => r.period);
+}
+
+/** "2026-09" -> [1 set 00:00 UTC, 1 out 00:00 UTC). */
+export function monthRange(period: string): { start: Date; end: Date } {
+  const [ano, mes] = period.split('-').map(Number);
+  const start = new Date(Date.UTC(ano, mes - 1, 1));
+  const end = new Date(Date.UTC(mes === 12 ? ano + 1 : ano, mes === 12 ? 0 : mes, 1));
+  return { start, end };
+}
+
+/** O mes corrente em "AAAA-MM". */
+export function currentPeriod(): string {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
 export async function getQuotes(ingredientId: string) {

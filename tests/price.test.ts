@@ -37,7 +37,7 @@ describe('autopsia do preco', () => {
   it('fecha a identidade contabil: nada aparece nem desaparece', () => {
     const b = breakdown(10, COSTS, BASE);
     const soma =
-      b.fixedCost + b.cardFee + b.platformFee + b.primeCost + b.deliveryCost + b.profit;
+      b.fixedCost + b.cardFee + b.platformFee + b.productCost + b.deliveryCost + b.profit;
 
     expect(soma).toBeCloseTo(b.net, 10);
     expect(b.gross).toBeCloseTo(b.net + b.vatAmount, 10);
@@ -206,7 +206,7 @@ describe('simulador multi-canal', () => {
     foodCostPerUnit: 0.896,
     packagingCost: 0.12,
     deliveryPackagingCost: 0.08,
-    primeCost: 1.016,
+    productCost: 1.016,
   };
 
   const SETTINGS: GlobalSettings = {

@@ -1,21 +1,22 @@
 import Link from 'next/link';
-import { ArrowRight, CalendarDays, Trash2 } from 'lucide-react';
+import { ArrowRight, CalendarDays, Plus } from 'lucide-react';
 
-import { ActionForm, DeleteButton, SubmitButton } from '@/components/action-form';
+import { ConfirmDelete, FormDialog } from '@/components/action-form';
+import { DataList, type ListColumn, type ListRow } from '@/components/data-list';
 import { Alert, Badge } from '@/components/ui/badge';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/form-controls';
 import { Input, Textarea } from '@/components/ui/input';
 import { createOrder, deleteOrder } from '@/lib/actions/production';
 import { getCostedRecipes, getProductionOrders } from '@/lib/queries';
 
 export const dynamic = 'force-dynamic';
+
+const COLUMNS: ListColumn[] = [
+  { header: 'Ordem' },
+  { header: 'Data', hideBelow: 'lg' },
+  { header: 'Porcoes', align: 'right' },
+];
 
 export default async function ProducaoPage() {
   const [orders, { recipes, currency }] = await Promise.all([
@@ -32,8 +33,90 @@ export default async function ProducaoPage() {
     timeZone: 'UTC',
   });
 
+  const rows: ListRow[] = orders.map((order) => {
+    const porcoes = order.lines.reduce((acc, l) => acc + Number(l.qty), 0);
+    const data = order.dueAt ? dateFmt.format(order.dueAt) : '—';
+
+    const resumo =
+      order.lines.length === 0
+        ? 'Sem produtos'
+        : order.lines
+            .slice(0, 3)
+            .map((l) => `${Number(l.qty)}x ${l.recipe.name}`)
+            .join(', ') + (order.lines.length > 3 ? '…' : '');
+
+    const nome = (
+      <Link href={`/producao/${order.id}`} className="font-medium hover:underline">
+        {order.name}
+      </Link>
+    );
+
+    return {
+      id: order.id,
+      search: `${order.name} ${order.notes ?? ''} ${order.lines
+        .map((l) => l.recipe.name)
+        .join(' ')}`,
+      cells: [
+        <div key="n">
+          <div className="flex flex-wrap items-center gap-2">
+            {nome}
+            {order._count.listLines > 0 ? (
+              <Badge variant="success">lista guardada</Badge>
+            ) : null}
+          </div>
+          <div className="text-xs text-muted-foreground">{resumo}</div>
+        </div>,
+        <span key="d" className="whitespace-nowrap text-muted-foreground">
+          {order.dueAt ? (
+            <span className="flex items-center gap-1.5">
+              <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              {data}
+            </span>
+          ) : (
+            '—'
+          )}
+        </span>,
+        <span key="p" className="font-medium">
+          {porcoes}
+        </span>,
+      ],
+      title: (
+        <span className="flex flex-wrap items-center gap-2">
+          {nome}
+          {order._count.listLines > 0 ? (
+            <Badge variant="success">guardada</Badge>
+          ) : null}
+        </span>
+      ),
+      lead: <span className="font-medium">{porcoes} porcoes</span>,
+      meta: (
+        <>
+          {order.dueAt ? `${data} · ` : ''}
+          {resumo}
+        </>
+      ),
+      actions: (
+        <>
+          <Link
+            href={`/producao/${order.id}`}
+            className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-1.5 text-sm text-primary hover:underline"
+          >
+            Abrir
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+          <ConfirmDelete
+            action={deleteOrder}
+            fields={{ id: order.id }}
+            title={`Remover a ordem "${order.name}"?`}
+            description="A ordem e a lista de compras guardada sao apagadas. Os insumos e fichas nao sao afetados."
+          />
+        </>
+      ),
+    };
+  });
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Producao e compras</h1>
         <p className="text-sm text-muted-foreground">
@@ -52,117 +135,44 @@ export default async function ProducaoPage() {
         </Alert>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-        <Card>
-          <CardHeader className="flex-row items-center justify-between space-y-0">
-            <CardTitle>Ordens de producao</CardTitle>
-            <Badge variant="secondary">{orders.length}</Badge>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {orders.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Nenhuma ordem ainda. Crie a primeira ao lado — por exemplo, a
-                producao do proximo fim de semana.
-              </p>
-            ) : (
-              orders.map((order) => {
-                const totalPortions = order.lines.reduce(
-                  (acc, l) => acc + Number(l.qty),
-                  0,
-                );
-                return (
-                  <div
-                    key={order.id}
-                    className="flex items-start justify-between gap-3 rounded-md border p-3"
-                  >
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Link
-                          href={`/producao/${order.id}`}
-                          className="font-medium hover:underline"
-                        >
-                          {order.name}
-                        </Link>
-                        {order.dueAt ? (
-                          <Badge variant="secondary">
-                            <CalendarDays className="mr-1 h-3 w-3" aria-hidden />
-                            {dateFmt.format(order.dueAt)}
-                          </Badge>
-                        ) : null}
-                        {order._count.listLines > 0 ? (
-                          <Badge variant="success">lista guardada</Badge>
-                        ) : null}
-                      </div>
-
-                      <p className="text-xs text-muted-foreground">
-                        {order.lines.length === 0
-                          ? 'Sem produtos'
-                          : `${totalPortions} porcoes · ${order.lines
-                              .slice(0, 3)
-                              .map((l) => `${Number(l.qty)}x ${l.recipe.name}`)
-                              .join(', ')}${order.lines.length > 3 ? '…' : ''}`}
-                      </p>
-                      {order.notes ? (
-                        <p className="text-xs text-muted-foreground">{order.notes}</p>
-                      ) : null}
-                    </div>
-
-                    <div className="flex shrink-0 items-center gap-1">
-                      <Link
-                        href={`/producao/${order.id}`}
-                        className="inline-flex items-center gap-1 px-2 text-sm text-primary hover:underline"
-                      >
-                        Abrir
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      </Link>
-                      <ActionForm action={deleteOrder} showSuccess={false}>
-                        <input type="hidden" name="id" value={order.id} />
-                        <DeleteButton
-                          confirmMessage={`Remover a ordem "${order.name}"?`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </DeleteButton>
-                      </ActionForm>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="h-fit">
-          <CardHeader>
-            <CardTitle>Nova ordem</CardTitle>
-            <CardDescription>
-              Um plano de producao: o que fazer e para quando.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ActionForm action={createOrder}>
-              <Field label="Nome" htmlFor="ord-name">
-                <Input
-                  id="ord-name"
-                  name="name"
-                  placeholder="Fim de semana 3-4 out"
-                  required
-                />
-              </Field>
-              <Field label="Data da producao" htmlFor="ord-due">
-                <Input id="ord-due" name="dueAt" type="date" />
-              </Field>
-              <Field label="Notas" htmlFor="ord-notes">
-                <Textarea
-                  id="ord-notes"
-                  name="notes"
-                  placeholder="Festa da rua. Comprar na quinta."
-                />
-              </Field>
-              <SubmitButton>Criar ordem</SubmitButton>
-            </ActionForm>
-          </CardContent>
-        </Card>
-      </div>
+      <DataList
+        columns={COLUMNS}
+        rows={rows}
+        searchPlaceholder="Procurar ordem…"
+        empty="Nenhuma ordem ainda. Crie a primeira — por exemplo, a producao do proximo fim de semana."
+        toolbar={<NovaOrdem />}
+      />
     </div>
+  );
+}
+
+function NovaOrdem() {
+  return (
+    <FormDialog
+      action={createOrder}
+      title="Nova ordem de producao"
+      description="Um plano de producao: o que fazer e para quando."
+      submitLabel="Criar ordem"
+      trigger={
+        <Button className="w-full sm:w-auto">
+          <Plus className="h-4 w-4" />
+          Nova ordem
+        </Button>
+      }
+    >
+      <Field label="Nome" htmlFor="ord-name">
+        <Input id="ord-name" name="name" placeholder="Fim de semana 3-4 out" required />
+      </Field>
+      <Field label="Data da producao" htmlFor="ord-due">
+        <Input id="ord-due" name="dueAt" type="date" />
+      </Field>
+      <Field label="Notas" htmlFor="ord-notes">
+        <Textarea
+          id="ord-notes"
+          name="notes"
+          placeholder="Festa da rua. Comprar na quinta."
+        />
+      </Field>
+    </FormDialog>
   );
 }

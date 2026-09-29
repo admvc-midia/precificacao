@@ -94,7 +94,7 @@ def recipe_cost(rid: str, ings: dict, recs: dict, stack=None) -> dict:
         "food_cost_per_unit": food_per_unit,
         "packaging_cost": pack,
         "delivery_packaging_cost": dpack,
-        "prime_cost": food_per_unit + pack,
+        "product_cost": food_per_unit + pack,
     }
 
 
@@ -116,9 +116,11 @@ def explode(demand: list, ings: dict, recs: dict) -> dict:
                 child = recs[ref]
                 qb = to_base(qty, unit, child.yield_unit)
                 walk(ref, qb * batches, stack + [rid])
+        # A embalagem tambem leva o fator de correcao: o custo da ficha ja o
+        # aplica, entao a lista de compras tem de aplicar o mesmo.
         for pid in (r.packaging_id, r.delivery_packaging_id):
             if pid:
-                totals[pid] = totals.get(pid, 0.0) + portions
+                totals[pid] = totals.get(pid, 0.0) + portions * ings[pid].fc
 
     for rid, qty in demand:
         walk(rid, qty, [])
@@ -329,9 +331,9 @@ expected_food = (
 check("custo de alimento do hamburguer bate com o calculo manual",
       close(burger["food_cost_per_unit"], expected_food),
       f"obtido {burger['food_cost_per_unit']:.6f}, esperado {expected_food:.6f}")
-check("custo primo = alimento + embalagem principal (sem a de transporte)",
-      close(burger["prime_cost"], expected_food + 0.12))
-check("embalagem de transporte fica de fora do custo primo de balcao",
+check("custo do produto = alimento + embalagem principal (sem a de transporte)",
+      close(burger["product_cost"], expected_food + 0.12))
+check("embalagem de transporte fica de fora do custo do produto de balcao",
       close(burger["delivery_packaging_cost"], 0.08))
 
 # Rendimento: dobrar o lote sem mexer nas quantidades deve metade o custo unitario.
@@ -513,6 +515,22 @@ check("100 hamburgueres consomem 10 ovos (4 ovos por 1200 ml de maionese)",
 check("embalagens: 100 caixas e 100 sacos",
       close(exp["caixa"], 100) and close(exp["saco"], 100))
 
+# Embalagem com perda por quebra: a explosao tem de a contar como conta no custo.
+ings["caixa"].fc = 1.10
+exp_pack = explode([("burger", 100)], ings, recs)
+check("a perda da embalagem entra na lista de compras: 100 porcoes -> 110 caixas",
+      close(exp_pack["caixa"], 110),
+      f"obtido {exp_pack['caixa']:.2f}")
+
+custo_mrp_pack = sum(q * cost_per_base_unit(ings[i]) for i, q in exp_pack.items())
+bp = recipe_cost("burger", ings, recs)
+custo_ficha_pack = 100 * (bp["food_cost_per_unit"] + bp["packaging_cost"]
+                          + bp["delivery_packaging_cost"])
+check("com perda na embalagem, MRP e ficha continuam a bater",
+      close(custo_mrp_pack, custo_ficha_pack, 1e-7),
+      f"mrp={custo_mrp_pack:.4f} ficha={custo_ficha_pack:.4f}")
+ings["caixa"].fc = 1.0
+
 # A explosao tem de aplicar o fator de correcao — e o que se compra, nao o
 # que se usa.
 recs["bife"] = Recipe("bife", "Bife limpo", "PRODUCT", 1, "UN",
@@ -594,11 +612,38 @@ check("FC aplicado antes de decidir a compra: 2500 g = 3 pacotes de 1 kg",
 
 print()
 print("=" * 72)
+print("ESTOQUE — custo medio ponderado")
+print("=" * 72)
+
+
+def entrada_media(qtd_ant, medio_ant, qtd_in, custo_in):
+    """Espelho de applyMovement para entradas."""
+    nova = qtd_ant + qtd_in
+    sem_base = medio_ant <= 0
+    if qtd_ant > 0 and nova > 0 and not sem_base:
+        return (qtd_ant * medio_ant + qtd_in * custo_in) / nova
+    return custo_in
+
+
+check("entrada mais cara dilui o que ja estava (5kg a 2,50 + 5kg a 3,50 -> 3,00)",
+      close(entrada_media(5000, 0.0005, 5000, 0.0007), 0.0006))
+check("pondera pelas quantidades e nao pela media simples dos precos",
+      close(entrada_media(9, 1.0, 1, 2.0), 1.1))
+check("saldo sem base de custo nao dilui a entrada",
+      close(entrada_media(8000, 0.0, 1000, 0.003), 0.003),
+      f"obtido {entrada_media(8000, 0.0, 1000, 0.003):.6f}")
+check("armazem vazio: a entrada define o medio",
+      close(entrada_media(0, 0.0, 500, 4.0), 4.0))
+check("saida valoriza ao medio e nao o altera",
+      close(0.003 * 2000, 6.0))
+
+print()
+print("=" * 72)
 print("Valores do cenario de exemplo")
 print("=" * 72)
 print(f"  Custo de alimento/porcao ....... {food:8.4f}")
 print(f"  Embalagem principal ............ {pack:8.4f}")
-print(f"  Custo primo (balcao) ........... {food + pack:8.4f}")
+print(f"  Custo do produto (balcao) ........... {food + pack:8.4f}")
 print()
 print(f"  Balcao      preco {r_counter['price']:6.2f}  "
       f"CMV {r_counter['cmv']:6.1%}  lucro {r_counter['profit']:6.2f}")

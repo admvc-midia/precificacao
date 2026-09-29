@@ -1,9 +1,18 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Check, Info, Store, Trash2 } from 'lucide-react';
+import { Check, Info, PackageCheck, ChefHat } from 'lucide-react';
 
-import { ActionForm, DeleteButton, SubmitButton } from '@/components/action-form';
+import {
+  ActionForm,
+  ConfirmDelete,
+  FormDialog,
+  SubmitButton,
+} from '@/components/action-form';
 import { StatTile } from '@/components/dre-breakdown';
+import {
+  PurchaseChecklist,
+  type ChecklistGroup,
+} from '@/components/purchase-checklist';
 import { Alert, Badge } from '@/components/ui/badge';
 import {
   Card,
@@ -18,7 +27,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableFooter,
   TableHead,
   TableHeader,
   TableNum,
@@ -28,7 +36,9 @@ import {
   addOrderLine,
   deleteOrderLine,
   freezePurchaseList,
+  updateOrderLine,
 } from '@/lib/actions/production';
+import { receivePurchase, recordProduction } from '@/lib/actions/stock';
 import { buildCostContext, num } from '@/lib/mappers';
 import { formatMoney, formatPercent } from '@/lib/money';
 import {
@@ -36,7 +46,7 @@ import {
   demandConsumptionCost,
   type PurchaseList,
 } from '@/lib/pricing/purchase';
-import { getPricingData, getProductionOrder } from '@/lib/queries';
+import { getPricingData, getProductionOrder, getSuppliers } from '@/lib/queries';
 import { formatBaseQty, UNIT_LABEL } from '@/lib/units';
 
 export const dynamic = 'force-dynamic';
@@ -47,7 +57,11 @@ export default async function OrdemPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [order, data] = await Promise.all([getProductionOrder(id), getPricingData()]);
+  const [order, data, suppliers] = await Promise.all([
+    getProductionOrder(id),
+    getPricingData(),
+    getSuppliers(),
+  ]);
   if (!order) notFound();
 
   const { currency } = data;
@@ -77,6 +91,43 @@ export default async function OrdemPage({
   const frozenTotal = order.listLines.reduce((a, l) => a + num(l.estimatedCost), 0);
   const hasFrozen = order.listLines.length > 0;
   const drift = hasFrozen && list ? list.totalCost - frozenTotal : 0;
+
+  // A morada e o telefone nao viajam no PurchaseLine, mas sao exatamente o
+  // que se quer no supermercado: onde ir e a quem ligar se faltar algo.
+  const porFornecedor = new Map(suppliers.map((s) => [s.id, s]));
+
+  const checklistGroups: ChecklistGroup[] = (list?.bySupplier ?? []).map((group) => {
+    const sup = group.supplierId ? porFornecedor.get(group.supplierId) : undefined;
+    return {
+      id: group.supplierId ?? 'sem-fornecedor',
+      supplier: group.supplierName,
+      address: sup?.address ?? null,
+      phone: sup?.phone ?? null,
+      total: formatMoney(group.total, currency),
+      items: group.lines.map((l) => ({
+        id: l.ingredient.id,
+        name: l.ingredient.name,
+        buy: `${l.packsToBuy}x ${num(l.ingredient.purchaseQty)} ${
+          UNIT_LABEL[l.ingredient.purchaseUnit]
+        }`,
+        cost: formatMoney(l.cost, currency),
+        costValue: l.cost,
+        detail: [
+          `preciso ${formatBaseQty(l.requiredBase, l.baseUnit, currency.locale)}`,
+          l.stockBase > 0
+            ? `tenho ${formatBaseQty(l.stockBase, l.baseUnit, currency.locale)}`
+            : null,
+          `falta ${formatBaseQty(l.missingBase, l.baseUnit, currency.locale)}`,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        leftover:
+          l.leftoverBase > 0
+            ? `sobram ${formatBaseQty(l.leftoverBase, l.baseUnit, currency.locale)}`
+            : undefined,
+      })),
+    };
+  });
 
   const dateFmt = new Intl.DateTimeFormat(currency.locale, {
     day: '2-digit',
@@ -124,10 +175,10 @@ export default async function OrdemPage({
             hint="Sobra das embalagens inteiras"
           />
           <StatTile
-            label="Ja coberto pelo estoque"
+            label="Nao precisa comprar"
             value={String(list.coveredByStock.length)}
             tone={list.coveredByStock.length > 0 ? 'good' : 'default'}
-            hint="Insumos que nao precisa comprar"
+            hint="Ja tem no estoque"
           />
         </div>
       ) : null}
@@ -186,15 +237,32 @@ export default async function OrdemPage({
                         </TableCell>
                         <TableNum>{num(line.qty)}</TableNum>
                         <TableCell>
-                          <ActionForm action={deleteOrderLine} showSuccess={false}>
-                            <input type="hidden" name="id" value={line.id} />
-                            <input type="hidden" name="orderId" value={id} />
-                            <DeleteButton
-                              confirmMessage={`Tirar "${line.recipe.name}" da ordem?`}
+                          <div className="flex items-center justify-end">
+                            <FormDialog
+                              action={updateOrderLine}
+                              title={`Quantidade de ${line.recipe.name}`}
+                              description="Quantas porcoes produzir. A lista de compras e recalculada."
+                              submitLabel="Guardar"
                             >
-                              <Trash2 className="h-4 w-4" />
-                            </DeleteButton>
-                          </ActionForm>
+                              <input type="hidden" name="id" value={line.id} />
+                              <Field label="Porcoes" htmlFor={`oq-${line.id}`}>
+                                <Input
+                                  id={`oq-${line.id}`}
+                                  name="qty"
+                                  inputMode="decimal"
+                                  defaultValue={String(num(line.qty))}
+                                  required
+                                />
+                              </Field>
+                            </FormDialog>
+
+                            <ConfirmDelete
+                              action={deleteOrderLine}
+                              fields={{ id: line.id, orderId: id }}
+                              title={`Tirar "${line.recipe.name}" da ordem?`}
+                              description="A lista de compras e recalculada sem este produto."
+                            />
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -204,97 +272,33 @@ export default async function OrdemPage({
             </CardContent>
           </Card>
 
-          {list && list.bySupplier.length > 0 ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Lista de compras</CardTitle>
-                <CardDescription>
-                  Dividida por loja, na ordem da volta das compras.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6 p-0">
-                {list.bySupplier.map((group) => (
-                  <div key={group.supplierId ?? 'none'}>
-                    <div className="flex items-center justify-between gap-3 border-y bg-muted/40 px-6 py-2">
-                      <span className="flex items-center gap-2 font-medium">
-                        <Store className="h-4 w-4 text-muted-foreground" aria-hidden />
-                        {group.supplierName}
-                      </span>
-                      <span className="tabular-nums font-medium">
-                        {formatMoney(group.total, currency)}
-                      </span>
-                    </div>
+          {list && checklistGroups.length > 0 ? (
+            <section className="space-y-3">
+              <div>
+                <h2 className="text-lg font-semibold">Lista de compras</h2>
+                <p className="text-sm text-muted-foreground">
+                  Dividida por loja. Toque num item para o riscar enquanto compra —
+                  o progresso fica guardado neste telemovel.
+                </p>
+              </div>
 
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Insumo</TableHead>
-                          <TableHead className="text-right">Preciso</TableHead>
-                          <TableHead className="text-right">Tenho</TableHead>
-                          <TableHead className="text-right">Falta</TableHead>
-                          <TableHead className="text-right">Comprar</TableHead>
-                          <TableHead className="text-right">Custo</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {group.lines.map((l) => (
-                          <TableRow key={l.ingredient.id}>
-                            <TableCell>
-                              <div className="font-medium">{l.ingredient.name}</div>
-                              {l.leftoverBase > 0 ? (
-                                <div className="text-xs text-muted-foreground">
-                                  sobram {formatBaseQty(l.leftoverBase, l.baseUnit, currency.locale)}
-                                </div>
-                              ) : null}
-                            </TableCell>
-                            <TableNum className="text-muted-foreground">
-                              {formatBaseQty(l.requiredBase, l.baseUnit, currency.locale)}
-                            </TableNum>
-                            <TableNum className="text-muted-foreground">
-                              {l.stockBase > 0
-                                ? formatBaseQty(l.stockBase, l.baseUnit, currency.locale)
-                                : '—'}
-                            </TableNum>
-                            <TableNum>
-                              {formatBaseQty(l.missingBase, l.baseUnit, currency.locale)}
-                            </TableNum>
-                            <TableNum className="font-medium">
-                              {l.packsToBuy}x {num(l.ingredient.purchaseQty)}{' '}
-                              {UNIT_LABEL[l.ingredient.purchaseUnit]}
-                            </TableNum>
-                            <TableNum className="font-medium">
-                              {formatMoney(l.cost, currency)}
-                            </TableNum>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ))}
+              <PurchaseChecklist
+                orderId={id}
+                groups={checklistGroups}
+                currency={currency}
+              />
 
-                <Table>
-                  <TableFooter>
-                    <TableRow>
-                      <TableCell>Total da compra</TableCell>
-                      <TableNum className="text-base font-semibold">
-                        {formatMoney(list.totalCost, currency)}
-                      </TableNum>
-                    </TableRow>
-                  </TableFooter>
-                </Table>
-
-                <div className="flex items-start gap-2 px-6 pb-6 text-xs text-muted-foreground">
-                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                  <p>
-                    Dos {formatMoney(list.totalCost, currency)} a pagar, apenas{' '}
-                    {formatMoney(list.theoreticalCost, currency)} sao consumidos por
-                    esta producao — o resto fica em despensa porque nao se compra
-                    fracao de embalagem. Esse dinheiro nao se perde, mas sai da caixa
-                    hoje.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+              <div className="flex items-start gap-2 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                <p>
+                  Dos {formatMoney(list.totalCost, currency)} a pagar, apenas{' '}
+                  {formatMoney(list.theoreticalCost, currency)} sao consumidos por
+                  esta producao — o resto fica em despensa porque nao se compra
+                  fracao de embalagem. Esse dinheiro nao se perde, mas sai da caixa
+                  hoje.
+                </p>
+              </div>
+            </section>
           ) : null}
 
           {list && list.coveredByStock.length > 0 ? (
@@ -302,10 +306,11 @@ export default async function OrdemPage({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Check className="h-4 w-4 text-emerald-600" aria-hidden />
-                  Ja tem em casa
+                  Nao precisa comprar — ja tem em casa
                 </CardTitle>
                 <CardDescription>
-                  O estoque cobre estes insumos por inteiro.
+O que voce ja tem no estoque chega para esta producao, entao estes
+                  ficaram fora da lista de compras acima.
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-0">
@@ -375,6 +380,62 @@ export default async function OrdemPage({
 
                 <SubmitButton>Adicionar</SubmitButton>
               </ActionForm>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Fechar o ciclo</CardTitle>
+              <CardDescription>
+                E aqui que o estoque deixa de ser um palpite.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <ActionForm action={receivePurchase}>
+                  <input type="hidden" name="orderId" value={id} />
+                  <SubmitButton
+                    variant={order.receivedAt ? 'outline' : 'default'}
+                    disabled={Boolean(order.receivedAt) || !list}
+                    className="w-full"
+                  >
+                    <PackageCheck className="h-4 w-4" />
+                    {order.receivedAt ? 'Compra ja recebida' : 'Recebi esta compra'}
+                  </SubmitButton>
+                </ActionForm>
+                <p className="text-xs text-muted-foreground">
+                  {order.receivedAt
+                    ? `Deu entrada em ${dateFmt.format(order.receivedAt)}.`
+                    : 'Da entrada no estoque das embalagens inteiras que a lista manda comprar.'}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <ActionForm action={recordProduction}>
+                  <input type="hidden" name="orderId" value={id} />
+                  <SubmitButton
+                    variant={order.producedAt ? 'outline' : 'secondary'}
+                    disabled={Boolean(order.producedAt) || order.lines.length === 0}
+                    className="w-full"
+                  >
+                    <ChefHat className="h-4 w-4" />
+                    {order.producedAt ? 'Producao ja registada' : 'Produzi'}
+                  </SubmitButton>
+                </ActionForm>
+                <p className="text-xs text-muted-foreground">
+                  {order.producedAt
+                    ? `Registada em ${dateFmt.format(order.producedAt)}.`
+                    : 'Tira do estoque o que as fichas dizem que esta producao consome, ja com o fator de correcao.'}
+                </p>
+              </div>
+
+              <p className="border-t pt-3 text-xs text-muted-foreground">
+                Ver o resultado em{' '}
+                <Link href="/estoque" className="text-primary hover:underline">
+                  Estoque
+                </Link>
+                .
+              </p>
             </CardContent>
           </Card>
 
