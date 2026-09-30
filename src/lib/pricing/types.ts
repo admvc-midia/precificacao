@@ -39,6 +39,11 @@ export interface IngredientInput {
   supplierName?: string | null;
   /** Estoque disponivel na unidade base (Modulo 4). */
   stockBase?: number;
+  /**
+   * Quanto se quer ter sempre em casa, na unidade base. Nulo ou ausente:
+   * nao ha minimo, e a lista de compras compra so o que a producao gasta.
+   */
+  minStockBase?: number | null;
 }
 
 export type RecipeItemInput =

@@ -15,7 +15,7 @@ import { importIngredientsCsv } from '@/lib/actions/import';
 import { deleteOffer, saveOffer, setOfferInUse } from '@/lib/actions/offers';
 import { deleteIngredient, saveIngredient } from '@/lib/actions/ingredients';
 import { num, toIngredientFormValues, toIngredientInput } from '@/lib/mappers';
-import { formatMoney, formatPercent, formatUnitCost } from '@/lib/money';
+import { formatMoney, formatPercent, formatUnitCost, currencyOf } from '@/lib/money';
 import {
   costPerBaseUnit,
   effectiveCostPerBaseUnit,
@@ -28,9 +28,9 @@ import {
   displayQtyValue,
   displayUnitOf,
   DISPLAY_UNIT_LABEL,
+  formatBaseQty,
   formatCostPerUnit,
   toBase,
-  UNIT_LABEL,
 } from '@/lib/units';
 
 export const dynamic = 'force-dynamic';
@@ -52,7 +52,7 @@ export default async function InsumosPage() {
     getSuppliers(),
     getSettings(),
   ]);
-  const currency = { currency: s.currency, locale: s.locale };
+  const currency = currencyOf(s);
 
   const build = (row: IngredientRow): ListRow => {
     const input = toIngredientInput(row);
@@ -63,9 +63,13 @@ export default async function InsumosPage() {
 
     // "1,69 € ÷ 1 kg": o sinal de divisao explica de onde vem o preco por kg
     // ao lado, sem precisar de legenda nenhuma.
-    const compra = `${formatMoney(num(row.purchasePrice), currency)} ÷ ${num(
-      row.purchaseQty,
-    )} ${UNIT_LABEL[row.purchaseUnit]}`;
+    // Com virgula e na unidade de exibicao, como o resto: "÷ 0.4 kg" com
+    // ponto era o unico sitio que ainda escrevia a moda inglesa.
+    const compra = `${formatMoney(num(row.purchasePrice), currency)} ÷ ${formatBaseQty(
+      toBase(num(row.purchaseQty), row.purchaseUnit),
+      row.baseUnit,
+      currency,
+    )}`;
 
     const perdaBadge =
       waste > 0 ? (
@@ -96,9 +100,11 @@ export default async function InsumosPage() {
       supplierName: o.supplierName,
       supplierId: o.supplierId,
       unitCostLabel: formatCostPerUnit(o.unitCost, row.baseUnit, currency),
-      packLabel: `${formatMoney(o.purchasePrice, currency)} ÷ ${o.purchaseQty} ${
-        UNIT_LABEL[o.purchaseUnit]
-      }`,
+      packLabel: `${formatMoney(o.purchasePrice, currency)} ÷ ${formatBaseQty(
+        toBase(o.purchaseQty, o.purchaseUnit),
+        row.baseUnit,
+        currency,
+      )}`,
       // Em bruto, para o formulario de alteracao voltar a mostrar o que la
       // esta. A embalagem vai na unidade de exibicao, como o campo espera.
       form: {

@@ -8,6 +8,20 @@
 export interface CurrencyConfig {
   currency: string;
   locale: string;
+  /**
+   * Casas das quantidades e dos custos por kg/L/un: 2, ou 4 (omissao). Os
+   * totais em dinheiro tem sempre 2. So muda o que se le — nunca as contas.
+   */
+  decimals?: number;
+}
+
+/** A configuracao de formatacao a partir da linha de Settings. */
+export function currencyOf(s: {
+  currency: string;
+  locale: string;
+  displayDecimals?: number | null;
+}): CurrencyConfig {
+  return { currency: s.currency, locale: s.locale, decimals: s.displayDecimals ?? 4 };
 }
 
 export const DEFAULT_CURRENCY: CurrencyConfig = {
@@ -47,7 +61,7 @@ export function formatUnitCost(value: number, cfg: CurrencyConfig = DEFAULT_CURR
     style: 'currency',
     currency: cfg.currency,
     minimumFractionDigits: 2,
-    maximumFractionDigits: 5,
+    maximumFractionDigits: cfg.decimals === 2 ? 2 : 5,
   }).format(value);
 }
 

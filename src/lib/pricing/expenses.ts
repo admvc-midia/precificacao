@@ -44,6 +44,16 @@ const POR_MES: Record<ExpensePeriod, number> = {
   YEARLY: 1 / 12,
 };
 
+export const CATEGORY_LABEL: Record<string, string> = {
+  RENT: 'Espaco',
+  UTILITIES: 'Agua, luz e gas',
+  LABOUR: 'Pessoas',
+  SERVICES: 'Servicos',
+  TAXES: 'Impostos e taxas',
+  MARKETING: 'Divulgacao',
+  OTHER: 'Outras',
+};
+
 export const PERIOD_LABEL: Record<ExpensePeriod, string> = {
   WEEKLY: 'por semana',
   MONTHLY: 'por mes',

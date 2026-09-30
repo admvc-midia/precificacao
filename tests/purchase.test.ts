@@ -4,6 +4,7 @@ import { PricingError } from '@/lib/pricing/cost';
 import {
   buildPurchaseList,
   demandConsumptionCost,
+  lowStockOutside,
   type PurchaseLine,
 } from '@/lib/pricing/purchase';
 import type { CostContext, IngredientInput, RecipeInput } from '@/lib/pricing/types';
@@ -338,5 +339,112 @@ describe('erros', () => {
     expect(list.lines).toHaveLength(0);
     expect(list.totalCost).toBe(0);
     expect(list.bySupplier).toHaveLength(0);
+  });
+});
+
+describe('estoque minimo', () => {
+  // 10 hamburgueres gastam 400 g de queijo (40 g cada). Pacote de 1 kg a 6,90.
+
+  it('sem minimo definido fica tudo como antes', () => {
+    const list = buildPurchaseList(
+      [{ recipeId: 'burger', qty: 10 }],
+      buildCtx({ id: 'queijo', stockBase: 1000 }),
+    );
+    const queijo = find(list.lines, 'queijo');
+    expect(queijo.minBase).toBe(0);
+    expect(queijo.forMinimumBase).toBe(0);
+    expect(queijo.packsToBuy).toBe(0);
+  });
+
+  it('compra para produzir e ainda ficar com o minimo', () => {
+    // Ha 1 kg, a producao gasta 400 g, ficariam 600 g — abaixo dos 800 g.
+    const list = buildPurchaseList(
+      [{ recipeId: 'burger', qty: 10 }],
+      buildCtx({ id: 'queijo', stockBase: 1000, minStockBase: 800 }),
+    );
+    const queijo = find(list.lines, 'queijo');
+    expect(queijo.missingBase).toBeCloseTo(200, 8);
+    expect(queijo.forMinimumBase).toBeCloseTo(200, 8);
+    expect(queijo.packsToBuy).toBe(1);
+  });
+
+  it('com o minimo ja coberto nao compra nada', () => {
+    // 2 kg - 400 g = 1,6 kg, acima dos 800 g.
+    const list = buildPurchaseList(
+      [{ recipeId: 'burger', qty: 10 }],
+      buildCtx({ id: 'queijo', stockBase: 2000, minStockBase: 800 }),
+    );
+    const queijo = find(list.lines, 'queijo');
+    expect(queijo.missingBase).toBe(0);
+    expect(queijo.forMinimumBase).toBe(0);
+    expect(queijo.packsToBuy).toBe(0);
+  });
+
+  it('a reposicao do minimo nao entra no custo da producao', () => {
+    // Ha 300 g, faltam 100 g para produzir e mais 500 g para o minimo.
+    const list = buildPurchaseList(
+      [{ recipeId: 'burger', qty: 10 }],
+      buildCtx({ id: 'queijo', stockBase: 300, minStockBase: 500 }),
+    );
+    const queijo = find(list.lines, 'queijo');
+    expect(queijo.missingBase).toBeCloseTo(600, 8);
+    expect(queijo.forMinimumBase).toBeCloseTo(500, 8);
+    expect(queijo.packsToBuy).toBe(1);
+    // So os 100 g da producao contam como consumo; o resto fica em despensa.
+    expect(queijo.theoreticalCost).toBeCloseTo(0.69, 8);
+    expect(queijo.cost).toBeCloseTo(6.9, 8);
+  });
+
+  it('orcamentar do zero (ignoreStock) nao soma o minimo', () => {
+    const list = buildPurchaseList(
+      [{ recipeId: 'burger', qty: 10 }],
+      buildCtx({ id: 'queijo', stockBase: 0, minStockBase: 5000 }),
+      { ignoreStock: true },
+    );
+    const queijo = find(list.lines, 'queijo');
+    expect(queijo.missingBase).toBeCloseTo(400, 8);
+    expect(queijo.forMinimumBase).toBe(0);
+  });
+
+  it('um minimo negativo (dado estragado) conta como sem minimo', () => {
+    const list = buildPurchaseList(
+      [{ recipeId: 'burger', qty: 10 }],
+      buildCtx({ id: 'queijo', stockBase: 1000, minStockBase: -50 }),
+    );
+    expect(find(list.lines, 'queijo').missingBase).toBe(0);
+  });
+});
+
+describe('tambem a acabar (fora da ordem)', () => {
+  it('mostra o que esta no minimo e a ordem nao usa, sem o por na compra', () => {
+    // A alcatra so entra no "premium", que nao esta nesta ordem.
+    const ctx = buildCtx({ id: 'alcatra', stockBase: 200, minStockBase: 500 });
+    const list = buildPurchaseList([{ recipeId: 'burger', qty: 10 }], ctx);
+
+    const fora = lowStockOutside(list, ctx);
+    expect(fora.map((l) => l.ingredient.id)).toEqual(['alcatra']);
+    expect(fora[0].missingBase).toBeCloseTo(300, 8);
+    // E nao foi parar a compra.
+    expect(list.lines.some((l) => l.ingredient.id === 'alcatra')).toBe(false);
+  });
+
+  it('nao repete o que ja esta na lista, nem o que esta acima do minimo', () => {
+    const base = buildCtx({ id: 'queijo', stockBase: 100, minStockBase: 500 });
+    // Alcatra acima do minimo: nao e alerta.
+    base.ingredients.set('alcatra', {
+      ...base.ingredients.get('alcatra')!,
+      stockBase: 900,
+      minStockBase: 500,
+    });
+    const list = buildPurchaseList([{ recipeId: 'burger', qty: 10 }], base);
+    expect(lowStockOutside(list, base)).toEqual([]);
+  });
+
+  it('exatamente no minimo ja conta — e o ponto em que se compra', () => {
+    const ctx = buildCtx({ id: 'alcatra', stockBase: 500, minStockBase: 500 });
+    const list = buildPurchaseList([{ recipeId: 'burger', qty: 10 }], ctx);
+    const fora = lowStockOutside(list, ctx);
+    expect(fora).toHaveLength(1);
+    expect(fora[0].missingBase).toBe(0);
   });
 });

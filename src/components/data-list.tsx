@@ -19,8 +19,10 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
 
+import { Paginacao } from '@/components/paginacao';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { pagina } from '@/lib/paginacao';
 import { useStoredString } from '@/lib/use-stored-state';
 import { cn } from '@/lib/utils';
 
@@ -69,6 +71,9 @@ function normalize(value: string): string {
     .toLowerCase();
 }
 
+/** Chega para uma volta de olhos sem rolar demasiado, mesmo no telemovel. */
+const POR_PAGINA = 20;
+
 const hideClass = { lg: 'hidden lg:table-cell', xl: 'hidden xl:table-cell' };
 
 // ---------------------------------------------------------------------------
@@ -78,6 +83,7 @@ export function GroupedList({
   searchPlaceholder,
   toolbar,
   storageKey,
+  pageSize = POR_PAGINA,
 }: {
   groups: ListGroup[];
   /** Sem isto nao aparece campo de busca. */
@@ -86,6 +92,8 @@ export function GroupedList({
   toolbar?: React.ReactNode;
   /** Prefixo para lembrar que seccoes ficaram fechadas. */
   storageKey?: string;
+  /** Linhas por pagina em cada seccao. */
+  pageSize?: number;
 }) {
   const [query, setQuery] = useState('');
   const needle = normalize(query.trim());
@@ -139,8 +147,11 @@ export function GroupedList({
       ) : (
         filtered.map((group) => (
           <Section
-            key={group.id}
+            // A busca entra na chave: mudar o que se procura volta a pagina 1,
+            // senao ficava-se na 3 de uma lista que agora so tem uma.
+            key={`${group.id}|${needle}`}
             group={group}
+            pageSize={pageSize}
             storageKey={storageKey ? `${storageKey}:${group.id}` : undefined}
             /* Uma busca a decorrer abre tudo: esconder resultados atras de uma
                seccao fechada faria parecer que nao ha nada. */
@@ -159,6 +170,7 @@ export function DataList(props: {
   empty: string;
   searchPlaceholder?: string;
   toolbar?: React.ReactNode;
+  pageSize?: number;
 }) {
   const { columns, rows, empty, ...rest } = props;
   return (
@@ -175,11 +187,19 @@ function Section({
   group,
   storageKey,
   forceOpen,
+  pageSize,
 }: {
   group: ListGroup;
   storageKey?: string;
   forceOpen: boolean;
+  pageSize: number;
 }) {
+  // A pagina nao se guarda entre visitas, ao contrario do aberto/fechado:
+  // voltar a lista e reencontrar a pagina 4 desorienta mais do que ajuda.
+  const [pedida, setPedida] = useState(1);
+  const p = pagina(group.rows.length, pageSize, pedida);
+  const fatia = group.rows.slice(p.inicio, p.fim);
+
   // Sem chave de persistencia o estado vive so nesta sessao (prefixo `mem:`).
   const [guardado, guardar] = useStoredString(
     storageKey ?? `mem:${group.id}`,
@@ -222,8 +242,9 @@ function Section({
           </p>
         ) : (
           <>
-            <TableView columns={group.columns} rows={group.rows} />
-            <CardView rows={group.rows} />
+            <TableView columns={group.columns} rows={fatia} />
+            <CardView rows={fatia} />
+            <Paginacao p={p} onChange={setPedida} className="border-t px-4 py-2 sm:px-6" />
           </>
         )
       ) : null}

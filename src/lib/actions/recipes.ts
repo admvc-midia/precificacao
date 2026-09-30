@@ -181,9 +181,16 @@ export async function updateRecipeItem(
     if (!current) throw new Error('Linha nao encontrada.');
     previous = { qty: Number(current.qty), unit: current.unit };
 
+    // As notas so mudam se o campo veio. A edicao rapida na tabela manda so a
+    // quantidade, e ausente nao e o mesmo que vazio — tratar os dois igual
+    // apagava as notas sem aviso (foi assim que as configuracoes zeraram).
+    const notes = form.has('notes')
+      ? String(form.get('notes') ?? '').trim() || null
+      : undefined;
+
     await prisma.recipeItem.update({
       where: { id },
-      data: { qty, unit, notes: String(form.get('notes') ?? '').trim() || null },
+      data: { qty, unit, ...(notes === undefined ? {} : { notes }) },
     });
 
     await assertRecipeIsComputable(current.recipeId);

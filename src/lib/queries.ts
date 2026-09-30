@@ -12,7 +12,10 @@ import {
   toGlobalSettings,
   num,
 } from '@/lib/mappers';
+import { currencyOf } from '@/lib/money';
 import type { CurrencyConfig } from '@/lib/money';
+import { pagina as paginar } from '@/lib/paginacao';
+import type { MovementKind } from '@/lib/pricing/stock';
 import { computeRecipeCost } from '@/lib/pricing/cost';
 import type { GlobalSettings } from '@/lib/pricing/channels';
 import type { ChannelInput, RecipeCost } from '@/lib/pricing/types';
@@ -29,7 +32,7 @@ export const getSettings = cache(async () => {
 
 export async function getCurrencyConfig(): Promise<CurrencyConfig> {
   const s = await getSettings();
-  return { currency: s.currency, locale: s.locale };
+  return currencyOf(s);
 }
 
 /** Apenas os canais ativos — e com estes que se calculam precos. */
@@ -96,7 +99,7 @@ export async function getPricingData() {
 
   return {
     settings: toGlobalSettings(settingsRow),
-    currency: { currency: settingsRow.currency, locale: settingsRow.locale },
+    currency: currencyOf(settingsRow),
     ctx: buildCostContext(ingredientRows, recipeRows),
     channels: channelRows.map(toChannelInput),
     ingredientRows,
@@ -220,16 +223,37 @@ export const getStockLines = cache(async () => {
   return rows.map((r) => ({ row: r, last: porInsumo.get(r.id) ?? null }));
 });
 
-export async function getMovements(limit = 60, ingredientId?: string) {
-  return prisma.stockMovement.findMany({
-    where: ingredientId ? { ingredientId } : undefined,
+/** Os filtros do livro no Estoque. Quebra e amostra juntas: ambas sao perda. */
+export const FILTROS_MOVIMENTO = {
+  todos: { label: 'Todos', kinds: null },
+  compras: { label: 'Compras', kinds: ['PURCHASE'] },
+  producao: { label: 'Producao', kinds: ['PRODUCTION'] },
+  perdas: { label: 'Quebras e amostras', kinds: ['WASTE', 'PROMO'] },
+  ajustes: { label: 'Ajustes e contagens', kinds: ['ADJUSTMENT', 'INVENTORY'] },
+} as const satisfies Record<string, { label: string; kinds: readonly MovementKind[] | null }>;
+
+export type FiltroMovimento = keyof typeof FILTROS_MOVIMENTO;
+
+/**
+ * Uma pagina do livro de movimentos, e quantos ha ao todo com o filtro.
+ * Pagina na base: o livro so cresce, e trazer tudo para mostrar 20 nao escala.
+ */
+export async function getMovementsPage(pagina: number, porPagina: number, filtro: FiltroMovimento) {
+  const kinds = FILTROS_MOVIMENTO[filtro].kinds;
+  const where = kinds ? { kind: { in: [...kinds] } } : undefined;
+  const total = await prisma.stockMovement.count({ where });
+  const p = paginar(total, porPagina, pagina);
+  const rows = await prisma.stockMovement.findMany({
+    where,
     include: {
       ingredient: { select: { name: true, baseUnit: true } },
       order: { select: { id: true, name: true } },
     },
-    orderBy: { occurredAt: 'desc' },
-    take: limit,
+    orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+    skip: p.inicio,
+    take: porPagina,
   });
+  return { rows, p };
 }
 
 /**

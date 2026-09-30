@@ -17,13 +17,13 @@
  */
 
 import { revalidatePath } from 'next/cache';
-import type { Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/db';
 import { num } from '@/lib/mappers';
 import { parseDecimal, parseQty } from '@/lib/money';
 import { rankOffers } from '@/lib/pricing/offers';
 import { baseUnitOf, type PurchaseUnit } from '@/lib/units';
+import { sincronizarEmUso } from '@/lib/escritas';
 import { errorMessage, PURCHASE_UNIT, type ActionState } from './shared';
 
 function revalidar() {
@@ -35,41 +35,6 @@ function revalidar() {
   revalidatePath('/fichas', 'layout');
   revalidatePath('/precificacao', 'layout');
   revalidatePath('/');
-}
-
-/**
- * Marca um preco como o que vale e copia-o para o insumo.
- *
- * Tudo numa transacao: se o insumo ficasse com o preco novo e a marca de
- * "em uso" continuasse noutra linha, a lista mostrava uma coisa e o custo das
- * fichas usava outra.
- */
-async function sincronizarEmUso(
-  tx: Prisma.TransactionClient,
-  ingredientId: string,
-  offerId: string,
-): Promise<void> {
-  const oferta = await tx.supplierOffer.findUnique({ where: { id: offerId } });
-  if (!oferta || oferta.ingredientId !== ingredientId) {
-    throw new Error('Preco nao encontrado neste insumo.');
-  }
-
-  await tx.supplierOffer.updateMany({
-    where: { ingredientId, NOT: { id: offerId } },
-    data: { inUse: false },
-  });
-  await tx.supplierOffer.update({ where: { id: offerId }, data: { inUse: true } });
-
-  await tx.ingredient.update({
-    where: { id: ingredientId },
-    data: {
-      supplierId: oferta.supplierId,
-      purchasePrice: num(oferta.purchasePrice),
-      purchaseQty: num(oferta.purchaseQty),
-      purchaseUnit: oferta.purchaseUnit,
-      baseUnit: baseUnitOf(oferta.purchaseUnit),
-    },
-  });
 }
 
 export interface DadosDePreco {

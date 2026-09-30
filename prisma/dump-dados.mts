@@ -5,6 +5,9 @@
  * para o caso de alguem se lembrar, depois de apagar, de uma ficha que
  * gostava de ter escrito outra vez.
  *
+ * Para uma copia de verdade, `copia-seguranca.mts`: le as tabelas do proprio
+ * schema e por isso nao esquece nenhuma (esta lista a mao chegou a esquecer as despesas).
+ *
  *   npx tsx prisma/dump-dados.mts <ficheiro.json>
  */
 import { writeFileSync } from 'node:fs';
@@ -28,6 +31,7 @@ const dados = {
   purchaseListLines: await prisma.purchaseListLine.findMany(),
   stockMovements: await prisma.stockMovement.findMany(),
   salesRecords: await prisma.salesRecord.findMany(),
+  expenses: await prisma.expense.findMany(),
 };
 
 // `Decimal` do Prisma e `Date` nao sao JSON: viram texto.

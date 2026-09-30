@@ -4,7 +4,10 @@ import animate from 'tailwindcss-animate';
 const config: Config = {
   // O tema escolhe-se no menu da engrenagem (automatico, claro, escuro); quem
   // poe ou tira a classe `dark` e `lib/tema.ts`.
-  darkMode: 'class',
+  //
+  // So no ecra: impresso no tema escuro, um `dark:bg-red-950` dava caixas
+  // escuras com letra clara no papel branco. O papel e sempre claro.
+  darkMode: ['variant', '@media screen { &:is(.dark *) }'],
   content: ['./src/**/*.{ts,tsx}'],
   theme: {
     container: {

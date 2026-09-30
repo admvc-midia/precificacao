@@ -26,7 +26,7 @@ export default async function FichasPage() {
 
   const build = (r: Costed, perUnit: boolean): ListRow => {
     const rendimento = r.cost
-      ? formatBaseQty(r.cost.yieldQty, r.cost.yieldUnit, currency.locale)
+      ? formatBaseQty(r.cost.yieldQty, r.cost.yieldUnit, currency)
       : '—';
 
     const custo = r.cost

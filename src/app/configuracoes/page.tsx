@@ -22,7 +22,7 @@ import { Field, Select } from '@/components/ui/form-controls';
 import { Input } from '@/components/ui/input';
 import { deleteChannel, saveChannel, saveSettings } from '@/lib/actions/settings';
 import { num } from '@/lib/mappers';
-import { formatMoney, SUPPORTED_CURRENCIES } from '@/lib/money';
+import { formatMoney, SUPPORTED_CURRENCIES, currencyOf } from '@/lib/money';
 import { priceDenominator } from '@/lib/pricing/price';
 import { getAllChannels, getSettings } from '@/lib/queries';
 
@@ -36,7 +36,7 @@ const CHANNEL_KIND_LABEL: Record<string, string> = {
 
 export default async function ConfiguracoesPage() {
   const [s, channels] = await Promise.all([getSettings(), getAllChannels()]);
-  const currency = { currency: s.currency, locale: s.locale };
+  const currency = currencyOf(s);
 
   const pct = (v: unknown) => (num(v) * 100).toFixed(2).replace(/\.?0+$/, '');
 
@@ -104,6 +104,20 @@ export default async function ConfiguracoesPage() {
                     <option value="pt-BR">Brasil (R$ 1.234,56)</option>
                     <option value="en-US">Estados Unidos ($1,234.56)</option>
                     <option value="en-GB">Reino Unido (£1,234.56)</option>
+                  </Select>
+                </Field>
+                <Field
+                  label="Casas decimais"
+                  htmlFor="displayDecimals"
+                  hint="Nas quantidades e no custo por kg, L ou un. Os totais em dinheiro tem sempre 2. So muda o que se ve: as contas usam a precisao toda."
+                >
+                  <Select
+                    id="displayDecimals"
+                    name="displayDecimals"
+                    defaultValue={String(s.displayDecimals)}
+                  >
+                    <option value="4">Automatico, ate 4 (0,395 kg · 1,6875 €/kg)</option>
+                    <option value="2">2 casas (0,40 kg · 1,69 €/kg)</option>
                   </Select>
                 </Field>
               </div>

@@ -16,7 +16,9 @@ export type SecaoAjuda =
   | 'estoque'
   | 'vendas'
   | 'despesas'
-  | 'painel';
+  | 'painel'
+  | 'exportar'
+  | 'compras';
 
 export function AjudaLink({ secao }: { secao: SecaoAjuda }) {
   return (

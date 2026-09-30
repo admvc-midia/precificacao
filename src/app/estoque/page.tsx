@@ -20,9 +20,17 @@ import { Input, Textarea } from '@/components/ui/input';
 import { ActionForm, SubmitButton } from '@/components/action-form';
 import { countInventory, recordAdjustment, setCostBasis } from '@/lib/actions/stock';
 import { num } from '@/lib/mappers';
-import { formatMoney } from '@/lib/money';
+import { formatMoney, currencyOf } from '@/lib/money';
 import { lowStock, MOVEMENT_LABEL, type MovementKind } from '@/lib/pricing/stock';
-import { getMovements, getSettings, getStockLines } from '@/lib/queries';
+import {
+  FILTROS_MOVIMENTO,
+  getMovementsPage,
+  getSettings,
+  getStockLines,
+  type FiltroMovimento,
+} from '@/lib/queries';
+import { Paginacao } from '@/components/paginacao';
+import { cn } from '@/lib/utils';
 import {
   displayUnitOf,
   DISPLAY_UNIT_LABEL,
@@ -40,14 +48,33 @@ const COLUMNS: ListColumn[] = [
   { header: 'Ultimo movimento', hideBelow: 'xl' },
 ];
 
-export default async function EstoquePage() {
-  const [linhas, movimentos, s] = await Promise.all([
+const MOVIMENTOS_POR_PAGINA = 20;
+
+export default async function EstoquePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mov?: string; tipo?: string }>;
+}) {
+  const sp = await searchParams;
+  const filtro: FiltroMovimento =
+    sp.tipo && sp.tipo in FILTROS_MOVIMENTO ? (sp.tipo as FiltroMovimento) : 'todos';
+  const [linhas, livro, s] = await Promise.all([
     getStockLines(),
-    getMovements(40),
+    getMovementsPage(Number(sp.mov ?? 1), MOVIMENTOS_POR_PAGINA, filtro),
     getSettings(),
   ]);
-  const currency = { currency: s.currency, locale: s.locale };
+  const movimentos = livro.rows;
+  // O filtro e a pagina vivem no endereco: da para voltar atras e partilhar.
+  const hrefLivro = (pag: number, tipo: FiltroMovimento = filtro) => {
+    const q = new URLSearchParams();
+    if (tipo !== 'todos') q.set('tipo', tipo);
+    if (pag > 1) q.set('mov', String(pag));
+    const qs = q.toString();
+    return `/estoque${qs ? `?${qs}` : ''}#movimentos`;
+  };
+  const currency = currencyOf(s);
 
+  const diaFmt = new Intl.DateTimeFormat(currency.locale, { day: '2-digit', month: '2-digit' });
   const dataFmt = new Intl.DateTimeFormat(currency.locale, {
     day: '2-digit',
     month: 'short',
@@ -94,7 +121,7 @@ export default async function EstoquePage() {
     const saldo = (
       <span key="s" className="inline-flex items-center gap-1.5">
         <span className={qty < 0 ? 'font-medium text-destructive' : 'font-medium'}>
-          {formatBaseQty(qty, row.baseUnit, currency.locale)}
+          {formatBaseQty(qty, row.baseUnit, currency)}
         </span>
         {nivel === 'ACABOU' ? (
           <Badge variant="destructive">acabou</Badge>
@@ -155,7 +182,7 @@ export default async function EstoquePage() {
             <input type="hidden" name="ingredientId" value={row.id} />
             <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
               A aplicacao diz{' '}
-              <strong>{formatBaseQty(qty, row.baseUnit, currency.locale)}</strong>.
+              <strong>{formatBaseQty(qty, row.baseUnit, currency)}</strong>.
             </p>
             <Field label="Contei" htmlFor={`c-${row.id}`}>
               <QtyInput
@@ -286,14 +313,14 @@ export default async function EstoquePage() {
             {paraRepor.map((l) => (
               <li key={l.ingredientId}>
                 <strong>{l.name}</strong>: tem{' '}
-                {formatBaseQty(l.qtyBase, l.baseUnit, currency.locale)}
+                {formatBaseQty(l.qtyBase, l.baseUnit, currency)}
                 {l.minBase !== null ? (
                   <>
                     {' '}
-                    de {formatBaseQty(l.minBase, l.baseUnit, currency.locale)} —
+                    de {formatBaseQty(l.minBase, l.baseUnit, currency)} —
                     faltam{' '}
                     <strong>
-                      {formatBaseQty(l.missingBase, l.baseUnit, currency.locale)}
+                      {formatBaseQty(l.missingBase, l.baseUnit, currency)}
                     </strong>
                   </>
                 ) : null}
@@ -323,7 +350,7 @@ export default async function EstoquePage() {
               <li key={l.row.id} className="flex flex-wrap items-center gap-2">
                 <span className="font-medium">{l.row.name}</span>
                 <span className="text-xs">
-                  {formatBaseQty(num(l.row.stockBase), l.row.baseUnit, currency.locale)}
+                  {formatBaseQty(num(l.row.stockBase), l.row.baseUnit, currency)}
                 </span>
                 <ActionForm action={setCostBasis} showSuccess={false}>
                   <input type="hidden" name="ingredientId" value={l.row.id} />
@@ -367,75 +394,106 @@ export default async function EstoquePage() {
         ]}
       />
 
-      <Card>
-        <CardHeader>
+      <Card id="movimentos" className="scroll-mt-20">
+        <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
             <Boxes className="h-4 w-4 text-muted-foreground" />
-            Ultimos movimentos
+            Movimentos
           </CardTitle>
           <CardDescription>
-            O livro. E aqui que se responde a &quot;porque e que diz isto?&quot;.
+            O livro. Toque num movimento para ver o tipo, a producao e a nota.
           </CardDescription>
+          {/* Filtros como links: cada um e um endereco, e o voltar do browser
+              funciona como se espera. */}
+          <div className="flex flex-wrap gap-1.5 pt-2" role="group" aria-label="Filtrar">
+            {(Object.keys(FILTROS_MOVIMENTO) as FiltroMovimento[]).map((f) => (
+              <Link
+                key={f}
+                href={hrefLivro(1, f)}
+                scroll={false}
+                aria-current={f === filtro ? 'true' : undefined}
+                className={cn(
+                  'rounded-full border px-2.5 py-0.5 text-xs transition-colors',
+                  f === filtro
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-accent',
+                )}
+              >
+                {FILTROS_MOVIMENTO[f].label}
+              </Link>
+            ))}
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {movimentos.length === 0 ? (
             <p className="px-6 pb-6 text-sm text-muted-foreground">
-              Ainda nao ha movimentos. Receba a compra de uma ordem de producao para
-              comecar.
+              {filtro === 'todos'
+                ? 'Ainda nao ha movimentos. Receba a compra de uma ordem de producao para comecar.'
+                : 'Nenhum movimento deste tipo.'}
             </p>
           ) : (
-            <ul className="divide-y">
-              {movimentos.map((m) => {
-                const qty = num(m.qtyBase);
-                const entra = qty > 0;
-                return (
-                  <li
-                    key={m.id}
-                    className="flex items-start gap-3 px-4 py-2.5 sm:px-6"
-                  >
-                    {entra ? (
-                      <ArrowUpRight
-                        className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400"
-                        aria-label="entrada"
-                      />
-                    ) : (
-                      <ArrowDownRight
-                        className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
-                        aria-label="saida"
-                      />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                        <span className="font-medium">{m.ingredient.name}</span>
-                        <span className="tabular-nums">
-                          {entra ? '+' : ''}
-                          {formatBaseQty(qty, m.ingredient.baseUnit, currency.locale)}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        <Badge variant="secondary">
-                          {MOVEMENT_LABEL[m.kind as MovementKind]}
-                        </Badge>{' '}
-                        {dataFmt.format(m.occurredAt)} ·{' '}
-                        {formatMoney(Math.abs(num(m.value)), currency)}
-                        {m.order ? (
-                          <>
-                            {' · '}
-                            <Link
-                              href={`/producao/${m.order.id}`}
-                              className="text-primary hover:underline"
-                            >
-                              {m.order.name}
-                            </Link>
-                          </>
-                        ) : null}
-                        {m.note ? ` · ${m.note}` : ''}
-                      </p>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+            <>
+              <ul className="divide-y border-t text-sm">
+                {movimentos.map((m) => {
+                  const qty = num(m.qtyBase);
+                  const entra = qty > 0;
+                  return (
+                    <li key={m.id}>
+                      {/* Uma linha: seta, data, insumo, quantidade, valor. O
+                          resto so interessa a quem pergunta, e abre ali. */}
+                      <details className="group">
+                        <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2 hover:bg-accent/50 sm:px-6 [&::-webkit-details-marker]:hidden">
+                          {entra ? (
+                            <ArrowUpRight
+                              className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400"
+                              aria-label="entrada"
+                            />
+                          ) : (
+                            <ArrowDownRight
+                              className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400"
+                              aria-label="saida"
+                            />
+                          )}
+                          <span className="w-12 shrink-0 text-xs tabular-nums text-muted-foreground">
+                            {diaFmt.format(m.occurredAt)}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate">{m.ingredient.name}</span>
+                          <span className="shrink-0 tabular-nums">
+                            {entra ? '+' : ''}
+                            {formatBaseQty(qty, m.ingredient.baseUnit, currency)}
+                          </span>
+                          <span className="hidden w-20 shrink-0 text-right tabular-nums text-muted-foreground sm:inline">
+                            {formatMoney(Math.abs(num(m.value)), currency)}
+                          </span>
+                        </summary>
+                        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 bg-muted/30 px-4 py-2 pl-10 text-xs text-muted-foreground sm:px-6 sm:pl-12">
+                          <Badge variant="secondary">
+                            {MOVEMENT_LABEL[m.kind as MovementKind]}
+                          </Badge>
+                          <span>{dataFmt.format(m.occurredAt)}</span>
+                          <span className="sm:hidden">
+                            · {formatMoney(Math.abs(num(m.value)), currency)}
+                          </span>
+                          {m.order ? (
+                            <span>
+                              ·{' '}
+                              <Link
+                                href={`/producao/${m.order.id}`}
+                                className="text-primary hover:underline"
+                              >
+                                {m.order.name}
+                              </Link>
+                            </span>
+                          ) : null}
+                          {m.note ? <span>· {m.note}</span> : null}
+                        </p>
+                      </details>
+                    </li>
+                  );
+                })}
+              </ul>
+              <Paginacao p={livro.p} href={(n) => hrefLivro(n)} className="border-t px-4 py-2 sm:px-6" />
+            </>
           )}
         </CardContent>
       </Card>

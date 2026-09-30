@@ -22,12 +22,14 @@
  * assunto deles. Quem quiser os custos tem-nos no ecra, a um clique.
  */
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { AllergenPanel } from '@/components/allergen-panel';
 import { PrintButton } from '@/components/print-button';
 import { buildCostContext } from '@/lib/mappers';
+import { currencyOf } from '@/lib/money';
 import { collectAllergens, type Allergen } from '@/lib/pricing/allergens';
 import { flattenRecipe } from '@/lib/pricing/cost';
 import { getPricingData, getRecipeDetail, getSettings } from '@/lib/queries';
@@ -48,7 +50,7 @@ export default async function ImprimirFichaPage({
   ]);
   if (!recipe) notFound();
 
-  const currency = { currency: s.currency, locale: s.locale };
+  const currency = currencyOf(s);
   const ctx = buildCostContext(data.ingredientRows, data.recipeRows);
   const porId = new Map(data.ingredientRows.map((i) => [i.id, i]));
 
@@ -77,7 +79,7 @@ export default async function ImprimirFichaPage({
   const rendimento = formatBaseQty(
     Number(recipe.yieldQty),
     recipe.yieldUnit,
-    currency.locale,
+    currency,
   );
 
   const impressoEm = new Intl.DateTimeFormat(currency.locale, {
@@ -102,6 +104,28 @@ export default async function ImprimirFichaPage({
 
       <article className="space-y-6">
         <header className="border-b pb-3">
+          {/* Imagem e nao fundo: o "sem graficos de fundo" do dialogo de
+              impressao, ligado por omissao, apagava um logotipo em CSS. No
+              papel vai sempre o vinho; o creme so serve o ecra escuro. */}
+          <div className="mb-3 flex items-end justify-between gap-4">
+            <Image
+              src="/logo-vinho.png"
+              alt={s.businessName ?? 'Amo Brigs'}
+              width={1200}
+              height={342}
+              priority
+              className="h-12 w-auto dark:hidden print:!block"
+            />
+            <Image
+              src="/logo-creme.png"
+              alt=""
+              aria-hidden
+              width={1200}
+              height={342}
+              className="hidden h-12 w-auto dark:block print:!hidden"
+            />
+            <span className="text-xs text-muted-foreground">Ficha tecnica</span>
+          </div>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">{recipe.name}</h1>
             {s.businessName ? (
@@ -151,7 +175,7 @@ export default async function ImprimirFichaPage({
                       </td>
                       <td className="py-1.5 text-right tabular-nums">
                         {linha
-                          ? formatBaseQty(linha.qtyBase, base, currency.locale)
+                          ? formatBaseQty(linha.qtyBase, base, currency)
                           : `${Number(item.qty)} ${DISPLAY_UNIT_LABEL[base]}`}
                       </td>
                     </tr>

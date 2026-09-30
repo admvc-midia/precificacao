@@ -30,69 +30,12 @@ import {
   inventoryAdjustment,
   planMovements,
   type PlanEntry,
-  type PlannedMovement,
   type StockState,
 } from '@/lib/pricing/stock';
 import { toBase, type PurchaseUnit } from '@/lib/units';
+import { gravarPlano, lerEstados } from '@/lib/escritas';
 import { errorMessage, PURCHASE_UNIT, type ActionState } from './shared';
 
-/** Saldo e custo medio de todos os insumos, para alimentar o plano. */
-async function lerEstados(): Promise<Map<string, StockState>> {
-  const rows = await prisma.ingredient.findMany({
-    select: { id: true, stockBase: true, avgCostBase: true },
-  });
-  return new Map(
-    rows.map((r) => [
-      r.id,
-      { qtyBase: num(r.stockBase), avgUnitCost: num(r.avgCostBase) },
-    ]),
-  );
-}
-
-/** Escreve o plano: os movimentos de uma vez, depois um saldo por insumo. */
-async function gravarPlano(
-  plano: PlannedMovement[],
-  orderId: string | null,
-  guarda?: () => Promise<boolean>,
-): Promise<void> {
-  await prisma.$transaction(
-    async (tx) => {
-      if (guarda && !(await guarda())) {
-        throw new Error('Esta operacao ja tinha sido registada.');
-      }
-
-      await tx.stockMovement.createMany({
-        data: plano.map((m) => ({
-          ingredientId: m.ingredientId,
-          kind: m.kind,
-          qtyBase: m.qtyBase,
-          unitCost: m.unitCost,
-          value: m.value,
-          orderId,
-          note: m.note ?? null,
-        })),
-      });
-
-      // Um update por insumo: o Postgres nao tem update em massa com valores
-      // diferentes por linha, e sao poucas linhas.
-      const finais = new Map<string, PlannedMovement>();
-      for (const m of plano) finais.set(m.ingredientId, m);
-
-      for (const m of finais.values()) {
-        await tx.ingredient.update({
-          where: { id: m.ingredientId },
-          data: { stockBase: m.finalQtyBase, avgCostBase: m.finalAvgCost },
-        });
-      }
-    },
-    // Folga generosa: a ligacao ao Supabase e remota e cada escrita custa
-    // uma ida e volta.
-    { timeout: 20000, maxWait: 10000 },
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Entradas: receber uma compra
 // ---------------------------------------------------------------------------
 
 /**

@@ -146,6 +146,12 @@ model Settings {
   expectedMonthlyRevenue Decimal? @db.Decimal(12, 2)
 
   businessName String?
+
+  /// Casas decimais das quantidades e dos custos por kg/L/un no ecra: 4
+  /// ("automatico", o que sempre foi) ou 2. So a leitura muda — as contas, a
+  /// base e a exportacao guardam a precisao toda.
+  displayDecimals Int @default(4)
+
   updatedAt    DateTime @updatedAt
 }
 
@@ -241,6 +247,7 @@ model Supplier {
 
   ingredients Ingredient[]
   offers      SupplierOffer[]
+  shoppingItems ShoppingItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -315,6 +322,7 @@ model Ingredient {
   purchaseLines        PurchaseListLine[]
   movements            StockMovement[]
   offers               SupplierOffer[]
+  shoppingItems        ShoppingItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -625,4 +633,77 @@ model SupplierOffer {
 
   @@unique([ingredientId, supplierId])
   @@index([ingredientId, inUse])
+}
+
+// ---------------------------------------------------------------------------
+// Compras (a aba do comprador)
+// ---------------------------------------------------------------------------
+
+/// Uma lista de compras propria, que nao depende do que se vai produzir.
+///
+/// A lista da ordem de producao continua onde esta; esta e a do comprador —
+/// "Semana 40", "Makro sabado" — e pode receber itens de uma ordem, do que
+/// esta abaixo do minimo, ou escolhidos a mao.
+model ShoppingList {
+  id    String  @id @default(cuid())
+  name  String
+  notes String?
+
+  /// Preenchido ao fechar: o que foi comprado deu entrada no estoque. Uma
+  /// lista fechada ja nao se edita — corrigir e com um ajuste no Estoque.
+  closedAt DateTime?
+
+  items ShoppingItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([closedAt])
+}
+
+enum ShoppingItemStatus {
+  PENDING
+  BOUGHT
+  MISSING
+}
+
+/// Um insumo a comprar. Nasce com o preco, a loja e a embalagem do preco em
+/// uso; o comprador corrige-os no supermercado se forem outros.
+model ShoppingItem {
+  id     String       @id @default(cuid())
+  listId String
+  list   ShoppingList @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  ingredientId String
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  /// Quantas embalagens.
+  packs Decimal @db.Decimal(12, 4)
+
+  /// A loja, o preco da embalagem e o tamanho dela — os de agora, que o
+  /// comprador pode ter corrigido.
+  supplierId String?
+  supplier   Supplier?    @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  price      Decimal      @db.Decimal(12, 4)
+  packQty    Decimal      @db.Decimal(12, 4)
+  packUnit   PurchaseUnit
+
+  /// Preco por unidade base do preco em uso quando o item entrou, para se ver
+  /// "pagou 3,20 EUR/kg em vez de 3,45". Nulo se o insumo nao tinha preco.
+  refPricePerBase Decimal? @db.Decimal(12, 6)
+
+  status ShoppingItemStatus @default(PENDING)
+
+  /// O comprador marcou "usar este preco daqui para a frente". Sem isto, o
+  /// preco novo fica registado para a loja mas nao muda o custo das fichas.
+  useAsCurrent Boolean @default(false)
+
+  note      String?
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([listId])
+  @@index([ingredientId])
 }

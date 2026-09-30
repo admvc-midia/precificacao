@@ -88,6 +88,11 @@ export async function saveSettings(
     if (presente(form, 'rounding')) {
       data.rounding = ROUNDING.parse(String(form.get('rounding')));
     }
+    if (presente(form, 'displayDecimals')) {
+      const casas = Number(form.get('displayDecimals'));
+      if (casas !== 2 && casas !== 4) throw new Error('Casas decimais: escolha 2 ou automatico.');
+      data.displayDecimals = casas;
+    }
 
     // Estes dois validam-se um contra o outro, por isso comparam-se sempre os
     // valores que vao ficar — venham do formulario ou do que ja estava.
@@ -109,6 +114,8 @@ export async function saveSettings(
 
     await prisma.settings.update({ where: { id: 'default' }, data });
 
+    // As casas decimais mudam a leitura de todas as paginas.
+    revalidatePath('/', 'layout');
     revalidatePath('/configuracoes');
     revalidatePath('/precificacao');
     revalidatePath('/');

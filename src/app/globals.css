@@ -50,7 +50,10 @@
     --radius: 0.6rem;
   }
 
-  /* Escolhido no menu, ou o do aparelho em automatico (ver lib/tema.ts). */
+  /* Escolhido no menu, ou o do aparelho em automatico (ver lib/tema.ts).
+     So no ecra: o papel e branco, e imprimir no tema escuro dava texto creme
+     sobre folha branca. */
+  @media screen {
   .dark {
     --background: 340 40% 7%;
     --foreground: 38 35% 90%;
@@ -86,6 +89,7 @@
 
     --estampa: url('/estampa-escura.svg');
     --estampa-opacidade: 0.5;
+  }
   }
 }
 

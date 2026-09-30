@@ -69,6 +69,8 @@ export interface Retrato {
   vendas: number;
   ofertas: number;
   canais: number;
+  listasDeCompras: number;
+  itensDeCompras: number;
   settings: Record<string, unknown>;
 }
 
@@ -94,6 +96,10 @@ export async function retrato(): Promise<Retrato> {
       where: { ingredient: semMarca },
     }),
     canais: await prisma.salesChannel.count(),
+    listasDeCompras: await prisma.shoppingList.count({
+      where: { NOT: { name: { startsWith: MARCA } } },
+    }),
+    itensDeCompras: await prisma.shoppingItem.count({ where: { ingredient: semMarca } }),
     settings: {
       businessName: s.businessName,
       currency: s.currency,
@@ -105,6 +111,7 @@ export async function retrato(): Promise<Retrato> {
       targetCmv: String(s.targetCmv),
       targetMargin: String(s.targetMargin),
       rounding: s.rounding,
+      displayDecimals: s.displayDecimals,
       expectedMonthlyRevenue:
         s.expectedMonthlyRevenue === null ? null : String(s.expectedMonthlyRevenue),
     },
@@ -133,6 +140,7 @@ export async function reporSettings(r: Retrato): Promise<void> {
       targetCmv: s.targetCmv as string,
       targetMargin: s.targetMargin as string,
       rounding: s.rounding as RoundingStrategy,
+      displayDecimals: s.displayDecimals as number,
       expectedMonthlyRevenue: s.expectedMonthlyRevenue as string | null,
     },
   });
@@ -154,6 +162,10 @@ export async function limpar(): Promise<void> {
     })
   ).map((r) => r.id);
 
+  // Listas de compras: as marcadas inteiras, e itens de insumos marcados que
+  // um teste tenha posto numa lista do utilizador.
+  await prisma.shoppingList.deleteMany({ where: { name: { startsWith: MARCA } } });
+  await prisma.shoppingItem.deleteMany({ where: { ingredientId: { in: insumos } } });
   await prisma.salesRecord.deleteMany({ where: { recipeId: { in: fichas } } });
   await prisma.recipeItem.deleteMany({
     where: {

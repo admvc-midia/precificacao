@@ -19,11 +19,13 @@
  * vao numa segunda linha que se quebra sozinha no telemovel.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Check, MapPin, Phone, Store, Tag } from 'lucide-react';
 
+import { Paginacao } from '@/components/paginacao';
 import { Button } from '@/components/ui/button';
 import { formatMoney, type CurrencyConfig } from '@/lib/money';
+import { pagina } from '@/lib/paginacao';
 import { useStoredString } from '@/lib/use-stored-state';
 import { cn } from '@/lib/utils';
 
@@ -55,6 +57,9 @@ export interface ChecklistGroup {
   total: string;
   items: ChecklistItem[];
 }
+
+/** Por loja. Menos que as listas normais: cada item aqui ocupa tres linhas. */
+const ITENS_POR_LOJA = 15;
 
 export function PurchaseChecklist({
   orderId,
@@ -106,6 +111,10 @@ export function PurchaseChecklist({
   }
 
   const tudoFeito = todos.length > 0 && feitos === todos.length;
+
+  // Pagina de cada loja. Os riscados nao mudam de sitio ao paginar: um item
+  // que salta para outra pagina ao ser tocado perde-se de vista.
+  const [paginas, setPaginas] = useState<Record<string, number>>({});
 
   return (
     <div className="space-y-4">
@@ -159,6 +168,7 @@ export function PurchaseChecklist({
 
       {groups.map((group) => {
         const porFazer = group.items.filter((i) => !checked.has(i.id)).length;
+        const p = pagina(group.items.length, ITENS_POR_LOJA, paginas[group.id] ?? 1);
 
         return (
           <section key={group.id} className="overflow-hidden rounded-lg border bg-card">
@@ -190,7 +200,7 @@ export function PurchaseChecklist({
             </div>
 
             <ul className="divide-y">
-              {group.items.map((item) => {
+              {group.items.slice(p.inicio, p.fim).map((item) => {
                 const feito = checked.has(item.id);
                 return (
                   <li key={item.id}>
@@ -259,6 +269,11 @@ export function PurchaseChecklist({
                 );
               })}
             </ul>
+            <Paginacao
+              p={p}
+              onChange={(n) => setPaginas((atual) => ({ ...atual, [group.id]: n }))}
+              className="border-t px-4 py-2"
+            />
           </section>
         );
       })}

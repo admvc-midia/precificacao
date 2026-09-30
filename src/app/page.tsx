@@ -174,9 +174,9 @@ export default async function DashboardPage() {
                 <span className="min-w-0 truncate font-medium">{l.name}</span>
                 <span className="flex shrink-0 items-center gap-2">
                   <span className="tabular-nums text-muted-foreground">
-                    {formatBaseQty(l.qtyBase, l.baseUnit, currency.locale)}
+                    {formatBaseQty(l.qtyBase, l.baseUnit, currency)}
                     {l.minBase !== null ? (
-                      <> de {formatBaseQty(l.minBase, l.baseUnit, currency.locale)}</>
+                      <> de {formatBaseQty(l.minBase, l.baseUnit, currency)}</>
                     ) : null}
                   </span>
                   <Badge

@@ -32,8 +32,9 @@ import {
 } from '@/lib/actions/expenses';
 import { prisma } from '@/lib/db';
 import { num } from '@/lib/mappers';
-import { formatMoney, formatPercent } from '@/lib/money';
+import { formatMoney, formatPercent, currencyOf } from '@/lib/money';
 import {
+  CATEGORY_LABEL,
   fixedCostRateFrom,
   monthlyAmount,
   netFromGross,
@@ -45,15 +46,7 @@ import { getSettings } from '@/lib/queries';
 
 export const dynamic = 'force-dynamic';
 
-const CATEGORIA_LABEL: Record<string, string> = {
-  RENT: 'Espaco',
-  UTILITIES: 'Agua, luz e gas',
-  LABOUR: 'Pessoas',
-  SERVICES: 'Servicos',
-  TAXES: 'Impostos e taxas',
-  MARKETING: 'Divulgacao',
-  OTHER: 'Outras',
-};
+const CATEGORIA_LABEL = CATEGORY_LABEL;
 
 /**
  * O que costuma ficar esquecido.
@@ -85,7 +78,7 @@ export default async function DespesasPage() {
     prisma.expense.findMany({ orderBy: [{ category: 'asc' }, { name: 'asc' }] }),
     getSettings(),
   ]);
-  const currency = { currency: s.currency, locale: s.locale };
+  const currency = currencyOf(s);
 
   const lista = despesas.map((d) => ({
     id: d.id,

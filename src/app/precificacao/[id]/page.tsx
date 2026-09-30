@@ -113,7 +113,7 @@ export default async function PrecificarPage({
   const totalPorcao =
     cost.foodCostPerUnit + cost.packagingCost + cost.deliveryPackagingCost;
 
-  const qtd = (v: number, u: BaseUnit) => formatBaseQty(v, u, currency.locale);
+  const qtd = (v: number, u: BaseUnit) => formatBaseQty(v, u, currency);
   const fatia = (c: number) => (totalPorcao > 0 ? c / totalPorcao : 0);
 
   const flat: BreakdownRow[] = flattenRecipe(id, 1, ctx).map((l) => ({
@@ -226,12 +226,12 @@ export default async function PrecificarPage({
         />
         <StatTile
           label="Rende"
-          value={formatBaseQty(cost.yieldQty, cost.yieldUnit, currency.locale)}
+          value={formatBaseQty(cost.yieldQty, cost.yieldUnit, currency)}
           hint={
             <RecipeQuickView
               recipeId={id}
               recipeName={recipe.name}
-              yieldLabel={formatBaseQty(cost.yieldQty, cost.yieldUnit, currency.locale)}
+              yieldLabel={formatBaseQty(cost.yieldQty, cost.yieldUnit, currency)}
               packagingLabel={recipe.packaging?.name ?? null}
               lines={quickLines}
               totalLabel={formatMoney(cost.batchFoodCost, currency)}

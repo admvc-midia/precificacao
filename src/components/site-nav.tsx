@@ -3,9 +3,9 @@
 /**
  * Navegacao.
  *
- * No ecra grande, a barra de cima com o Painel e tres grupos que abrem um
+ * No ecra grande, a barra de cima com o Painel, as Compras e tres grupos que abrem um
  * menu — Cadastros, Producao, Resultados — mais o menu da engrenagem
- * (configuracoes, ajuda, tema, sair). Dez destinos soltos numa linha nao
+ * (configuracoes, exportar, ajuda, tema, sair). Dez destinos soltos numa linha nao
  * cabiam e obrigavam a ler todos para achar um.
  *
  * Os Cadastros estao pela ordem em que se fazem: sem insumos nao ha ficha,
@@ -26,6 +26,7 @@ import {
   ChefHat,
   ChevronDown,
   ClipboardList,
+  Download,
   Factory,
   FolderOpen,
   LayoutDashboard,
@@ -33,6 +34,7 @@ import {
   LogOut,
   Menu,
   Settings as SettingsIcon,
+  ShoppingCart,
   Store,
   Tag,
   TrendingUp,
@@ -68,6 +70,8 @@ interface Grupo {
 }
 
 const PAINEL: Destino = { href: '/', label: 'Painel', icon: LayoutDashboard };
+/** A aba do comprador: solta na barra, porque e a que se abre no supermercado. */
+const COMPRAS: Destino = { href: '/compras', label: 'Compras', icon: ShoppingCart };
 
 const FORNECEDORES: Destino = { href: '/fornecedores', label: 'Fornecedores', icon: Store };
 const INSUMOS: Destino = { href: '/insumos', label: 'Insumos', icon: Boxes };
@@ -86,7 +90,7 @@ const PRECIFICACAO: Destino = {
 const PRODUCAO: Destino = {
   href: '/producao',
   label: 'Producao e compras',
-  short: 'Compras',
+  short: 'Producao',
   icon: ClipboardList,
 };
 const ESTOQUE: Destino = { href: '/estoque', label: 'Estoque', icon: Warehouse };
@@ -98,6 +102,7 @@ const CONFIGURACOES: Destino = {
   icon: SettingsIcon,
 };
 const AJUDA: Destino = { href: '/ajuda', label: 'Ajuda', icon: LifeBuoy };
+const EXPORTAR: Destino = { href: '/exportar', label: 'Exportar dados', icon: Download };
 
 const GRUPOS: Grupo[] = [
   {
@@ -110,10 +115,10 @@ const GRUPOS: Grupo[] = [
 ];
 
 /** Os cinco que aparecem na barra do telemovel. */
-const PRIMARIOS: Destino[] = [PAINEL, INSUMOS, FICHAS, PRECIFICACAO, PRODUCAO];
+const PRIMARIOS: Destino[] = [PAINEL, COMPRAS, INSUMOS, FICHAS, PRODUCAO];
 
 /** O que no telemovel nao cabe em baixo e vai para o menu "Mais". */
-const NO_MAIS: Destino[] = [FORNECEDORES, ESTOQUE, VENDAS, DESPESAS];
+const NO_MAIS: Destino[] = [PRECIFICACAO, FORNECEDORES, ESTOQUE, VENDAS, DESPESAS];
 
 function isActive(pathname: string, href: string): boolean {
   // "/" so casa exatamente; os outros casam tambem com as suas subpaginas,
@@ -260,6 +265,14 @@ export function TopNav({
             <LayoutDashboard className="h-4 w-4" />
             Painel
           </Link>
+          <Link
+            href={COMPRAS.href}
+            aria-current={isActive(pathname, COMPRAS.href) ? 'page' : undefined}
+            className={estiloBarra(isActive(pathname, COMPRAS.href))}
+          >
+            <ShoppingCart className="h-4 w-4" />
+            Compras
+          </Link>
 
           {GRUPOS.map(({ label, icon: Icon, destinos }) => (
             <DropdownMenu key={label} modal={false}>
@@ -286,7 +299,9 @@ export function TopNav({
               aria-label="Configuracoes, ajuda e tema"
               title="Configuracoes, ajuda e tema"
               className={cn(
-                estiloBarra(isActive(pathname, CONFIGURACOES.href) || isActive(pathname, AJUDA.href)),
+                estiloBarra(
+                  [CONFIGURACOES, EXPORTAR, AJUDA].some((d) => isActive(pathname, d.href)),
+                ),
                 'px-2',
               )}
             >
@@ -295,6 +310,7 @@ export function TopNav({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <ItemLink destino={CONFIGURACOES} pathname={pathname} />
+              <ItemLink destino={EXPORTAR} pathname={pathname} />
               <ItemLink destino={AJUDA} pathname={pathname} />
               <DropdownMenuSeparator />
               <EscolhaTema tema={tema} onChange={setTema} />
@@ -324,6 +340,7 @@ export function TopNav({
               ))}
               <DropdownMenuSeparator />
               <ItemLink destino={CONFIGURACOES} pathname={pathname} />
+              <ItemLink destino={EXPORTAR} pathname={pathname} />
               <ItemLink destino={AJUDA} pathname={pathname} />
               <DropdownMenuSeparator />
               <EscolhaTema tema={tema} onChange={setTema} />

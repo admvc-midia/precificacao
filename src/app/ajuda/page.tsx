@@ -134,6 +134,12 @@ const SECOES: Secao[] = [
           Com os custos fixos a 0%, todos os preços sugeridos saem baixos demais. É o
           primeiro número a acertar.
         </Nota>
+        <p>
+          <strong>Casas decimais</strong> — automático (até 4: 0,395 kg) ou 2 casas (0,40
+          kg). Muda só o que se lê nas quantidades e no custo por kg; as contas continuam
+          com a precisão toda. Quantidades muito pequenas aparecem como &quot;&lt; 0,01
+          kg&quot;.
+        </p>
       </>
     ),
   },
@@ -310,6 +316,64 @@ const SECOES: Secao[] = [
           diferentes: o primeiro é o que sai da caixa (pacotes inteiros), o segundo o que a
           produção gasta de facto. A diferença fica em despensa.
         </p>
+        <p>
+          <strong>Estoque mínimo:</strong> se um insumo tem mínimo (definido em Insumos), a
+          lista compra também o que falta para ficar nele — a linha diz{' '}
+          <em>&quot;inclui … para manter o mínimo&quot;</em>. Os insumos no mínimo que esta
+          produção não usa aparecem em <strong>Também a acabar</strong>, só como lembrete:
+          não entram na compra.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'compras',
+    titulo: 'Compras (a aba do comprador)',
+    resumo: 'Listas para o supermercado, preço achado e entrada no estoque.',
+    href: '/compras',
+    conteudo: (
+      <>
+        <p>
+          Listas de compras próprias, que não dependem do que se vai produzir. É a aba que
+          o comprador abre no telemóvel (na barra de baixo, <em>Compras</em>).
+        </p>
+        <Passos>
+          <li>
+            Em <strong>Compras</strong>, crie uma lista (por exemplo, &quot;Makro
+            sábado&quot;).
+          </li>
+          <li>
+            Junte o que comprar: <strong>Juntar insumo</strong> (procura nos insumos
+            cadastrados), <strong>Juntar o que está abaixo do mínimo</strong>, ou{' '}
+            <strong>De uma produção</strong>.
+          </li>
+          <li>
+            No supermercado, toque na linha para a <strong>riscar</strong>. Se o preço, a
+            loja ou a embalagem forem outros, corrija no lápis. O triângulo marca{' '}
+            <em>&quot;não havia&quot;</em>.
+          </li>
+          <li>
+            <strong>Achei mais barato:</strong> em <em>Juntar insumo</em>, escolha o insumo
+            e escreva o preço que está a ver. A app mostra o estoque, o mínimo, para quantos
+            dias chega e quanto mais barato (ou caro) é que o preço em uso. Depois{' '}
+            <em>Juntar à lista</em> ou <em>Comprei — pôr no carrinho</em>.
+          </li>
+          <li>
+            No fim, <strong>Fechar compra</strong>: o que foi riscado entra no estoque ao
+            preço pago, e o preço fica registado para a loja.
+          </li>
+        </Passos>
+        <Nota>
+          Riscar não mexe no estoque — só fechar. Um preço mais barato noutra loja{' '}
+          <strong>não</strong> muda o custo das fichas, a não ser que se marque{' '}
+          <em>&quot;usar este preço daqui para a frente&quot;</em>. Se a loja do preço em
+          uso mudou o preço, esse passa a valer, porque é a realidade.
+        </Nota>
+        <p>
+          Uma lista que veio de uma produção dá entrada por aqui <em>ou</em> pelo{' '}
+          <em>Recebi esta compra</em> da ordem — não pelos dois, senão o estoque entra a
+          dobrar.
+        </p>
       </>
     ),
   },
@@ -414,6 +478,37 @@ const SECOES: Secao[] = [
         insumos a acabar e preços de fornecedor que mudaram. Carregue num produto para ir
         direto à precificação dele.
       </p>
+    ),
+  },
+  {
+    id: 'exportar',
+    titulo: 'Exportar e cópia de segurança',
+    resumo: 'Listas para o Excel e uma cópia de tudo.',
+    href: '/exportar',
+    conteudo: (
+      <>
+        <Passos>
+          <li>
+            No menu ⚙ (no telemóvel, em <em>Mais</em>), abra{' '}
+            <strong>Exportar dados</strong>.
+          </li>
+          <li>
+            <strong>Listas para o Excel</strong> — insumos, fornecedores, preços por
+            fornecedor, fichas, preços sugeridos, movimentos de estoque, vendas e despesas.
+            Cada uma descarrega um ficheiro CSV que abre direto no Excel, com vírgula decimal
+            e acentos.
+          </li>
+          <li>
+            <strong>Cópia completa</strong> — todas as tabelas num só ficheiro. É a cópia
+            de segurança: guarde-a fora do computador (OneDrive, pen).
+          </li>
+        </Passos>
+        <Nota>
+          Além do botão, o computador onde a cópia automática foi configurada grava uma cópia
+          completa sozinho, uma vez por semana. Se estiver desligado no dia, grava assim que
+          for ligado.
+        </Nota>
+      </>
     ),
   },
   {

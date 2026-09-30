@@ -150,6 +150,8 @@ Num lote pequeno o primeiro fica bem acima do segundo, e essa diferença (**Fica
 
 **Estoque e fornecedor.** Só entra na lista o que falta, e a lista sai dividida por loja, na ordem da volta das compras.
 
+**Estoque mínimo.** Um insumo com mínimo compra também o que falta para ficar nele: precisa de 0,4 kg, tem 1 kg, mínimo 0,8 kg — compra 0,2 kg. A linha diz quanto é para o mínimo, e o **Custo da produção** não o conta (repor a despensa não é custo destes produtos). *Recebi esta compra* e *Guardar lista* usam a mesma conta. Os insumos no mínimo que a ordem não usa aparecem em **Também a acabar**, só como lembrete: metê-los na compra faria cada ordem arrastar a despensa inteira.
+
 A lista mostrada é sempre recalculada ao vivo. **Guardar lista** congela os preços e o estoque do dia do planeamento; se depois um insumo mudar de preço, a aplicação diz quanto a mesma compra passou a custar.
 
 ### Preços por fornecedor
@@ -190,6 +192,35 @@ Duas regras que parecem detalhe e não são:
 **O resultado** é a comparação que justifica o resto da app: o que as fichas dizem que o vendido devia ter custado, contra o que saiu mesmo do armazém. A diferença é desperdício, porção a mais, ou ficha desatualizada.
 
 E as vendas que esse cálculo precisa são as mesmas que dão vida à **engenharia de cardápio** — a matriz Estrela/Cavalo/Quebra-cabeça/Abacaxi, que até aqui assumia que todos os produtos vendiam igual.
+
+### Compras (a aba do comprador)
+
+`/compras` tem listas de compras **próprias**, que não dependem de uma ordem de produção ("Makro sábado"). Enchem-se à mão (pesquisa nos insumos), com **o que está abaixo do mínimo**, ou copiando a lista de uma ordem. No supermercado, o comprador risca, corrige preço/loja/embalagem, marca "não havia", e usa **Juntar insumo / achei mais barato**: escolhe o insumo, vê estoque, mínimo, para quantos dias chega (saídas dos últimos 30 dias) e o preço em uso, e a comparação por kg aparece enquanto escreve o preço.
+
+Três regras:
+
+- **Riscar não mexe no estoque; só fechar.** `closeShoppingList` dá entrada do que foi riscado ao preço **pago** (é isso que acerta o custo médio), com a mesma guarda atómica do *Recebi esta compra*: dois telemóveis a fechar ao mesmo tempo entram uma vez.
+- **O preço pago fica registado para a loja**, mas só passa a ser o **em uso** se o comprador marcar "usar daqui para a frente", se o insumo não tinha nenhum, ou se é da própria loja do preço em uso (a loja mudou o preço — é a realidade). Um preço mais barato noutra loja não muda o custo das fichas sem ninguém decidir.
+- Uma lista que veio de uma ordem dá entrada por aqui **ou** pelo *Recebi esta compra* da ordem — não pelos dois.
+
+As escritas partilhadas (`gravarPlano`, `lerEstados`, `sincronizarEmUso`) vivem em `lib/escritas.ts` e não num ficheiro `'use server'`: tudo o que esses exportam fica chamável do browser, e estas gravam sem validar.
+
+### Paginação e casas decimais
+
+As listas (`GroupedList`), a checklist de compras e o livro do Estoque paginam — 20 por secção, 15 por loja. O Estoque pagina **na base** (`getMovementsPage`, com filtros no endereço), porque o livro só cresce; as listas de cliente já têm as linhas e só escolhem quais mostrar. As contas estão em `lib/paginacao.ts`.
+
+Em Configurações, **Casas decimais**: automático (até 4) ou 2. Só muda a leitura das quantidades e do custo por kg (`CurrencyConfig.decimals`, lido por `formatBaseQty`/`formatCostPerUnit`/`formatUnitCost`); as contas, a base e a exportação guardam tudo. Com 2 casas, o que arredondaria para zero aparece como "< 0,01 kg".
+
+### Exportar e cópia de segurança
+
+Em **⚙ → Exportar dados** (`/exportar`) há duas coisas:
+
+- **Listas em CSV** para o Excel — insumos, fornecedores, preços por fornecedor, fichas, preços sugeridos, movimentos, vendas e despesas. Ponto e vírgula entre colunas, vírgula decimal, BOM UTF-8: é o que o Excel em português abre sem assistente. Quantidades em kg/L/un, nunca gramas; texto que começa por `=`, `+`, `-` ou `@` leva apóstrofo, para não virar fórmula.
+- **Cópia completa** em JSON — todas as tabelas tal como estão. As tabelas são lidas do próprio schema (`Prisma.dmmf`), não de uma lista escrita à mão: o `dump-dados.mts` antigo esquecia as despesas, e ninguém deu por isso.
+
+A mesma cópia corre sozinha: `prisma/copia-seguranca.mts <pasta> [quantas]` grava e apaga as mais antigas (12 por omissão), e `tools/agendar-copia.ps1` cria a tarefa do Windows — segundas às 10h, ou assim que o computador for ligado, para `OneDrive\Copias\precificacao`. O registo da última fica em `ultima-copia.log`, ao lado. Só lê a base.
+
+**Repor a partir de uma cópia não está feito**, de propósito: a base é partilhada com outro projeto, e uma reposição automática é o tipo de script que se escreve com calma no dia em que for preciso, não antes.
 
 ---
 

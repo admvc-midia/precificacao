@@ -6,13 +6,7 @@ import { CmvBadge } from '@/components/cmv-badge';
 import { DataList, type ListColumn, type ListRow } from '@/components/data-list';
 import { Alert } from '@/components/ui/badge';
 import { formatMoney, formatPercent } from '@/lib/money';
-import { channelContext } from '@/lib/pricing/channels';
-import {
-  analyzeManualPrice,
-  priceFromTargetCmv,
-  priceFromTargetMargin,
-} from '@/lib/pricing/price';
-import type { PriceResult } from '@/lib/pricing/types';
+import { priceForRecipe, referenceChannel } from '@/lib/pricing/sugerido';
 import { getCostedRecipes } from '@/lib/queries';
 
 export const dynamic = 'force-dynamic';
@@ -36,33 +30,10 @@ const COLUMNS: ListColumn[] = [
 export default async function PrecificacaoPage() {
   const { recipes, settings, currency, channels } = await getCostedRecipes();
   const products = recipes.filter((r) => r.kind === 'PRODUCT');
-  const reference = channels.find((c) => c.kind === 'COUNTER') ?? channels[0];
+  const reference = referenceChannel(channels);
 
   const rows: ListRow[] = products.map((r) => {
-    let result: PriceResult | null = null;
-
-    if (r.cost && reference) {
-      const { params, costs } = channelContext(r.cost, reference, settings);
-      const opts = { rounding: settings.rounding };
-
-      if (r.pricingMode === 'MANUAL') {
-        result = analyzeManualPrice(r.manualPrice ?? 0, costs, params);
-      } else if (r.pricingMode === 'TARGET_MARGIN') {
-        result = priceFromTargetMargin(
-          costs,
-          params,
-          r.targetMargin ?? settings.targetMargin,
-          opts,
-        );
-      } else {
-        result = priceFromTargetCmv(
-          costs,
-          params,
-          r.targetCmv ?? settings.targetCmv,
-          opts,
-        );
-      }
-    }
+    const result = priceForRecipe(r, reference, settings);
 
     const viavel = result?.feasible ?? false;
     const preco = viavel ? formatMoney(result!.price, currency) : '—';

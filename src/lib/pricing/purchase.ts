@@ -14,6 +14,11 @@
  *     da compra, e a aplicacao mostra os dois.
  *   - **Fornecedor.** A lista sai dividida por loja, porque e assim que se
  *     faz a volta das compras.
+ *   - **Minimo.** Se o insumo tem minimo definido, compra-se o bastante para
+ *     produzir e ainda ficar com o minimo em casa. Definir o minimo ja e a
+ *     decisao: nao ha interruptor, porque esta mesma conta corre tambem no
+ *     "Guardar lista" e no "Recebi esta compra", e um botao so no ecra poria
+ *     a lista vista e a compra recebida a dizer coisas diferentes.
  */
 
 import { toBase, type BaseUnit } from '@/lib/units';
@@ -28,8 +33,15 @@ export interface PurchaseLine {
   requiredBase: number;
   /** Estoque considerado. */
   stockBase: number;
-  /** O que falta, na unidade base. Nunca negativo. */
+  /** O que falta, na unidade base, ja a contar com o minimo. Nunca negativo. */
   missingBase: number;
+  /** Minimo definido no insumo, na unidade base. Zero quando nao ha. */
+  minBase: number;
+  /**
+   * A parte de `missingBase` que e so para repor o minimo — o que a producao
+   * nao gasta. Zero quando nao ha minimo ou o estoque ja o cobre.
+   */
+  forMinimumBase: number;
   /** Tamanho da embalagem de compra, na unidade base. */
   packSizeBase: number;
   /** Embalagens inteiras a comprar. */
@@ -40,7 +52,10 @@ export interface PurchaseLine {
   leftoverBase: number;
   /** Custo real: embalagens inteiras ao preco de compra. */
   cost: number;
-  /** Custo do que sera mesmo consumido. Sempre <= `cost`. */
+  /**
+   * Custo do que sera mesmo consumido. Sempre <= `cost`. Nao inclui a
+   * reposicao do minimo: essa fica em despensa, como a sobra da embalagem.
+   */
   theoreticalCost: number;
 }
 
@@ -102,7 +117,14 @@ export function buildPurchaseList(
     }
 
     const stockBase = options.ignoreStock ? 0 : (ingredient.stockBase ?? 0);
-    const missingBase = Math.max(0, requiredBase - stockBase);
+    // Orcamentar do zero (`ignoreStock`) e so a producao: o minimo e sobre a
+    // despensa, e ai a despensa nao conta.
+    const minBase = options.ignoreStock ? 0 : Math.max(0, ingredient.minStockBase ?? 0);
+    // O que a producao consome e nao ha em casa.
+    const forProductionBase = Math.max(0, requiredBase - stockBase);
+    // Mais o que for preciso para, no fim, ficar o minimo.
+    const missingBase = Math.max(0, requiredBase + minBase - stockBase);
+    const forMinimumBase = missingBase - forProductionBase;
 
     // Embalagem inteira, sempre para cima. A tolerancia evita que um erro de
     // virgula flutuante (2.0000000001 pacotes) mande comprar um pacote a mais.
@@ -118,12 +140,14 @@ export function buildPurchaseList(
       requiredBase,
       stockBase,
       missingBase,
+      minBase,
+      forMinimumBase,
       packSizeBase,
       packsToBuy,
       purchasedBase,
       leftoverBase: Math.max(0, purchasedBase - missingBase),
       cost: packsToBuy * ingredient.purchasePrice,
-      theoreticalCost: missingBase * unitPrice,
+      theoreticalCost: forProductionBase * unitPrice,
     });
   }
 
@@ -192,4 +216,43 @@ export function demandConsumptionCost(demand: DemandLine[], ctx: CostContext): n
     }
   }
   return total;
+}
+
+export interface LowOutsideLine {
+  ingredient: IngredientInput;
+  baseUnit: BaseUnit;
+  stockBase: number;
+  minBase: number;
+  /** Quanto falta para voltar ao minimo. */
+  missingBase: number;
+}
+
+/**
+ * Insumos no minimo ou abaixo que esta lista de compras nao usa.
+ *
+ * So para mostrar, como lembrete: nao entram na compra nem no "Recebi esta
+ * compra", porque o custo deles nao e desta producao. Serve para nao ter de
+ * voltar ao supermercado dois dias depois.
+ */
+export function lowStockOutside(list: PurchaseList, ctx: CostContext): LowOutsideLine[] {
+  const naLista = new Set(list.lines.map((l) => l.ingredient.id));
+  const out: LowOutsideLine[] = [];
+
+  for (const ingredient of ctx.ingredients.values()) {
+    if (naLista.has(ingredient.id)) continue;
+    const minBase = ingredient.minStockBase ?? 0;
+    if (minBase <= 0) continue;
+    const stockBase = ingredient.stockBase ?? 0;
+    // `<=` como no aviso do estoque: o minimo e o ponto em que se compra.
+    if (stockBase > minBase) continue;
+    out.push({
+      ingredient,
+      baseUnit: baseUnitOf(ingredient.purchaseUnit),
+      stockBase,
+      minBase,
+      missingBase: Math.max(0, minBase - stockBase),
+    });
+  }
+
+  return out.sort((a, b) => a.ingredient.name.localeCompare(b.ingredient.name));
 }

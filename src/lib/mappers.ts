@@ -55,6 +55,7 @@ export function toIngredientInput(row: IngredientRow): IngredientInput {
     supplierId: row.supplierId,
     supplierName: row.supplier?.name ?? null,
     stockBase: num(row.stockBase),
+    minStockBase: numOrNull(row.minStockBase),
   };
 }
 

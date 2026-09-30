@@ -48,8 +48,14 @@ export const config = {
    *
    * O logotipo e a estampa (em `public/`) tambem: a pagina de entrada mostra-os
    * antes do login, e nao tem nada da casa.
+   *
+   * Os ficheiros soltos vao pelo NOME EXATO, com `$` no fim. Um prefixo como
+   * `icon` ou `logo-` deixaria tambem passar, sem palavra-passe, qualquer rota
+   * futura que comecasse assim (`/iconografia`) — e nada avisaria. So as duas
+   * pastas do `_next` ficam por prefixo, porque tem subcaminhos. Um ficheiro
+   * novo em `public/` que a pagina de entrada precise tem de entrar nesta lista.
    */
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|robots.txt|logo-|estampa).*)',
+    '/((?!_next/static|_next/image|(?:favicon\\.ico|robots\\.txt|icon\\.svg|apple-icon\\.png|logo-creme\\.png|logo-vinho\\.png|estampa\\.svg|estampa-escura\\.svg)$).*)',
   ],
 };

@@ -147,7 +147,7 @@ export default async function FichaPage({
           </FormDialog>
         </div>
         <p className="text-sm text-muted-foreground">
-          Rende {formatBaseQty(Number(recipe.yieldQty), recipe.yieldUnit, currency.locale)}
+          Rende {formatBaseQty(Number(recipe.yieldQty), recipe.yieldUnit, currency)}
           {recipe.description ? ` · ${recipe.description}` : ''}
         </p>
       </header>
@@ -193,8 +193,25 @@ export default async function FichaPage({
                     qty: formatBaseQty(
                       line ? line.qtyBase : toBase(Number(item.qty), item.unit),
                       base,
-                      currency.locale,
+                      currency,
                     ),
+                    qtyEdit: {
+                      itemId: item.id,
+                      itemName: nome,
+                      display: formatBaseQty(
+                        line ? line.qtyBase : toBase(Number(item.qty), item.unit),
+                        base,
+                        currency,
+                      ),
+                      // Virgula, como se escreve em portugues: o ponto no campo
+                      // confundia (e o parseQty aceita os dois).
+                      value: displayQtyValue(toBase(Number(item.qty), item.unit), base).replace(
+                        '.',
+                        ',',
+                      ),
+                      unitLabel: DISPLAY_UNIT_LABEL[base],
+                      unitValue: displayUnitOf(base),
+                    },
                     unitCost: line
                       ? formatCostPerUnit(line.unitCost, base, currency)
                       : '—',
@@ -204,7 +221,7 @@ export default async function FichaPage({
                         <FormDialog
                           action={updateRecipeItem}
                           title={`Alterar ${nome}`}
-                          description={`Quantidade usada no lote inteiro desta ficha, nao na porcao (o lote rende ${formatBaseQty(Number(recipe.yieldQty), recipe.yieldUnit, currency.locale)}).`}
+                          description={`Quantidade usada no lote inteiro desta ficha, nao na porcao (o lote rende ${formatBaseQty(Number(recipe.yieldQty), recipe.yieldUnit, currency)}).`}
                           submitLabel="Guardar"
                         >
                           <input type="hidden" name="id" value={item.id} />

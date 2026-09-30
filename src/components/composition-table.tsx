@@ -21,6 +21,7 @@
 
 import { Eye, EyeOff } from 'lucide-react';
 
+import { QtyInline, type QtyInlineProps } from '@/components/qty-inline';
 import { Button } from '@/components/ui/button';
 import { useStoredString } from '@/lib/use-stored-state';
 
@@ -30,6 +31,11 @@ export interface CompositionRow {
   name: React.ReactNode;
   /** "0,015 kg" — sempre na unidade de exibicao. */
   qty: string;
+  /**
+   * Se vier, a quantidade edita-se no proprio sitio (clique, Enter grava).
+   * Sem isto, e so texto.
+   */
+  qtyEdit?: QtyInlineProps;
   /** "1,69 €/kg" */
   unitCost: string;
   /** Quanto esta linha custa no lote. */
@@ -94,7 +100,9 @@ export function CompositionTable({
             {rows.map((r) => (
               <tr key={r.id} className="border-b last:border-0 hover:bg-muted/50">
                 <td className="px-3 py-2.5">{r.name}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{r.qty}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">
+                  <Quantidade row={r} />
+                </td>
                 {mostraCustos ? (
                   <>
                     <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
@@ -138,10 +146,12 @@ export function CompositionTable({
                   <span className="shrink-0 tabular-nums font-medium">{r.cost}</span>
                 ) : null}
               </div>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {r.qty}
-                {mostraCustos ? ` · ${r.unitCost}` : ''}
-              </p>
+              {/* <div> e nao <p>: ao editar, a quantidade vira um <form>, que
+                  nao pode viver dentro de um paragrafo. */}
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
+                <Quantidade row={r} className="-ml-1.5 text-foreground" />
+                {mostraCustos ? <span>· {r.unitCost}</span> : null}
+              </div>
             </div>
             <div className="flex shrink-0 items-center">{r.actions}</div>
           </li>
@@ -155,5 +165,14 @@ export function CompositionTable({
         </div>
       ) : null}
     </div>
+  );
+}
+
+/** A quantidade de uma linha: editavel se a pagina deu com que editar. */
+function Quantidade({ row, className }: { row: CompositionRow; className?: string }) {
+  return row.qtyEdit ? (
+    <QtyInline {...row.qtyEdit} className={className} />
+  ) : (
+    <span className={className}>{row.qty}</span>
   );
 }

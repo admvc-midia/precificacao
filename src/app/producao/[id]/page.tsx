@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Check, Info, PackageCheck, ChefHat } from 'lucide-react';
+import { BellRing, Check, Info, PackageCheck, ChefHat } from 'lucide-react';
 
 import {
   ActionForm,
@@ -45,6 +45,8 @@ import { formatMoney, formatPercent } from '@/lib/money';
 import {
   buildPurchaseList,
   demandConsumptionCost,
+  lowStockOutside,
+  type LowOutsideLine,
   type PurchaseList,
 } from '@/lib/pricing/purchase';
 import { bestOfferForNeed } from '@/lib/pricing/offers';
@@ -78,11 +80,17 @@ export default async function OrdemPage({
   let list: PurchaseList | null = null;
   let consumption = 0;
   let error: string | null = null;
+  // Lembrete: o que esta no minimo e esta ordem nao usa. Nao entra na compra.
+  let aAcabar: LowOutsideLine[] = [];
+  // Ha compra so para repor o minimo? Muda a explicacao da sobra.
+  let paraMinimo = false;
 
   if (demand.length > 0) {
     try {
       list = buildPurchaseList(demand, ctx);
       consumption = demandConsumptionCost(demand, ctx);
+      aAcabar = lowStockOutside(list, ctx);
+      paraMinimo = list.lines.some((l) => l.forMinimumBase > 0);
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
     }
@@ -131,17 +139,21 @@ export default async function OrdemPage({
         cost: formatMoney(l.cost, currency),
         costValue: l.cost,
         detail: [
-          `preciso ${formatBaseQty(l.requiredBase, l.baseUnit, currency.locale)}`,
+          `preciso ${formatBaseQty(l.requiredBase, l.baseUnit, currency)}`,
           l.stockBase > 0
-            ? `tenho ${formatBaseQty(l.stockBase, l.baseUnit, currency.locale)}`
+            ? `tenho ${formatBaseQty(l.stockBase, l.baseUnit, currency)}`
             : null,
-          `falta ${formatBaseQty(l.missingBase, l.baseUnit, currency.locale)}`,
+          `falta ${formatBaseQty(l.missingBase, l.baseUnit, currency)}`,
+          // Sem isto a lista pedia mais do que a producao gasta sem dizer porque.
+          l.forMinimumBase > 0
+            ? `inclui ${formatBaseQty(l.forMinimumBase, l.baseUnit, currency)} para manter o minimo`
+            : null,
         ]
           .filter(Boolean)
           .join(' · '),
         leftover:
           l.leftoverBase > 0
-            ? `sobram ${formatBaseQty(l.leftoverBase, l.baseUnit, currency.locale)}`
+            ? `sobram ${formatBaseQty(l.leftoverBase, l.baseUnit, currency)}`
             : undefined,
         betterPrice: melhorPreco(l),
       })),
@@ -226,7 +238,11 @@ export default async function OrdemPage({
             label="Fica em despensa"
             value={formatMoney(list.leftoverCost, currency)}
             tone={list.leftoverCost > list.theoreticalCost ? 'warning' : 'default'}
-            hint="Sobra das embalagens inteiras"
+            hint={
+              paraMinimo
+                ? 'Sobra das embalagens inteiras e reposicao do minimo'
+                : 'Sobra das embalagens inteiras'
+            }
           />
           <StatTile
             label="Nao precisa comprar"
@@ -347,9 +363,11 @@ export default async function OrdemPage({
                 <p>
                   Dos {formatMoney(list.totalCost, currency)} a pagar, apenas{' '}
                   {formatMoney(list.theoreticalCost, currency)} sao consumidos por
-                  esta producao — o resto fica em despensa porque nao se compra
-                  fracao de embalagem. Esse dinheiro nao se perde, mas sai da caixa
-                  hoje.
+                  esta producao — o resto fica em despensa
+                  {paraMinimo
+                    ? ', para repor o estoque minimo e porque nao se compra fracao de embalagem'
+                    : ' porque nao se compra fracao de embalagem'}
+                  . Esse dinheiro nao se perde, mas sai da caixa hoje.
                 </p>
               </div>
             </section>
@@ -383,10 +401,63 @@ O que voce ja tem no estoque chega para esta producao, entao estes
                           {l.ingredient.name}
                         </TableCell>
                         <TableNum className="text-muted-foreground">
-                          {formatBaseQty(l.requiredBase, l.baseUnit, currency.locale)}
+                          {formatBaseQty(l.requiredBase, l.baseUnit, currency)}
                         </TableNum>
                         <TableNum>
-                          {formatBaseQty(l.stockBase, l.baseUnit, currency.locale)}
+                          {formatBaseQty(l.stockBase, l.baseUnit, currency)}
+                        </TableNum>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {aAcabar.length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BellRing className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-hidden />
+                  Tambem a acabar
+                </CardTitle>
+                <CardDescription>
+                  Estes estao no minimo ou abaixo, mas esta producao nao os usa.
+                  Nao entram na compra acima nem no &quot;Recebi esta compra&quot; —
+                  sao so um lembrete, para aproveitar a mesma volta.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Insumo</TableHead>
+                      <TableHead className="text-right">Tenho</TableHead>
+                      <TableHead className="text-right">Minimo</TableHead>
+                      <TableHead className="text-right">Falta</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {aAcabar.map((l) => (
+                      <TableRow key={l.ingredient.id}>
+                        <TableCell className="font-medium">
+                          {l.ingredient.name}
+                          {l.ingredient.supplierName ? (
+                            <span className="block text-xs font-normal text-muted-foreground">
+                              {l.ingredient.supplierName}
+                            </span>
+                          ) : null}
+                        </TableCell>
+                        <TableNum>
+                          {formatBaseQty(l.stockBase, l.baseUnit, currency)}
+                        </TableNum>
+                        <TableNum className="text-muted-foreground">
+                          {formatBaseQty(l.minBase, l.baseUnit, currency)}
+                        </TableNum>
+                        <TableNum className="font-medium">
+                          {l.missingBase > 0
+                            ? formatBaseQty(l.missingBase, l.baseUnit, currency)
+                            : 'no minimo'}
                         </TableNum>
                       </TableRow>
                     ))}

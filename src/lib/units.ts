@@ -118,13 +118,32 @@ const MAX_DECIMAIS = 4;
 /**
  * Formata uma quantidade guardada em unidade base, sempre na de exibicao:
  * 1500 g -> "1,5 kg"; 15 g -> "0,015 kg"; 3 un -> "3 un".
+ *
+ * Com a configuracao de 2 casas, 15 g passa a "0,02 kg" — e 3 g, que dava
+ * "0 kg" e fazia parecer que nao ha nada, passa a "< 0,01 kg".
  */
-export function formatBaseQty(qtyBase: number, base: BaseUnit, locale = 'pt-PT'): string {
-  const casas = base === 'UN' ? 2 : MAX_DECIMAIS;
-  const valor = new Intl.NumberFormat(locale, { maximumFractionDigits: casas }).format(
-    toDisplay(qtyBase, base),
-  );
-  return `${valor} ${DISPLAY_UNIT_LABEL[base]}`;
+export function formatBaseQty(
+  qtyBase: number,
+  base: BaseUnit,
+  fmt: string | Pick<CurrencyConfig, 'locale' | 'decimals'> = 'pt-PT',
+): string {
+  const { locale, decimals } = typeof fmt === 'string' ? { locale: fmt, decimals: undefined } : fmt;
+  const casas = decimals === 2 || base === 'UN' ? 2 : MAX_DECIMAIS;
+  const v = toDisplay(qtyBase, base);
+  const unidade = DISPLAY_UNIT_LABEL[base];
+  const minimo = 10 ** -casas;
+  if (v !== 0 && Math.abs(v) < minimo / 2) {
+    const f = new Intl.NumberFormat(locale, { minimumFractionDigits: casas }).format(minimo);
+    return `${v < 0 ? '-' : ''}< ${f} ${unidade}`;
+  }
+  // Com 2 casas pedidas, sempre as duas (0,40 kg), como num preco. Nas
+  // unidades nao: "3,00 un" so atrapalha.
+  const fixas = decimals === 2 && base !== 'UN' ? 2 : 0;
+  const valor = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: fixas,
+    maximumFractionDigits: casas,
+  }).format(v);
+  return `${valor} ${unidade}`;
 }
 
 /**
@@ -155,8 +174,9 @@ export function formatCostPerUnit(
     currency: cfg.currency,
     minimumFractionDigits: 2,
     // Um guardanapo a 0,015 por unidade ainda precisa de casas; um kg de
-    // acucar a 1,69 nao precisa de nenhuma a mais.
-    maximumFractionDigits: 4,
+    // acucar a 1,69 nao precisa de nenhuma a mais. Com a configuracao de 2
+    // casas, o guardanapo fica 0,02 — foi o que se pediu.
+    maximumFractionDigits: cfg.decimals === 2 ? 2 : 4,
   }).format(costPerBase * displayFactor(base));
   return `${valor}/${DISPLAY_UNIT_LABEL[base]}`;
 }
