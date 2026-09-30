@@ -15,7 +15,8 @@
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
     "dev:turbo": "next dev",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "test:db": "vitest run --config vitest.integracao.mts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
