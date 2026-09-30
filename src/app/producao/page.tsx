@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, CalendarDays, Plus } from 'lucide-react';
 
+import { AjudaLink } from '@/components/ajuda-link';
 import { ConfirmDelete, FormDialog } from '@/components/action-form';
 import { DataList, type ListColumn, type ListRow } from '@/components/data-list';
 import { Alert, Badge } from '@/components/ui/badge';
@@ -119,7 +120,9 @@ export default async function ProducaoPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Producao e compras</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Producao e compras
+            <AjudaLink secao="producao" />
+          </h1>
         <p className="text-sm text-muted-foreground">
           Diga quanto quer produzir; a aplicacao desce pelas fichas tecnicas e
           responde o que falta comprar, em que loja e por quanto.

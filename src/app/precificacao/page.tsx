@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 
+import { AjudaLink } from '@/components/ajuda-link';
 import { CmvBadge } from '@/components/cmv-badge';
 import { DataList, type ListColumn, type ListRow } from '@/components/data-list';
 import { Alert } from '@/components/ui/badge';
@@ -133,7 +134,9 @@ export default async function PrecificacaoPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Precificacao</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Precificacao
+            <AjudaLink secao="precificacao" />
+          </h1>
         <p className="text-sm text-muted-foreground">
           Preco e margem de cada produto no canal de referencia
           {reference ? ` (${reference.name})` : ''}. O CMV mede a eficiencia:

@@ -125,7 +125,10 @@ export function GroupedList({
           ) : (
             <div className="flex-1" />
           )}
-          {toolbar}
+          {/* Sempre dentro de um elemento proprio. Um componente de cliente
+              passado solto pelo servidor (o FormDialog dos Fornecedores)
+              fazia o React avisar de uma `key` em falta. */}
+          {toolbar ? <div className="shrink-0">{toolbar}</div> : null}
         </div>
       )}
 

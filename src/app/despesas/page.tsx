@@ -14,6 +14,7 @@
 import Link from 'next/link';
 import { Plus, Power, Wallet } from 'lucide-react';
 
+import { AjudaLink } from '@/components/ajuda-link';
 import { ActionForm, ConfirmDelete, FormDialog, SubmitButton } from '@/components/action-form';
 import { DataList, type ListColumn, type ListRow } from '@/components/data-list';
 import { StatTile } from '@/components/dre-breakdown';
@@ -207,7 +208,9 @@ export default async function DespesasPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Despesas fixas</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Despesas fixas
+            <AjudaLink secao="despesas" />
+          </h1>
         <p className="text-sm text-muted-foreground">
           O que se paga haja ou nao vendas. A soma destas, dividida pelo que
           fatura, e a percentagem de custos fixos que entra no preco de todos os

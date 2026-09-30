@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { AjudaLink } from '@/components/ajuda-link';
 import { ActionForm, SubmitButton } from '@/components/action-form';
 import { StatTile } from '@/components/dre-breakdown';
 import {
@@ -199,7 +200,9 @@ export default async function PrecificarPage({
             Precificacao
           </Link>
           <span className="text-muted-foreground">/</span>
-          <h1 className="text-2xl font-semibold tracking-tight">{recipe.name}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{recipe.name}
+            <AjudaLink secao="precificacao" />
+          </h1>
         </div>
         <ProductSwitcher current={id} products={produtos} />
       </header>

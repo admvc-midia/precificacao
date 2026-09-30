@@ -2,8 +2,9 @@ import type { Config } from 'tailwindcss';
 import animate from 'tailwindcss-animate';
 
 const config: Config = {
-  // Sem toggle na interface: o tema segue a preferencia do sistema.
-  darkMode: 'media',
+  // O tema escolhe-se no menu da engrenagem (automatico, claro, escuro); quem
+  // poe ou tira a classe `dark` e `lib/tema.ts`.
+  darkMode: 'class',
   content: ['./src/**/*.{ts,tsx}'],
   theme: {
     container: {
@@ -42,10 +43,17 @@ const config: Config = {
           DEFAULT: 'hsl(var(--popover))',
           foreground: 'hsl(var(--popover-foreground))',
         },
+        brand: {
+          DEFAULT: 'hsl(var(--brand))',
+          foreground: 'hsl(var(--brand-foreground))',
+        },
         card: {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+      },
+      fontFamily: {
+        titulo: ['var(--font-titulo)', 'Georgia', 'serif'],
       },
       borderRadius: {
         lg: 'var(--radius)',

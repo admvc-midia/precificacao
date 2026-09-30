@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowDownRight, ArrowUpRight, Boxes, ClipboardCheck, Trash2 } from 'lucide-react';
 
+import { AjudaLink } from '@/components/ajuda-link';
 import { FormDialog } from '@/components/action-form';
 import { GroupedList, type ListColumn, type ListRow } from '@/components/data-list';
 import { StatTile } from '@/components/dre-breakdown';
@@ -227,7 +228,9 @@ export default async function EstoquePage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Estoque</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Estoque
+            <AjudaLink secao="estoque" />
+          </h1>
         <p className="text-sm text-muted-foreground">
           O saldo e a soma dos movimentos, nao um numero digitado. As entradas vem
           de{' '}

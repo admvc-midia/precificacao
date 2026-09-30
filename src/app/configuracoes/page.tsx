@@ -7,6 +7,7 @@ import {
   FormDialog,
   SubmitButton,
 } from '@/components/action-form';
+import { AjudaLink } from '@/components/ajuda-link';
 import { ChannelFields } from '@/components/forms/fields';
 import { Alert, Badge, Separator } from '@/components/ui/badge';
 import {
@@ -56,7 +57,9 @@ export default async function ConfiguracoesPage() {
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Configuracoes</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Configuracoes
+            <AjudaLink secao="configuracoes" />
+          </h1>
         <p className="text-sm text-muted-foreground">
           As variaveis globais que entram no preco de todos os produtos.
         </p>

@@ -1,5 +1,6 @@
 import { Plus, Upload } from 'lucide-react';
 
+import { AjudaLink } from '@/components/ajuda-link';
 import { ConfirmDelete, FormDialog } from '@/components/action-form';
 import { GroupedList, type ListColumn, type ListRow } from '@/components/data-list';
 import { CsvImport } from '@/components/forms/csv-import';
@@ -199,7 +200,9 @@ export default async function InsumosPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Insumos e embalagens</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Insumos e embalagens
+            <AjudaLink secao="insumos" />
+          </h1>
         <p className="text-sm text-muted-foreground">
           A base de todos os custos. O que estiver errado aqui fica errado em todas
           as fichas tecnicas.

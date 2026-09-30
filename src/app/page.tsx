@@ -7,6 +7,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 
+import { AjudaLink } from '@/components/ajuda-link';
 import { CmvBadge } from '@/components/cmv-badge';
 import { StatTile } from '@/components/dre-breakdown';
 import { Alert, Badge } from '@/components/ui/badge';
@@ -121,7 +122,9 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Painel</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Painel
+            <AjudaLink secao="painel" />
+          </h1>
         <p className="text-sm text-muted-foreground">
           Onde esta o lucro e onde esta o risco.
         </p>

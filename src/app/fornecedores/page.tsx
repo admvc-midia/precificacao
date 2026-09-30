@@ -1,5 +1,6 @@
 import { MapPin, Phone, Plus } from 'lucide-react';
 
+import { AjudaLink } from '@/components/ajuda-link';
 import { ConfirmDelete, FormDialog } from '@/components/action-form';
 import { DataList, type ListColumn, type ListRow } from '@/components/data-list';
 import { SupplierFields } from '@/components/forms/fields';
@@ -102,7 +103,9 @@ export default async function FornecedoresPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Fornecedores</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Fornecedores
+            <AjudaLink secao="fornecedores" />
+          </h1>
         <p className="text-sm text-muted-foreground">
           Agrupar insumos por fornecedor e o que permite dividir a lista de compras
           por loja.

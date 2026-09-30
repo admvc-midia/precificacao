@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowRight, Plus, Printer } from 'lucide-react';
 
+import { AjudaLink } from '@/components/ajuda-link';
 import { ActionForm, ConfirmDelete, FormDialog } from '@/components/action-form';
 import { Alert, Badge, Separator } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -117,7 +118,9 @@ export default async function FichaPage({
             Fichas tecnicas
           </Link>
           <span className="text-muted-foreground">/</span>
-          <h1 className="text-2xl font-semibold tracking-tight">{recipe.name}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{recipe.name}
+            <AjudaLink secao="fichas" />
+          </h1>
           <Badge variant={isProduct ? 'default' : 'secondary'}>
             {isProduct ? 'Produto final' : 'Preparacao base'}
           </Badge>

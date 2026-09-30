@@ -8,6 +8,7 @@ import {
   FormDialog,
   SubmitButton,
 } from '@/components/action-form';
+import { AjudaLink } from '@/components/ajuda-link';
 import { StatTile } from '@/components/dre-breakdown';
 import {
   PurchaseChecklist,
@@ -192,7 +193,9 @@ export default async function OrdemPage({
             Producao
           </Link>
           <span className="text-muted-foreground">/</span>
-          <h1 className="text-2xl font-semibold tracking-tight">{order.name}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{order.name}
+            <AjudaLink secao="producao" />
+          </h1>
           {order.dueAt ? (
             <Badge variant="secondary">{dateFmt.format(order.dueAt)}</Badge>
           ) : null}

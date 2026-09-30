@@ -168,7 +168,7 @@ Preciso de 1 kg de carne.
 
 O "mais barato por grama" custava quatro vezes mais nesta compra. Por isso há duas funções em `offers.ts`: `rankOffers` para a ficha do insumo ("quem vende mais barato") e `bestOfferForNeed` para a lista de compras ("onde é que *esta* compra fica mais barata"). A lista mostra a poupança em euros, já contando embalagens inteiras.
 
-Um fornecedor pode ser marcado como **preferido** — por qualidade, prazo ou confiança. A app respeita a escolha e diz quanto ela custa em relação ao mais barato, em vez de a discutir.
+Não há fornecedor "preferido" como campo à parte: a preferência é o próprio preço **em uso**. Pode ser de propósito o de uma loja mais cara — por qualidade, prazo ou confiança. A app respeita a escolha e mostra quanto ela custa em relação ao mais barato ("há 6% mais barato em Continente"), em vez de a trocar.
 
 **Nomes parecidos** dão aviso ao criar, não recusa: `findSimilarNames` apanha acentos, maiúsculas, um nome contido no outro e gralhas de uma ou duas letras. Recusar impediria "Tomate" e "Tomate cereja" de coexistirem, que é legítimo.
 

@@ -25,11 +25,16 @@ const badgeVariants = cva(
 );
 
 export interface BadgeProps
-  extends React.HTMLAttributes<HTMLDivElement>,
+  extends React.HTMLAttributes<HTMLSpanElement>,
     VariantProps<typeof badgeVariants> {}
 
+/**
+ * <span>, nao <div>: um selo vive dentro de uma linha de texto, muitas vezes
+ * num <p>, e um <div> dentro de <p> e HTML invalido — o browser parte o
+ * paragrafo e o React refaz a pagina toda ao hidratar.
+ */
 function Badge({ className, variant, ...props }: BadgeProps) {
-  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
+  return <span className={cn(badgeVariants({ variant }), className)} {...props} />;
 }
 
 function Separator({ className }: { className?: string }) {

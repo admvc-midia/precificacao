@@ -3,69 +3,89 @@
 @tailwind utilities;
 
 @layer base {
+  /* Paleta da Amo Brigs, tirada do logotipo e da estampa: vinho #5B1C32,
+     creme #EFE6D6 e rosa #D1AEB1. As cores de estado (verde, ambar,
+     vermelho) nao vem daqui de proposito: dizem se um numero esta bem ou mal,
+     e isso nao muda com a marca. */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
+    --background: 38 40% 92%;
+    --foreground: 340 35% 14%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    /* Cartoes e tabelas num creme mais claro que o fundo: os numeros leem-se
+       melhor, e a estampa por tras fica so a espreitar. */
+    --card: 40 50% 98%;
+    --card-foreground: 340 35% 14%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover: 40 50% 98%;
+    --popover-foreground: 340 35% 14%;
 
-    /* Laranja de brasa: a cor de uma chapa quente, nao o azul de SaaS. */
-    --primary: 22 88% 45%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 339 53% 23%;
+    --primary-foreground: 38 44% 94%;
 
-    --secondary: 30 20% 95%;
-    --secondary-foreground: 222 47% 11%;
+    --secondary: 355 28% 90%;
+    --secondary-foreground: 340 35% 14%;
 
-    --muted: 30 20% 96%;
-    --muted-foreground: 222 12% 45%;
+    --muted: 38 30% 88%;
+    --muted-foreground: 340 12% 38%;
 
-    --accent: 30 25% 94%;
-    --accent-foreground: 222 47% 11%;
+    --accent: 355 30% 88%;
+    --accent-foreground: 339 53% 23%;
 
-    --destructive: 0 72% 45%;
+    /* Um vermelho vivo, longe do vinho dos botoes normais: "apagar" nao pode
+       parecer "guardar". */
+    --destructive: 0 75% 42%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 14% 89%;
-    --input: 30 14% 86%;
-    --ring: 22 88% 45%;
+    --border: 30 20% 82%;
+    --input: 30 20% 78%;
+    --ring: 339 53% 35%;
+
+    /* A barra de cima: vinho com o logotipo em creme, nos dois temas. */
+    --brand: 339 53% 23%;
+    --brand-foreground: 38 44% 89%;
+
+    --estampa: url('/estampa.svg');
+    --estampa-opacidade: 0.13;
 
     --radius: 0.6rem;
   }
 
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --background: 222 47% 7%;
-      --foreground: 30 20% 96%;
+  /* Escolhido no menu, ou o do aparelho em automatico (ver lib/tema.ts). */
+  .dark {
+    --background: 340 40% 7%;
+    --foreground: 38 35% 90%;
 
-      --card: 222 40% 10%;
-      --card-foreground: 30 20% 96%;
+    --card: 340 32% 11%;
+    --card-foreground: 38 35% 90%;
 
-      --popover: 222 40% 10%;
-      --popover-foreground: 30 20% 96%;
+    --popover: 340 32% 11%;
+    --popover-foreground: 38 35% 90%;
 
-      --primary: 22 88% 55%;
-      --primary-foreground: 222 47% 7%;
+    /* No escuro o vinho some no fundo; quem destaca e o rosa. */
+    --primary: 355 40% 78%;
+    --primary-foreground: 340 40% 10%;
 
-      --secondary: 222 30% 16%;
-      --secondary-foreground: 30 20% 96%;
+    --secondary: 340 25% 17%;
+    --secondary-foreground: 38 35% 90%;
 
-      --muted: 222 30% 15%;
-      --muted-foreground: 222 12% 65%;
+    --muted: 340 25% 15%;
+    --muted-foreground: 355 12% 66%;
 
-      --accent: 222 30% 18%;
-      --accent-foreground: 30 20% 96%;
+    --accent: 340 28% 19%;
+    --accent-foreground: 38 35% 92%;
 
-      --destructive: 0 62% 50%;
-      --destructive-foreground: 0 0% 100%;
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 0 0% 100%;
 
-      --border: 222 25% 20%;
-      --input: 222 25% 24%;
-      --ring: 22 88% 55%;
-    }
+    --border: 340 22% 21%;
+    --input: 340 22% 25%;
+    --ring: 355 40% 70%;
+
+    --brand: 339 55% 16%;
+    --brand-foreground: 38 44% 89%;
+
+    --estampa: url('/estampa-escura.svg');
+    --estampa-opacidade: 0.5;
   }
 }
 
@@ -76,9 +96,35 @@
 
   body {
     @apply bg-background text-foreground antialiased;
+    /* Cria o contexto onde a estampa (z-index -1) fica por tras do conteudo
+       mas a frente do fundo do body. */
+    isolation: isolate;
     font-feature-settings:
       'rlig' 1,
       'calt' 1;
+  }
+
+  /* A estampa, bem apagada, fixa enquanto a pagina rola. Os cartoes sao
+     opacos e ficam lisos por cima dela.
+     O desenho original (1080x1080) nao repete certo: o SVG em public/ mostra
+     so uma janela de 972x858.8 (3 colunas x 2 filas do trelicado), medida
+     para as emendas nao se verem. Daqui o 360x318, na mesma proporcao. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: var(--estampa);
+    background-size: 360px 318px;
+    opacity: var(--estampa-opacidade);
+  }
+
+  /* Os titulos das paginas na serifada da marca; numeros e tabelas ficam na
+     letra de sistema, que tem algarismos mais legiveis. */
+  h1 {
+    font-family: var(--font-titulo), Georgia, serif;
+    font-weight: 600;
   }
 
   /* Dinheiro alinha melhor com algarismos de largura fixa. */
@@ -109,6 +155,10 @@
   /* Poupar tinta: o papel e branco e as caixas cinzentas nao ajudam a ler. */
   body {
     background: #fff;
+  }
+
+  body::before {
+    display: none;
   }
 
   /* Uma seccao nao deve partir a meio entre duas folhas. */

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, Plus } from 'lucide-react';
 
+import { AjudaLink } from '@/components/ajuda-link';
 import { ConfirmDelete, FormDialog } from '@/components/action-form';
 import { GroupedList, type ListColumn, type ListRow } from '@/components/data-list';
 import { RecipeFields } from '@/components/forms/fields';
@@ -90,7 +91,9 @@ export default async function FichasPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Fichas tecnicas</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Fichas tecnicas
+            <AjudaLink secao="fichas" />
+          </h1>
         <p className="text-sm text-muted-foreground">
           Preparacoes base entram como ingrediente dos produtos finais. O custo
           desce a arvore sozinho.

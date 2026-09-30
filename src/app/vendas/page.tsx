@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Info } from 'lucide-react';
 
+import { AjudaLink } from '@/components/ajuda-link';
 import { ActionForm, SubmitButton } from '@/components/action-form';
 import { StatTile } from '@/components/dre-breakdown';
 import { MenuMatrix, type MenuItem } from '@/components/menu-matrix';
@@ -155,7 +156,9 @@ export default async function VendasPage({
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Vendas e CMV real</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Vendas e CMV real
+            <AjudaLink secao="vendas" />
+          </h1>
           <p className="text-sm text-muted-foreground">
             O que as fichas dizem que devia custar, contra o que saiu mesmo do
             armazem.

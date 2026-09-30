@@ -45,6 +45,11 @@ export const config = {
    * Tudo menos o que o browser precisa antes de haver sessao. Sem esta
    * exclusao, a propria pagina de entrada ficaria sem estilos nem JavaScript,
    * porque os pedidos deles tambem seriam redirecionados.
+   *
+   * O logotipo e a estampa (em `public/`) tambem: a pagina de entrada mostra-os
+   * antes do login, e nao tem nada da casa.
    */
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|robots.txt).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|robots.txt|logo-|estampa).*)',
+  ],
 };
