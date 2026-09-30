@@ -119,6 +119,8 @@ export interface CostedRecipe {
   manualPrice: number | null;
   targetCmv: number | null;
   targetMargin: number | null;
+  /** Miniatura da foto no Blob (ver `fotoSrc`). */
+  photoThumbPath: string | null;
 }
 
 /**
@@ -154,6 +156,7 @@ export async function getCostedRecipes(): Promise<{
       manualPrice: row.manualPrice === null ? null : num(row.manualPrice),
       targetCmv: row.targetCmv === null ? null : num(row.targetCmv),
       targetMargin: row.targetMargin === null ? null : num(row.targetMargin),
+      photoThumbPath: row.photoThumbPath,
     };
   });
 

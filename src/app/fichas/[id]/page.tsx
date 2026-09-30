@@ -23,6 +23,8 @@ import {
   updateRecipeItem,
 } from '@/lib/actions/recipes';
 import { AllergenPanel } from '@/components/allergen-panel';
+import { FotoProduto } from '@/components/foto-produto';
+import { fotoSrc } from '@/lib/foto-url';
 import { CompositionTable } from '@/components/composition-table';
 import { QtyInput } from '@/components/ui/qty-input';
 import { RecipeFields } from '@/components/forms/fields';
@@ -272,6 +274,18 @@ export default async function FichaPage({
         </Card>
 
         <div className="space-y-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle>Foto</CardTitle>
+              <CardDescription>
+                Como o produto fica pronto. Sai tambem na ficha impressa.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FotoProduto recipeId={recipe.id} nome={recipe.name} src={fotoSrc(recipe.id, recipe.photoPath)} />
+            </CardContent>
+          </Card>
+
           {recipe.items.length > 0 ? (
             <Card>
               <CardHeader>

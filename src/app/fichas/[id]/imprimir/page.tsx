@@ -28,6 +28,7 @@ import { notFound } from 'next/navigation';
 
 import { AllergenPanel } from '@/components/allergen-panel';
 import { PrintButton } from '@/components/print-button';
+import { fotoSrc } from '@/lib/foto-url';
 import { buildCostContext } from '@/lib/mappers';
 import { currencyOf } from '@/lib/money';
 import { collectAllergens, type Allergen } from '@/lib/pricing/allergens';
@@ -76,6 +77,7 @@ export default async function ImprimirFichaPage({
   );
 
   const isProduct = recipe.kind === 'PRODUCT';
+  const foto = fotoSrc(recipe.id, recipe.photoPath);
   const rendimento = formatBaseQty(
     Number(recipe.yieldQty),
     recipe.yieldUnit,
@@ -126,16 +128,31 @@ export default async function ImprimirFichaPage({
             />
             <span className="text-xs text-muted-foreground">Ficha tecnica</span>
           </div>
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">{recipe.name}</h1>
-            {s.businessName ? (
-              <span className="text-sm text-muted-foreground">{s.businessName}</span>
+          <div className="flex items-start gap-4">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h1 className="text-2xl font-semibold tracking-tight">{recipe.name}</h1>
+                {s.businessName ? (
+                  <span className="text-sm text-muted-foreground">{s.businessName}</span>
+                ) : null}
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {isProduct ? 'Produto final' : 'Preparacao base'} · rende {rendimento}
+                {recipe.description ? ` · ${recipe.description}` : ''}
+              </p>
+            </div>
+            {/* A foto diz a cozinha como o produto fica pronto — o que a lista
+                de ingredientes nao consegue. <img> pela mesma razao da ficha
+                no ecra: a rota da foto exige sessao. */}
+            {foto ? (
+              // eslint-disable-next-line @next/next/no-img-element -- rota com sessao
+              <img
+                src={foto}
+                alt={`Foto de ${recipe.name}`}
+                className="h-32 w-44 shrink-0 rounded-md border object-cover"
+              />
             ) : null}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {isProduct ? 'Produto final' : 'Preparacao base'} · rende {rendimento}
-            {recipe.description ? ` · ${recipe.description}` : ''}
-          </p>
         </header>
 
         <section>

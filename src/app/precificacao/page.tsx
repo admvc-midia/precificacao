@@ -4,6 +4,7 @@ import { ArrowRight } from 'lucide-react';
 import { AjudaLink } from '@/components/ajuda-link';
 import { CmvBadge } from '@/components/cmv-badge';
 import { DataList, type ListColumn, type ListRow } from '@/components/data-list';
+import { Miniatura } from '@/components/miniatura';
 import { Alert } from '@/components/ui/badge';
 import { formatMoney, formatPercent } from '@/lib/money';
 import { priceForRecipe, referenceChannel } from '@/lib/pricing/sugerido';
@@ -48,7 +49,12 @@ export default async function PrecificacaoPage() {
     );
 
     const nome = (
-      <Link key="n" href={`/precificacao/${r.id}`} className="font-medium hover:underline">
+      <Link
+        key="n"
+        href={`/precificacao/${r.id}`}
+        className="flex items-center gap-3 font-medium hover:underline"
+      >
+        <Miniatura recipeId={r.id} nome={r.name} caminho={r.photoThumbPath} />
         {r.name}
       </Link>
     );

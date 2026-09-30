@@ -374,6 +374,17 @@ model Recipe {
   deliveryPackagingId String?
   deliveryPackaging   Ingredient? @relation("DeliveryPackaging", fields: [deliveryPackagingId], references: [id], onDelete: SetNull)
 
+  /// Foto do produto no Vercel Blob (store privado): o caminho, nao o URL. So
+  /// se ve atraves de `/api/fotos/<id>`, que exige sessao — um URL do store
+  /// privado nao abre sem o token.
+  ///
+  /// O caminho leva um sufixo aleatorio, e muda a cada foto nova: e isso que
+  /// deixa o browser guardar a foto em cache para sempre sem nunca mostrar a
+  /// antiga.
+  photoPath String?
+  /// A mesma foto em pequeno (320 px), para as listas.
+  photoThumbPath String?
+
   pricingMode PricingMode @default(TARGET_CMV)
   /// Preco de balcao definido a mao quando pricingMode = MANUAL.
   manualPrice Decimal?    @db.Decimal(12, 4)

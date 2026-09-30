@@ -241,6 +241,11 @@ const SECOES: Secao[] = [
           cozinha, <strong>Imprimir</strong> faz uma folha com o que leva, quanto leva e os
           alergénios — sem custos, de propósito.
         </p>
+        <p>
+          <strong>Foto:</strong> na ficha, <em>Adicionar foto</em> abre a câmara ou a galeria
+          do telemóvel. A foto é reduzida antes de enviar (fica leve) e aparece nas listas e
+          na ficha impressa. Só a vê quem entrou com a palavra-passe.
+        </p>
       </>
     ),
   },

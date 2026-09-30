@@ -8,6 +8,7 @@
 import { revalidatePath } from 'next/cache';
 
 import { prisma } from '@/lib/db';
+import { apagarFotos } from '@/lib/fotos';
 import { parseDecimal, parsePercent, parseQty } from '@/lib/money';
 import { buildCostContext } from '@/lib/mappers';
 import { computeRecipeCost } from '@/lib/pricing/cost';
@@ -85,7 +86,10 @@ export async function deleteRecipe(
       };
     }
 
-    await prisma.recipe.delete({ where: { id } });
+    const apagada = await prisma.recipe.delete({ where: { id } });
+    // Depois de apagar a ficha, e nunca antes: se o delete falhar, a foto
+    // continua a servir a ficha que ficou.
+    await apagarFotos([apagada.photoPath, apagada.photoThumbPath]);
     revalidatePath('/fichas');
     revalidatePath('/precificacao');
     revalidatePath('/');

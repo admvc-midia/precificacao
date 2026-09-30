@@ -5,6 +5,7 @@ import { AjudaLink } from '@/components/ajuda-link';
 import { ConfirmDelete, FormDialog } from '@/components/action-form';
 import { GroupedList, type ListColumn, type ListRow } from '@/components/data-list';
 import { RecipeFields } from '@/components/forms/fields';
+import { Miniatura } from '@/components/miniatura';
 import { Alert } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { deleteRecipe, saveRecipe } from '@/lib/actions/recipes';
@@ -39,7 +40,8 @@ export default async function FichasPage() {
       id: r.id,
       search: r.name,
       cells: [
-        <Link key="n" href={`/fichas/${r.id}`} className="font-medium hover:underline">
+        <Link key="n" href={`/fichas/${r.id}`} className="flex items-center gap-3 font-medium hover:underline">
+          <Miniatura recipeId={r.id} nome={r.name} caminho={r.photoThumbPath} />
           {r.name}
         </Link>,
         <span key="y" className="text-muted-foreground">
@@ -50,7 +52,8 @@ export default async function FichasPage() {
         </span>,
       ],
       title: (
-        <Link href={`/fichas/${r.id}`} className="hover:underline">
+        <Link href={`/fichas/${r.id}`} className="flex items-center gap-3 hover:underline">
+          <Miniatura recipeId={r.id} nome={r.name} caminho={r.photoThumbPath} />
           {r.name}
         </Link>
       ),

@@ -205,6 +205,19 @@ Três regras:
 
 As escritas partilhadas (`gravarPlano`, `lerEstados`, `sincronizarEmUso`) vivem em `lib/escritas.ts` e não num ficheiro `'use server'`: tudo o que esses exportam fica chamável do browser, e estas gravam sem validar.
 
+### Fotos dos produtos
+
+Cada ficha pode ter uma foto (na ficha, na lista de Fichas e Precificação, e na ficha impressa). Ficam no **Vercel Blob**, store `precificacao-blob`, que é **privado**: um URL do store não abre sem o token. Por isso a base guarda o caminho (`Recipe.photoPath`, `photoThumbPath`) e a foto chega ao browser por `/api/fotos/<id>`, que exige sessão — quem não entrou não vê as fotos, mesmo com o endereço.
+
+- **Reduzida no telemóvel antes de enviar** (`components/foto-produto.tsx`): 1600 px em JPEG, mais uma miniatura de 320 px para as listas. Uma foto de 6,8 MB chega com ~250 KB; cabe no limite das actions sem o alargar.
+- **O servidor confere os bytes**, não o que o browser diz (`tipoDaImagem`): só JPEG, PNG e WebP.
+- **Cada foto nova tem um caminho novo** (sufixo aleatório). A rota manda guardar em cache para sempre (`private, immutable`) e o `?v=` no endereço garante que nunca se vê a antiga.
+- **Nada fica órfão:** trocar grava a nova, aponta a ficha, e só depois apaga a antiga; remover e apagar a ficha apagam do Blob.
+- `<img>` e não `next/image`: o otimizador pediria a foto sem o cookie e receberia a página de entrada.
+- A **cópia semanal** descarrega as fotos para `fotos/`, só as que faltam.
+
+Configuração: `BLOB_READ_WRITE_TOKEN` no `.env` e na Vercel (ligar o store ao projeto em *Storage → Connect* cria-a sozinha). Sem ela, o resto funciona e o envio de fotos diz o que falta.
+
 ### Paginação e casas decimais
 
 As listas (`GroupedList`), a checklist de compras e o livro do Estoque paginam — 20 por secção, 15 por loja. O Estoque pagina **na base** (`getMovementsPage`, com filtros no endereço), porque o livro só cresce; as listas de cliente já têm as linhas e só escolhem quais mostrar. As contas estão em `lib/paginacao.ts`.
