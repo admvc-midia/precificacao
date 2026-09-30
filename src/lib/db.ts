@@ -6,6 +6,58 @@ import { PrismaClient } from '@prisma/client';
  */
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
+/**
+ * Avisa quando a ligacao nao serve para onde a aplicacao esta a correr.
+ *
+ * ---------------------------------------------------------------------------
+ * PORQUE ISTO EXISTE
+ * ---------------------------------------------------------------------------
+ * O Supabase tem dois poolers na mesma maquina, e so o numero da porta os
+ * distingue:
+ *
+ *   :5432  modo **sessao** — segura uma ligacao ao Postgres do principio ao
+ *          fim de cada cliente. Serve para um servidor que corre sempre, ou
+ *          para scripts. Tem um tecto baixo (15 por omissao).
+ *   :6543  modo **transacao** — devolve a ligacao ao fim de cada transacao.
+ *          E o que serve para serverless.
+ *
+ * Em serverless cada invocacao e um cliente novo. Com o pooler de sessao, meia
+ * duzia de pedidos simultaneos esgota os 15 lugares e o Postgres recusa com
+ * `EMAXCONNSESSION`. Do lado do browser isso aparece como um erro generico de
+ * render — sem nada que aponte para a porta errada numa variavel de ambiente.
+ *
+ * Nao rebenta aqui de proposito: uma aplicacao que se recusa a arrancar por
+ * causa de um aviso e pior que uma que funciona e se queixa. O aviso sai nos
+ * logs, que e onde alguem vai procurar quando isto falhar.
+ */
+function avisarSeLigacaoErrada(): void {
+  const url = process.env.DATABASE_URL;
+  if (!url || process.env.NODE_ENV !== 'production') return;
+
+  // `VERCEL` so existe la; nao ha pacote nenhum para isto.
+  const serverless = Boolean(process.env.VERCEL);
+  if (!serverless) return;
+
+  if (/pooler\.supabase\.com:5432/.test(url)) {
+    console.error(
+      '[precificaragao] DATABASE_URL usa o pooler do Supabase em modo sessao ' +
+        '(porta 5432). Em serverless isso esgota as ligacoes e as paginas ' +
+        'rebentam com um erro generico. Use a porta 6543 e acrescente ' +
+        '`pgbouncer=true&connection_limit=1`.',
+    );
+  }
+
+  if (!/[?&]schema=/.test(url)) {
+    console.error(
+      '[precificaragao] DATABASE_URL nao diz o schema. Esta base e partilhada ' +
+        'com outro projeto: sem `?schema=precificaragao` a aplicacao procura ' +
+        'as tabelas no schema `public`, onde elas nao estao.',
+    );
+  }
+}
+
+avisarSeLigacaoErrada();
+
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({

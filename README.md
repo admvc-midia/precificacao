@@ -43,7 +43,15 @@ e defina `DIRECT_URL` com a connection string sem pooler. O schema não declara 
 ### Deploy na Vercel
 
 1. Importe o repositório.
-2. Defina as variáveis de ambiente: `DATABASE_URL` (e `DIRECT_URL`, se usar migrations) e **`APP_PASSWORD`**. Sem a segunda ninguém entra, nem você — ver "A aplicação fecha por omissão" mais abaixo.
+2. Defina as variáveis de ambiente: `DATABASE_URL` e **`APP_PASSWORD`**. Sem a segunda ninguém entra, nem você — ver "A aplicação fecha por omissão" mais abaixo.
+
+   A `DATABASE_URL` de produção **não é a mesma** do seu computador. Em serverless cada pedido é um cliente novo, e o pooler do Supabase em modo sessão (porta `5432`) tem tecto de 15 ligações: meia dúzia de pedidos esgota-o e as páginas rebentam com um erro de render genérico, que não aponta para a porta nenhuma. Use o modo transação:
+
+   ```
+   postgresql://user:pass@HOST.pooler.supabase.com:6543/postgres?sslmode=require&schema=precificaragao&pgbouncer=true&connection_limit=1
+   ```
+
+   `pgbouncer=true` desliga os prepared statements, que o modo transação não suporta; `connection_limit=1` evita que cada instância abra mais do que precisa. O `schema=` não é opcional aqui — esta base é partilhada com outro projeto.
 3. O `build` já corre `prisma generate`; o `postinstall` também, para o caso do cache de dependências da Vercel.
 4. Na primeira vez, corra `npm run db:push` apontando para o banco de produção.
 
