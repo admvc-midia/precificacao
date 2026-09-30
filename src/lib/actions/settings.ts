@@ -15,6 +15,27 @@ import {
 } from './shared';
 
 
+/**
+ * Um campo **ausente** do formulario nao e um campo vazio.
+ *
+ * Todos os campos liam-se com `String(form.get(x) ?? '0')`, o que faz de um
+ * campo que nao veio um zero. Num formulario submetido pelo ecra isso nunca
+ * se nota, porque o ecra manda sempre tudo. Mas basta um pedido que traga
+ * dois campos para a configuracao inteira ir a zero — o IVA, os custos fixos,
+ * a taxa de cartao, a margem alvo e o nome da casa — sem erro nenhum, porque
+ * zero e um valor legitimo em todos eles.
+ *
+ * Aconteceu. O ecra so mostrou numeros diferentes, e os precos sugeridos
+ * passaram a ignorar impostos e custos fixos em silencio.
+ *
+ * Agora distingue-se: ausente quer dizer "este formulario nao fala deste
+ * campo, nao lhe toques"; presente e vazio continua a querer dizer zero, que
+ * e o que apagar o conteudo de uma caixa deve significar.
+ */
+function presente(form: FormData, nome: string): boolean {
+  return form.get(nome) !== null;
+}
+
 /** Percentagem entre 0 e `max`, recusando valores que so podem ser engano. */
 function rate(value: string, label: string, max = 0.95): number {
   const v = parsePercent(value);
@@ -34,8 +55,48 @@ export async function saveSettings(
     const known = SUPPORTED_CURRENCIES.find((c) => c.code === currency);
     if (!known) throw new Error('Moeda nao suportada.');
 
-    const fixedCostRate = rate(String(form.get('fixedCostRate') ?? '0'), 'Custos fixos');
-    const targetMargin = rate(String(form.get('targetMargin') ?? '0'), 'Margem alvo');
+    await prisma.settings.upsert({
+      where: { id: 'default' },
+      create: { id: 'default' },
+      update: {},
+    });
+
+    const atual = await prisma.settings.findUniqueOrThrow({ where: { id: 'default' } });
+
+    // So entra no update o que o formulario trouxe. O que ele nao trouxe fica
+    // como esta, em vez de virar zero.
+    const data: Record<string, unknown> = { currency };
+
+    if (presente(form, 'businessName')) {
+      data.businessName = String(form.get('businessName')).trim() || null;
+    }
+    // O locale acompanha a moeda: EUR -> pt-PT, BRL -> pt-BR.
+    data.locale = String(form.get('locale') ?? '') || known.locale;
+
+    if (presente(form, 'vatRate')) {
+      data.vatRate = rate(String(form.get('vatRate')), 'IVA', 0.5);
+    }
+    if (presente(form, 'vatMode')) {
+      data.vatMode = VAT_MODE.parse(String(form.get('vatMode')));
+    }
+    if (presente(form, 'cardFeeRate')) {
+      data.cardFeeRate = rate(String(form.get('cardFeeRate')), 'Taxa de cartao', 0.2);
+    }
+    if (presente(form, 'targetCmv')) {
+      data.targetCmv = rate(String(form.get('targetCmv')), 'CMV alvo');
+    }
+    if (presente(form, 'rounding')) {
+      data.rounding = ROUNDING.parse(String(form.get('rounding')));
+    }
+
+    // Estes dois validam-se um contra o outro, por isso comparam-se sempre os
+    // valores que vao ficar — venham do formulario ou do que ja estava.
+    const fixedCostRate = presente(form, 'fixedCostRate')
+      ? rate(String(form.get('fixedCostRate')), 'Custos fixos')
+      : Number(atual.fixedCostRate);
+    const targetMargin = presente(form, 'targetMargin')
+      ? rate(String(form.get('targetMargin')), 'Margem alvo')
+      : Number(atual.targetMargin);
 
     if (fixedCostRate + targetMargin >= 1) {
       throw new Error(
@@ -43,28 +104,10 @@ export async function saveSettings(
       );
     }
 
-    await prisma.settings.upsert({
-      where: { id: 'default' },
-      create: { id: 'default' },
-      update: {},
-    });
+    if (presente(form, 'fixedCostRate')) data.fixedCostRate = fixedCostRate;
+    if (presente(form, 'targetMargin')) data.targetMargin = targetMargin;
 
-    await prisma.settings.update({
-      where: { id: 'default' },
-      data: {
-        businessName: String(form.get('businessName') ?? '').trim() || null,
-        currency,
-        // O locale acompanha a moeda: EUR -> pt-PT, BRL -> pt-BR.
-        locale: String(form.get('locale') ?? '') || known.locale,
-        vatRate: rate(String(form.get('vatRate') ?? '0'), 'IVA', 0.5),
-        vatMode: VAT_MODE.parse(String(form.get('vatMode') ?? 'INCLUDED')),
-        fixedCostRate,
-        cardFeeRate: rate(String(form.get('cardFeeRate') ?? '0'), 'Taxa de cartao', 0.2),
-        targetCmv: rate(String(form.get('targetCmv') ?? '30'), 'CMV alvo'),
-        targetMargin,
-        rounding: ROUNDING.parse(String(form.get('rounding') ?? 'NONE')),
-      },
-    });
+    await prisma.settings.update({ where: { id: 'default' }, data });
 
     revalidatePath('/configuracoes');
     revalidatePath('/precificacao');

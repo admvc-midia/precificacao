@@ -25,6 +25,7 @@ import {
   Settings as SettingsIcon,
   Store,
   Tag,
+  Wallet,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -58,6 +59,7 @@ const SECUNDARIOS: Destino[] = [
   ESTOQUE,
   { href: '/vendas', label: 'Vendas e CMV real', icon: TrendingUp },
   { href: '/fornecedores', label: 'Fornecedores', icon: Store },
+  { href: '/despesas', label: 'Despesas fixas', icon: Wallet },
   { href: '/configuracoes', label: 'Configuracoes', icon: SettingsIcon },
 ];
 

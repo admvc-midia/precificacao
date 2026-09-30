@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Plus } from 'lucide-react';
 
 import {
@@ -135,7 +136,7 @@ export default async function ConfiguracoesPage() {
                 <Field
                   label="Custos fixos (%)"
                   htmlFor="fixedCostRate"
-                  hint="Renda, salarios, energia, limpeza — sobre a receita liquida."
+                  hint="Sobre a receita liquida. Escrever aqui e um palpite; em Despesas fixas sai das contas."
                 >
                   <Input
                     id="fixedCostRate"
@@ -143,6 +144,13 @@ export default async function ConfiguracoesPage() {
                     inputMode="decimal"
                     defaultValue={pct(s.fixedCostRate)}
                   />
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    Esta percentagem entra no preco de todos os produtos.{' '}
+                    <Link href="/despesas" className="text-primary hover:underline">
+                      Lance as suas contas
+                    </Link>{' '}
+                    e ela sai da divisao, em vez de ser um numero escolhido.
+                  </p>
                 </Field>
                 <Field
                   label="Taxa media de cartao (%)"
