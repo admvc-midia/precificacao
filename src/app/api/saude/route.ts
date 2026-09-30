@@ -33,7 +33,27 @@ export const dynamic = 'force-dynamic';
 /** A forma da ligacao, sem o que e segredo. */
 function ligacao(): Record<string, unknown> {
   const bruto = process.env.DATABASE_URL;
-  if (!bruto) return { definida: false };
+  if (!bruto) {
+    // A integracao com o fornecedor do banco cria estes nomes, e nao o que a
+    // aplicacao le. E a confusao mais provavel quando "esta tudo configurado"
+    // e mesmo assim nada abre.
+    const daIntegracao = [
+      'POSTGRES_PRISMA_URL',
+      'POSTGRES_URL',
+      'POSTGRES_URL_NON_POOLING',
+      'DATABASE_URL_UNPOOLED',
+    ].filter((n) => process.env[n]);
+
+    return {
+      definida: false,
+      problema: 'DATABASE_URL nao esta definida neste ambiente.',
+      variaveisDaIntegracaoPresentes: daIntegracao,
+      comoResolver:
+        daIntegracao.length > 0
+          ? 'A integracao com o fornecedor do banco criou as variaveis acima, mas esta aplicacao le DATABASE_URL — e essas nao trazem o `?schema=`, que aqui nao e opcional. Defina DATABASE_URL a mao, no ambiente de Producao, e publique outra vez.'
+          : 'Defina DATABASE_URL nas variaveis de ambiente, no ambiente de Producao, e publique outra vez — variaveis novas nao se aplicam a um deploy ja feito.',
+    };
+  }
 
   try {
     const u = new URL(bruto);

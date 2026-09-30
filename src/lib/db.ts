@@ -30,9 +30,37 @@ const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
  * causa de um aviso e pior que uma que funciona e se queixa. O aviso sai nos
  * logs, que e onde alguem vai procurar quando isto falhar.
  */
+
+/** Nomes que a integracao Vercel–Supabase/Neon cria sozinha. */
+const NOMES_DA_INTEGRACAO = [
+  'POSTGRES_PRISMA_URL',
+  'POSTGRES_URL',
+  'POSTGRES_URL_NON_POOLING',
+  'DATABASE_URL_UNPOOLED',
+];
+
 function avisarSeLigacaoErrada(): void {
   const url = process.env.DATABASE_URL;
-  if (!url || process.env.NODE_ENV !== 'production') return;
+
+  // O caso mais importante e o que faltava aqui: a variavel **ausente**. Sem
+  // ela o Prisma rebenta na primeira consulta, e em producao isso chega ao
+  // browser como um erro generico de render que nao aponta para nada.
+  if (!url) {
+    const daIntegracao = NOMES_DA_INTEGRACAO.filter((n) => process.env[n]);
+    console.error(
+      '[precificaragao] DATABASE_URL nao esta definida. Nenhuma pagina que leia ' +
+        'dados vai conseguir abrir.' +
+        (daIntegracao.length > 0
+          ? ` Existem ${daIntegracao.join(', ')}, criadas pela integracao com o ` +
+            'fornecedor do banco — mas esta aplicacao le DATABASE_URL, e essas ' +
+            'nao trazem o `?schema=`, que aqui nao e opcional porque a base e ' +
+            'partilhada. Defina DATABASE_URL a mao.'
+          : ''),
+    );
+    return;
+  }
+
+  if (process.env.NODE_ENV !== 'production') return;
 
   // `VERCEL` so existe la; nao ha pacote nenhum para isto.
   const serverless = Boolean(process.env.VERCEL);
