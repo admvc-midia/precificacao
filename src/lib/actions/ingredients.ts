@@ -160,6 +160,13 @@ export async function saveIngredient(
         );
       }
 
+      // Custo do que ja esta em casa, ao preco que se acabou de dar. Sem ele,
+      // as saidas desse saldo entravam a zero no CMV real.
+      const custoBase =
+        payload.stockBase > 0
+          ? preco.purchasePrice / toBase(preco.purchaseQty, preco.purchaseUnit)
+          : 0;
+
       await prisma.$transaction(async (tx) => {
         const criado = await tx.ingredient.create({
           data: {
@@ -168,12 +175,7 @@ export async function saveIngredient(
             purchasePrice: preco.purchasePrice,
             purchaseQty: preco.purchaseQty,
             purchaseUnit: preco.purchaseUnit,
-            // Estoque inicial com base de custo: sem ela, as saidas desse
-            // saldo entravam a zero no CMV real.
-            avgCostBase:
-              payload.stockBase > 0
-                ? preco.purchasePrice / toBase(preco.purchaseQty, preco.purchaseUnit)
-                : 0,
+            avgCostBase: custoBase,
           },
         });
 
@@ -188,6 +190,32 @@ export async function saveIngredient(
             inUse: true,
           },
         });
+
+        // O saldo declarado ao cadastrar tambem e um movimento.
+        //
+        // O saldo de um insumo e suposto ser a soma do seu livro. Editar o
+        // estoque ja escrevia o ajuste; criar com estoque nao escrevia nada, e
+        // o insumo nascia com um saldo que o livro nao explicava. Enquanto
+        // assim fosse, nao havia como reconstruir o estoque a partir dos
+        // movimentos quando alguma conta nao batesse — que e a unica rede que
+        // ha para isso.
+        //
+        // Fica como INVENTORY, e nao como PURCHASE: e uma contagem declarada,
+        // "isto e o que ja tinha", e nao uma compra que tenha acontecido nesta
+        // aplicacao. A diferenca importa no CMV real, onde uma compra e uma
+        // contagem nao significam a mesma coisa.
+        if (payload.stockBase !== 0) {
+          await tx.stockMovement.create({
+            data: {
+              ingredientId: criado.id,
+              kind: 'INVENTORY',
+              qtyBase: payload.stockBase,
+              unitCost: custoBase,
+              value: payload.stockBase * custoBase,
+              note: 'Estoque inicial, lancado ao cadastrar o insumo',
+            },
+          });
+        }
       });
     }
 
