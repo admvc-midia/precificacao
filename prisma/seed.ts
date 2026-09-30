@@ -5,7 +5,22 @@
  * numeros que aparecem na aplicacao logo apos a instalacao sejam os mesmos
  * que os testes conferem.
  *
- * Idempotente: pode correr varias vezes (usa upsert por nome).
+ * ---------------------------------------------------------------------------
+ * SO CORRE NUMA BASE VAZIA
+ * ---------------------------------------------------------------------------
+ * Chama-se a si proprio idempotente porque usa `upsert` por nome, e e verdade
+ * para os dados que ele proprio cria. Mas numa base com dados a serio nao e
+ * inofensivo:
+ *
+ *  - apaga as linhas de qualquer ficha cujo nome bata com uma das suas
+ *    ("X-Burger Artesanal", "Coxinha de Frango"...) e substitui-as pelas de
+ *    demonstracao;
+ *  - apaga as cotacoes de preco do insumo de carne;
+ *  - enche a lista de insumos, fornecedores e fichas com vinte e tal registos
+ *    de mentira, que depois ha que distinguir dos verdadeiros um a um.
+ *
+ * Por isso recusa-se a correr quando encontra dados. Quem quiser mesmo,
+ * acrescenta `--forcar` e sabe o que esta a fazer.
  */
 
 import { PrismaClient, type PurchaseUnit } from '@prisma/client';
@@ -18,7 +33,47 @@ function baseUnitOf(unit: PurchaseUnit) {
   return 'UN' as const;
 }
 
+/** Recusa-se a semear por cima de dados reais. */
+async function confirmarBaseVazia(): Promise<void> {
+  const contagem = {
+    insumos: await prisma.ingredient.count(),
+    fornecedores: await prisma.supplier.count(),
+    fichas: await prisma.recipe.count(),
+    despesas: await prisma.expense.count(),
+    'movimentos de estoque': await prisma.stockMovement.count(),
+    vendas: await prisma.salesRecord.count(),
+  };
+
+  const ocupado = Object.entries(contagem).filter(([, n]) => n > 0);
+  if (ocupado.length === 0) return;
+
+  if (process.argv.includes('--forcar')) {
+    console.warn(
+      'AVISO: a base ja tem dados e o seed vai correr na mesma, porque foi ' +
+        'pedido com --forcar.\n' +
+        '  Linhas de fichas com os nomes de demonstracao serao substituidas.',
+    );
+    return;
+  }
+
+  console.error('Esta base ja tem dados. O seed nao vai correr.\n');
+  for (const [nome, n] of ocupado) {
+    console.error(`  ${String(n).padStart(5)}  ${nome}`);
+  }
+  console.error(
+    '\nO seed serve para uma instalacao nova. Aqui ele apagaria as linhas de\n' +
+      'qualquer ficha com o nome de uma das suas, apagaria as cotacoes do\n' +
+      'insumo de carne, e juntaria vinte e tal registos de demonstracao aos\n' +
+      'seus, que depois teria de distinguir um a um.\n\n' +
+      'Para esvaziar primeiro:  npx tsx prisma/reset-dados.mts --apply\n' +
+      'Para semear mesmo assim: npx tsx prisma/seed.ts --forcar',
+  );
+  process.exit(1);
+}
+
 async function main() {
+  await confirmarBaseVazia();
+
   // -------------------------------------------------------------------------
   // Configuracoes: Portugal, IVA de restauracao incluido no preco de menu.
   // -------------------------------------------------------------------------
