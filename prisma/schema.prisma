@@ -149,6 +149,32 @@ model Settings {
   updatedAt    DateTime @updatedAt
 }
 
+/// Os catorze alergenios do Anexo II do Regulamento (UE) 1169/2011.
+///
+/// A lista e fechada e fixada por lei: nao e um campo livre nem um catalogo a
+/// crescer. Os nomes seguem o regulamento, e nao o que se diz na cozinha.
+enum Allergen {
+  /// Cereais que contem gluten: trigo, centeio, cevada, aveia, espelta, kamut.
+  GLUTEN
+  CRUSTACEOS
+  OVOS
+  PEIXES
+  AMENDOINS
+  SOJA
+  /// Leite, incluindo lactose.
+  LEITE
+  /// Frutos de casca rija: amendoas, avelas, nozes, cajus, pecans, castanhas
+  /// do Brasil, pistacios, macadamias.
+  FRUTOS_CASCA_RIJA
+  AIPO
+  MOSTARDA
+  SESAMO
+  /// Dioxido de enxofre e sulfitos acima de 10 mg/kg.
+  SULFITOS
+  TREMOCO
+  MOLUSCOS
+}
+
 /// Com que frequencia uma despesa fixa chega.
 enum ExpensePeriod {
   WEEKLY
@@ -255,6 +281,21 @@ model Ingredient {
   /// mais cara, o custo do que la estava dilui-se no novo — e e por este
   /// valor que se mede o que saiu.
   avgCostBase Decimal @default(0) @db.Decimal(12, 6)
+
+  /// Alergenios que este insumo contem, do Anexo II do Reg. (UE) 1169/2011.
+  ///
+  /// Lista vazia **nao** quer dizer "nao tem": quer dizer o mesmo que
+  /// `allergensReviewed = false` diria, se ninguem tiver olhado. Ver o campo
+  /// seguinte — a diferenca entre "nao tem" e "ninguem verificou" e a unica
+  /// coisa que interessa num aviso de alergenios.
+  allergens Allergen[]
+
+  /// Alguem ja olhou para os alergenios deste insumo.
+  ///
+  /// Sem isto, uma ficha de um produto que leva farinha e ovos mostraria
+  /// "sem alergenios" enquanto ninguem preenchesse nada — e essa e a pior
+  /// resposta possivel, porque parece informacao e e ausencia dela.
+  allergensReviewed Boolean @default(false)
 
   /// Saldo abaixo do qual a aplicacao avisa. Nulo significa "nao avisar".
   ///

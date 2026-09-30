@@ -17,6 +17,7 @@ import { baseUnitOf, fromDisplay, toBase, type PurchaseUnit } from '@/lib/units'
 import { lerPreco } from './offers';
 import { findSimilarNames } from '@/lib/pricing/offers';
 import {
+  ALLERGEN,
   CATEGORY,
   errorMessage,
   PURCHASE_UNIT,
@@ -35,6 +36,8 @@ const ingredientSchema = z.object({
     .max(10, 'Fator de correcao acima de 10 quase sempre e erro de digitacao.'),
   stockBase: z.number().min(0),
   minStockBase: z.number().min(0).nullable(),
+  allergens: z.array(ALLERGEN).optional(),
+  allergensReviewed: z.boolean().optional(),
   sku: z.string().trim().optional(),
   notes: z.string().trim().optional(),
 });
@@ -75,6 +78,14 @@ function readIngredient(form: FormData) {
     correctionFactor: readCorrectionFactor(form),
     stockBase,
     minStockBase,
+    // Um formulario que nao fala de alergenios nao lhes mexe. Sem o marcador,
+    // a ausencia das caixas seria indistinguivel de as terem desmarcado todas.
+    ...(form.get('allergensSubmitted')
+      ? {
+          allergens: form.getAll('allergens').map(String),
+          allergensReviewed: form.get('allergensReviewed') !== null,
+        }
+      : {}),
     sku: String(form.get('sku') ?? ''),
     notes: String(form.get('notes') ?? ''),
   });
@@ -97,6 +108,10 @@ export async function saveIngredient(
       correctionFactor: data.correctionFactor,
       stockBase: data.stockBase,
       minStockBase: data.minStockBase,
+      ...(data.allergens ? { allergens: data.allergens } : {}),
+      ...(data.allergensReviewed === undefined
+        ? {}
+        : { allergensReviewed: data.allergensReviewed }),
       sku: data.sku || null,
       notes: data.notes || null,
     };

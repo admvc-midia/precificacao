@@ -228,3 +228,28 @@ que o Painel começa sem o cartão: é preciso dizer-lhe primeiro o que é pouco
 
 Um bom mínimo é quanto se gasta entre duas idas às compras, mais uma folga. Se faz
 compras à segunda e gasta 4 kg de farinha por semana, ponha 5 ou 6.
+
+**Como ponho os alergénios nas fichas?**
+Em cada insumo há uma lista com os catorze do Regulamento (UE) 1169/2011, cada um
+com uma explicação do que conta. Marque os que o insumo contém e, sobretudo, marque
+**"já verifiquei este insumo"** — mesmo quando não tem nenhum.
+
+Essa caixa é o ponto todo. Sem ela, a ficha não diz "sem alergénios": diz que há
+insumos por verificar, e mostra quais. Um bolo que leva farinha e ovos a dizer "sem
+alergénios" porque ninguém preencheu nada é a pior resposta que esta app podia dar.
+
+Os alergénios das preparações base sobem sozinhos para os produtos que as usam.
+
+**Posso imprimir a ficha para afixar na cozinha?**
+Sim — botão **Imprimir** no topo da ficha. A folha leva o que a cozinha precisa: o
+que leva, quanto leva, quanto rende e os alergénios. **Custos não vão**, de propósito:
+uma ficha na parede é lida por quem passa, e as suas margens não são assunto de
+fornecedores nem de clientes.
+
+Para PDF, escolha "Guardar como PDF" no diálogo de impressão.
+
+**Isto serve como declaração legal de alergénios?**
+Não. A app junta o que você declarou em cada insumo e poupa-lhe o trabalho de
+percorrer as sub-receitas à mão. Quem responde pela declaração é quem a assina, e
+continua a ser preciso conferir os rótulos dos fornecedores. Vestígios por
+contaminação cruzada não estão aqui de todo.

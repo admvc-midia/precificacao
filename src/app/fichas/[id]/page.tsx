@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowRight, Plus } from 'lucide-react';
+import { ArrowRight, Plus, Printer } from 'lucide-react';
 
 import { ActionForm, ConfirmDelete, FormDialog } from '@/components/action-form';
 import { Alert, Badge, Separator } from '@/components/ui/badge';
@@ -21,6 +21,7 @@ import {
   saveRecipe,
   updateRecipeItem,
 } from '@/lib/actions/recipes';
+import { AllergenPanel } from '@/components/allergen-panel';
 import { CompositionTable } from '@/components/composition-table';
 import { QtyInput } from '@/components/ui/qty-input';
 import { RecipeFields } from '@/components/forms/fields';
@@ -28,9 +29,10 @@ import { IngredientForm } from '@/components/forms/ingredient-form';
 import { RecipeItemForm } from '@/components/forms/recipe-item-form';
 import { buildCostContext } from '@/lib/mappers';
 import { formatMoney } from '@/lib/money';
-import { computeRecipeCost } from '@/lib/pricing/cost';
+import { computeRecipeCost, flattenRecipe } from '@/lib/pricing/cost';
 import type { RecipeCost } from '@/lib/pricing/types';
 import { getPricingData, getRecipeDetail, getSuppliers } from '@/lib/queries';
+import { collectAllergens, type Allergen } from '@/lib/pricing/allergens';
 import {
   baseUnitOf,
   displayQtyValue,
@@ -67,6 +69,36 @@ export default async function FichaPage({
     error = err instanceof Error ? err.message : String(err);
   }
 
+  // Alergenios: juntam-se a partir das linhas ja achatadas, por isso as
+  // sub-receitas vem resolvidas — um insumo que entra por dentro de uma
+  // preparacao base conta como qualquer outro, que e o que a lei quer.
+  const porId = new Map(data.ingredientRows.map((i) => [i.id, i]));
+
+  // A mesma travessia do custo pode rebentar pelas mesmas razoes — um ciclo
+  // entre sub-receitas, uma unidade incompativel. Aqui isso nao deve derrubar
+  // a pagina: sem linhas, nao ha alergenios a mostrar, e o erro ja aparece em
+  // cima vindo do calculo do custo.
+  let achatada: ReturnType<typeof flattenRecipe> = [];
+  try {
+    achatada = flattenRecipe(id, 1, ctx);
+  } catch {
+    achatada = [];
+  }
+
+  const alergenios = collectAllergens(
+    achatada.map((l) => {
+      const ing = porId.get(l.ingredientId);
+      return {
+        ingredientId: l.ingredientId,
+        name: l.name,
+        category: l.category,
+        via: l.via,
+        allergens: (ing?.allergens ?? []) as Allergen[],
+        reviewed: ing?.allergensReviewed ?? false,
+      };
+    }),
+  );
+
   const isProduct = recipe.kind === 'PRODUCT';
   const yieldLabel = DISPLAY_UNIT_LABEL[recipe.yieldUnit];
 
@@ -89,6 +121,14 @@ export default async function FichaPage({
           <Badge variant={isProduct ? 'default' : 'secondary'}>
             {isProduct ? 'Produto final' : 'Preparacao base'}
           </Badge>
+
+          <Link
+            href={`/fichas/${id}/imprimir`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Printer className="h-4 w-4" />
+            Imprimir
+          </Link>
 
           <FormDialog
             action={saveRecipe}
@@ -212,6 +252,20 @@ export default async function FichaPage({
         </Card>
 
         <div className="space-y-6">
+          {recipe.items.length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Alergenios</CardTitle>
+                <CardDescription>
+                  Juntados a partir dos insumos, sub-receitas incluidas.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AllergenPanel report={alergenios} />
+              </CardContent>
+            </Card>
+          ) : null}
+
           {cost ? (
             <Card>
               <CardHeader>

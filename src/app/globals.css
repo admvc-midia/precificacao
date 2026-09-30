@@ -86,3 +86,33 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Papel
+ * ---------------------------------------------------------------------------
+ * A pagina de impressao da ficha ja so tem o que vai para a folha, mas o
+ * layout da aplicacao envolve-a com barra de cima, barra de baixo e rodape.
+ * Aqui tiram-se esses tres, e mais nada — esconder conteudo a mais por CSS e
+ * como a folha acaba com buracos onde estavam os elementos.
+ */
+@media print {
+  header.sticky,
+  nav.fixed,
+  body > div > footer {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  /* Poupar tinta: o papel e branco e as caixas cinzentas nao ajudam a ler. */
+  body {
+    background: #fff;
+  }
+
+  /* Uma seccao nao deve partir a meio entre duas folhas. */
+  .break-inside-avoid {
+    break-inside: avoid;
+  }
+}

@@ -35,6 +35,11 @@ import { Field, Select } from '@/components/ui/form-controls';
 import { Input, Textarea } from '@/components/ui/input';
 import { QtyInput } from '@/components/ui/qty-input';
 import { fcFromWastePercent, wastePercentFromFc } from '@/lib/pricing/cost';
+import {
+  ALLERGENS,
+  ALLERGEN_HINT,
+  ALLERGEN_LABEL,
+} from '@/lib/pricing/allergens';
 import type { PurchaseUnit } from '@/lib/units';
 
 /** Tudo em texto: e o que o formulario envia e o que o servidor interpreta. */
@@ -49,6 +54,8 @@ export interface IngredientFormValues {
   correctionFactor: string;
   stockBase: string;
   minStockBase: string;
+  allergens: string[];
+  allergensReviewed: boolean;
   notes: string;
 }
 
@@ -63,6 +70,8 @@ export const EMPTY_INGREDIENT: IngredientFormValues = {
   correctionFactor: '1',
   stockBase: '0',
   minStockBase: '',
+  allergens: [],
+  allergensReviewed: false,
   notes: '',
 };
 
@@ -386,6 +395,65 @@ export function IngredientForm({
             placeholder="—"
           />
         </Field>
+      </div>
+
+      {/* ------------------------------------------------ alergenios */}
+      <div className="rounded-md border bg-muted/40 p-3">
+        <p className="text-sm font-medium">Alergenios</p>
+        <p className="mb-3 mt-0.5 text-xs text-muted-foreground">
+          Os catorze do Anexo II do Regulamento (UE) 1169/2011. As fichas que
+          usarem este insumo passam a mostra-los.
+        </p>
+
+        {/* Sem este marcador, um formulario que nao traga a caixa e um em que
+            ela foi desmarcada chegam iguais ao servidor. */}
+        <input type="hidden" name="allergensSubmitted" value="1" />
+
+        <label className="mb-3 flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            name="allergensReviewed"
+            checked={v.allergensReviewed}
+            onChange={(e) => set('allergensReviewed', e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-input"
+          />
+          <span>
+            Ja verifiquei este insumo
+            <span className="block text-xs text-muted-foreground">
+              Sem isto, a ficha nao diz &quot;sem alergenios&quot; — diz que ha
+              insumos por verificar. E a unica diferenca que importa num aviso
+              de alergenios.
+            </span>
+          </span>
+        </label>
+
+        <div className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
+          {ALLERGENS.map((a) => (
+            <label key={a} className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="allergens"
+                value={a}
+                checked={v.allergens.includes(a)}
+                onChange={(e) =>
+                  set(
+                    'allergens',
+                    e.target.checked
+                      ? [...v.allergens, a]
+                      : v.allergens.filter((x) => x !== a),
+                  )
+                }
+                className="mt-0.5 h-4 w-4 rounded border-input"
+              />
+              <span>
+                {ALLERGEN_LABEL[a]}
+                <span className="block text-[11px] leading-snug text-muted-foreground">
+                  {ALLERGEN_HINT[a]}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
       </div>
 
       <Field label="Notas" htmlFor={id('notes')}>

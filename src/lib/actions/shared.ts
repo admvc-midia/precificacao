@@ -19,6 +19,24 @@ export interface ActionState {
 }
 
 export const PURCHASE_UNIT = z.enum(['KG', 'G', 'L', 'ML', 'UN']);
+
+/** Os catorze do Anexo II do Reg. (UE) 1169/2011. Lista fechada por lei. */
+export const ALLERGEN = z.enum([
+  'GLUTEN',
+  'CRUSTACEOS',
+  'OVOS',
+  'PEIXES',
+  'AMENDOINS',
+  'SOJA',
+  'LEITE',
+  'FRUTOS_CASCA_RIJA',
+  'AIPO',
+  'MOSTARDA',
+  'SESAMO',
+  'SULFITOS',
+  'TREMOCO',
+  'MOLUSCOS',
+]);
 export const CATEGORY = z.enum(['FOOD', 'PACKAGING']);
 export const QUOTE_SOURCE = z.enum([
   'MANUAL',
