@@ -48,6 +48,7 @@ export interface IngredientFormValues {
   purchaseUnit: PurchaseUnit;
   correctionFactor: string;
   stockBase: string;
+  minStockBase: string;
   notes: string;
 }
 
@@ -61,6 +62,7 @@ export const EMPTY_INGREDIENT: IngredientFormValues = {
   purchaseUnit: 'KG',
   correctionFactor: '1',
   stockBase: '0',
+  minStockBase: '',
   notes: '',
 };
 
@@ -370,15 +372,30 @@ export function IngredientForm({
             onChange={(e) => set('stockBase', e.target.value)}
           />
         </Field>
-        <Field label="Notas" htmlFor={id('notes')}>
-          <Textarea
-            id={id('notes')}
-            name="notes"
-            value={v.notes}
-            onChange={(e) => set('notes', e.target.value)}
+        <Field
+          label="Avisar abaixo de"
+          htmlFor={id('min')}
+          hint="Deixe vazio para nao avisar."
+        >
+          <QtyInput
+            id={id('min')}
+            name="minStockBase"
+            unitLabel={UNIDADE[fam].label}
+            value={v.minStockBase}
+            onChange={(e) => set('minStockBase', e.target.value)}
+            placeholder="—"
           />
         </Field>
       </div>
+
+      <Field label="Notas" htmlFor={id('notes')}>
+        <Textarea
+          id={id('notes')}
+          name="notes"
+          value={v.notes}
+          onChange={(e) => set('notes', e.target.value)}
+        />
+      </Field>
     </>
   );
 }

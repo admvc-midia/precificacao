@@ -200,6 +200,14 @@ model Ingredient {
   /// valor que se mede o que saiu.
   avgCostBase Decimal @default(0) @db.Decimal(12, 6)
 
+  /// Saldo abaixo do qual a aplicacao avisa. Nulo significa "nao avisar".
+  ///
+  /// Nulo e nao zero de proposito: um minimo por insumo e trabalho de quem
+  /// cadastra, e obrigar a preencher isto em todos antes de a aplicacao
+  /// servir para alguma coisa seria trocar um problema por outro. Quem quiser
+  /// o aviso define o minimo; quem nao quiser nao e incomodado.
+  minStockBase Decimal? @db.Decimal(12, 4)
+
   sku   String?
   notes String?
 

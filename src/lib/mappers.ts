@@ -112,6 +112,11 @@ export function toIngredientFormValues(row: IngredientRow) {
     correctionFactor: dec(row.correctionFactor),
     // O formulario mostra kg; a coluna guarda gramas.
     stockBase: displayQtyValue(num(row.stockBase), row.baseUnit),
+    // Nulo e campo vazio: "nao avisar". Nao e zero.
+    minStockBase:
+      row.minStockBase === null || row.minStockBase === undefined
+        ? ''
+        : displayQtyValue(num(row.minStockBase), row.baseUnit),
     notes: row.notes ?? '',
   };
 }

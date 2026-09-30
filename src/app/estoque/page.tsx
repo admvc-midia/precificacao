@@ -20,7 +20,7 @@ import { ActionForm, SubmitButton } from '@/components/action-form';
 import { countInventory, recordAdjustment, setCostBasis } from '@/lib/actions/stock';
 import { num } from '@/lib/mappers';
 import { formatMoney } from '@/lib/money';
-import { MOVEMENT_LABEL, type MovementKind } from '@/lib/pricing/stock';
+import { lowStock, MOVEMENT_LABEL, type MovementKind } from '@/lib/pricing/stock';
 import { getMovements, getSettings, getStockLines } from '@/lib/queries';
 import {
   displayUnitOf,
@@ -66,15 +66,40 @@ export default async function EstoquePage() {
   );
   const semMovimento = linhas.filter((l) => l.last === null).length;
 
+  // Quem esta a acabar. `lowStock` ja deixa de fora quem nao tem minimo
+  // definido e ordena do mais grave para o menos.
+  const aAcabar = lowStock(
+    linhas.map((l) => ({
+      ingredientId: l.row.id,
+      name: l.row.name,
+      baseUnit: l.row.baseUnit,
+      qtyBase: num(l.row.stockBase),
+      minBase: l.row.minStockBase === null ? null : num(l.row.minStockBase),
+    })),
+  );
+  const nivelPorId = new Map(aAcabar.map((l) => [l.ingredientId, l.level]));
+  // Os negativos ja tem aviso proprio; aqui conta-se o que falta comprar.
+  const paraRepor = aAcabar.filter((l) => l.level !== 'NEGATIVO');
+  const semMinimo = linhas.filter((l) => l.row.minStockBase === null).length;
+
   const build = ({ row, last }: (typeof linhas)[number]): ListRow => {
     const qty = num(row.stockBase);
     const medio = num(row.avgCostBase);
     const valor = qty * medio;
     const unidade = DISPLAY_UNIT_LABEL[row.baseUnit];
 
+    const nivel = nivelPorId.get(row.id);
+
     const saldo = (
-      <span key="s" className={qty < 0 ? 'font-medium text-destructive' : 'font-medium'}>
-        {formatBaseQty(qty, row.baseUnit, currency.locale)}
+      <span key="s" className="inline-flex items-center gap-1.5">
+        <span className={qty < 0 ? 'font-medium text-destructive' : 'font-medium'}>
+          {formatBaseQty(qty, row.baseUnit, currency.locale)}
+        </span>
+        {nivel === 'ACABOU' ? (
+          <Badge variant="destructive">acabou</Badge>
+        ) : nivel === 'BAIXO' ? (
+          <Badge variant="warning">a acabar</Badge>
+        ) : null}
       </span>
     );
 
@@ -213,7 +238,7 @@ export default async function EstoquePage() {
         </p>
       </header>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
           label="Dinheiro parado no estoque"
           value={formatMoney(valorTotal, currency)}
@@ -226,6 +251,18 @@ export default async function EstoquePage() {
           hint="Gastou mais do que tinha dado entrada"
         />
         <StatTile
+          label="A acabar"
+          value={String(paraRepor.length)}
+          tone={paraRepor.length > 0 ? 'warning' : 'good'}
+          hint={
+            paraRepor.length > 0
+              ? 'No minimo que voce definiu, ou abaixo'
+              : semMinimo === linhas.length
+                ? 'Nenhum insumo tem minimo definido'
+                : 'Nada abaixo do minimo'
+          }
+        />
+        <StatTile
           label="Sem preco registado"
           value={String(semCusto.length)}
           tone={semCusto.length > 0 ? 'warning' : 'good'}
@@ -236,6 +273,36 @@ export default async function EstoquePage() {
           }
         />
       </div>
+
+      {paraRepor.length > 0 ? (
+        <Alert tone="warning">
+          <p className="font-medium">
+            {paraRepor.length} insumo(s) no minimo ou abaixo.
+          </p>
+          <ul className="mt-1.5 space-y-0.5">
+            {paraRepor.map((l) => (
+              <li key={l.ingredientId}>
+                <strong>{l.name}</strong>: tem{' '}
+                {formatBaseQty(l.qtyBase, l.baseUnit, currency.locale)}
+                {l.minBase !== null ? (
+                  <>
+                    {' '}
+                    de {formatBaseQty(l.minBase, l.baseUnit, currency.locale)} —
+                    faltam{' '}
+                    <strong>
+                      {formatBaseQty(l.missingBase, l.baseUnit, currency.locale)}
+                    </strong>
+                  </>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs">
+            O minimo define-se em cada insumo, no campo &quot;Avisar abaixo de&quot;.
+            Sem minimo nao ha aviso.
+          </p>
+        </Alert>
+      ) : null}
 
       {semCusto.length > 0 ? (
         <Alert tone="warning">

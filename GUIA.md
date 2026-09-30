@@ -217,3 +217,14 @@ o acesso a alguém.
 Enquanto não a definir, **ninguém entra**, nem você. É de propósito: esta app tem os
 seus custos, as suas margens e os seus fornecedores, e estava publicada sem nada a
 proteger.
+
+**Como sei que um insumo está a acabar?**
+Abra o insumo e preencha **"Avisar abaixo de"** — a quantidade em que já quer ir
+comprar, não a quantidade em que já faltou. A partir daí, o insumo aparece marcado
+como *a acabar* no Estoque e num cartão no Painel.
+
+Deixe vazio nos que não quer acompanhar. Sem mínimo não há aviso nenhum, e é por isso
+que o Painel começa sem o cartão: é preciso dizer-lhe primeiro o que é pouco para si.
+
+Um bom mínimo é quanto se gasta entre duas idas às compras, mais uma folga. Se faz
+compras à segunda e gasta 4 kg de farinha por semana, ponha 5 ou 6.

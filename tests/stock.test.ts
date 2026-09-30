@@ -7,7 +7,9 @@ import {
   computeVariance,
   EMPTY_STOCK,
   inventoryAdjustment,
+  lowStock,
   replayMovements,
+  stockLevel,
   type MovementInput,
   type StockState,
 } from '@/lib/pricing/stock';
@@ -292,5 +294,66 @@ describe('plano de movimentos', () => {
     expect(finais.size).toBe(2);
     expect(finais.get('carne')!.qtyBase).toBeCloseTo(7500, 10);
     expect(finais.get('pao')!.qtyBase).toBeCloseTo(24, 10);
+  });
+});
+
+describe('alerta de estoque baixo', () => {
+  it('sem minimo definido nao ha alerta nenhum', () => {
+    expect(stockLevel(0, null)).toBe('SEM_MINIMO');
+    expect(stockLevel(5000, null)).toBe('SEM_MINIMO');
+    // Zero ou menos tratado como "ninguem definiu": e o valor que um campo
+    // vazio produz, e nao se pode confundir com um minimo a serio.
+    expect(stockLevel(0, 0)).toBe('SEM_MINIMO');
+  });
+
+  it('separa acabou de baixo', () => {
+    expect(stockLevel(0, 500)).toBe('ACABOU');
+    expect(stockLevel(300, 500)).toBe('BAIXO');
+    expect(stockLevel(900, 500)).toBe('OK');
+  });
+
+  it('estar exatamente no minimo ja pede reposicao', () => {
+    // O minimo e o ponto em que se compra, nao o ponto em que ja faltou.
+    expect(stockLevel(500, 500)).toBe('BAIXO');
+    expect(stockLevel(500.01, 500)).toBe('OK');
+  });
+
+  it('saldo negativo vem antes de tudo, mesmo sem minimo', () => {
+    // Nao e falta de compras: e producao registada sem a entrada.
+    expect(stockLevel(-200, null)).toBe('NEGATIVO');
+    expect(stockLevel(-200, 500)).toBe('NEGATIVO');
+  });
+
+  it('ordena do mais grave para o menos', () => {
+    const linhas = [
+      { ingredientId: 'a', name: 'Farinha', baseUnit: 'G' as const, qtyBase: 400, minBase: 500 },
+      { ingredientId: 'b', name: 'Nata', baseUnit: 'G' as const, qtyBase: -100, minBase: 200 },
+      { ingredientId: 'c', name: 'Acucar', baseUnit: 'G' as const, qtyBase: 0, minBase: 1000 },
+      { ingredientId: 'd', name: 'Sal', baseUnit: 'G' as const, qtyBase: 9000, minBase: 500 },
+      { ingredientId: 'e', name: 'Oleo', baseUnit: 'G' as const, qtyBase: 10, minBase: null },
+    ];
+    // Sal esta OK e Oleo nao tem minimo: nenhum dos dois aparece.
+    expect(lowStock(linhas).map((l) => l.name)).toEqual(['Nata', 'Acucar', 'Farinha']);
+  });
+
+  it('ordena pela fracao do minimo, nao pela quantidade em falta', () => {
+    // Faltam 400 g de fermento, de que se usa pouco, contra 400 g de farinha,
+    // de que ha sacos. O fermento esta mais perto de parar a producao.
+    const linhas = [
+      { ingredientId: 'f', name: 'Farinha', baseUnit: 'G' as const, qtyBase: 4600, minBase: 5000 },
+      { ingredientId: 'g', name: 'Fermento', baseUnit: 'G' as const, qtyBase: 100, minBase: 500 },
+    ];
+    const r = lowStock(linhas);
+    expect(r.map((l) => l.name)).toEqual(['Fermento', 'Farinha']);
+    expect(r[0].missingBase).toBeCloseTo(400, 10);
+    expect(r[1].missingBase).toBeCloseTo(400, 10);
+  });
+
+  it('nao inventa falta onde nao ha minimo', () => {
+    const [linha] = lowStock([
+      { ingredientId: 'h', name: 'X', baseUnit: 'G' as const, qtyBase: -5, minBase: null },
+    ]);
+    expect(linha.level).toBe('NEGATIVO');
+    expect(linha.missingBase).toBe(0);
   });
 });

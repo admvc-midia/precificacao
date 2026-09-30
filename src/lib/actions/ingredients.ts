@@ -34,6 +34,7 @@ const ingredientSchema = z.object({
     .min(1, 'O fator de correcao nao pode ser menor que 1.')
     .max(10, 'Fator de correcao acima de 10 quase sempre e erro de digitacao.'),
   stockBase: z.number().min(0),
+  minStockBase: z.number().min(0).nullable(),
   sku: z.string().trim().optional(),
   notes: z.string().trim().optional(),
 });
@@ -62,6 +63,10 @@ function readIngredient(form: FormData) {
     base,
   );
 
+  // Campo vazio significa "nao avisar", e e diferente de um minimo de zero.
+  const minBruto = String(form.get('minStockBase') ?? '').trim();
+  const minStockBase = minBruto ? fromDisplay(parseQty(minBruto), base) : null;
+
   return ingredientSchema.parse({
     name: String(form.get('name') ?? ''),
     category: String(form.get('category') ?? 'FOOD'),
@@ -69,6 +74,7 @@ function readIngredient(form: FormData) {
     purchaseUnit,
     correctionFactor: readCorrectionFactor(form),
     stockBase,
+    minStockBase,
     sku: String(form.get('sku') ?? ''),
     notes: String(form.get('notes') ?? ''),
   });
@@ -90,6 +96,7 @@ export async function saveIngredient(
       baseUnit: baseUnitOf(data.purchaseUnit as PurchaseUnit),
       correctionFactor: data.correctionFactor,
       stockBase: data.stockBase,
+      minStockBase: data.minStockBase,
       sku: data.sku || null,
       notes: data.notes || null,
     };

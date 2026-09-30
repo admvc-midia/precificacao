@@ -1,5 +1,11 @@
 import Link from 'next/link';
-import { AlertTriangle, ArrowRight, TrendingDown, TrendingUp } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  PackageOpen,
+  TrendingDown,
+  TrendingUp,
+} from 'lucide-react';
 
 import { CmvBadge } from '@/components/cmv-badge';
 import { StatTile } from '@/components/dre-breakdown';
@@ -31,12 +37,35 @@ import {
 } from '@/lib/pricing/price';
 import type { PriceResult } from '@/lib/pricing/types';
 import { getCostedRecipes } from '@/lib/queries';
-import { toBase } from '@/lib/units';
+import { lowStock } from '@/lib/pricing/stock';
+import { formatBaseQty, toBase } from '@/lib/units';
 
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
   const { recipes, settings, currency, channels } = await getCostedRecipes();
+
+  // O que esta a acabar. Uma consulta so, e so o que precisa de ser lido.
+  const aAcabar = lowStock(
+    (
+      await prisma.ingredient.findMany({
+        where: { minStockBase: { not: null } },
+        select: {
+          id: true,
+          name: true,
+          baseUnit: true,
+          stockBase: true,
+          minStockBase: true,
+        },
+      })
+    ).map((i) => ({
+      ingredientId: i.id,
+      name: i.name,
+      baseUnit: i.baseUnit,
+      qtyBase: num(i.stockBase),
+      minBase: i.minStockBase === null ? null : num(i.minStockBase),
+    })),
+  );
   const reference = channels.find((c) => c.kind === 'COUNTER') ?? channels[0];
   const products = recipes.filter((r) => r.kind === 'PRODUCT');
 
@@ -120,6 +149,60 @@ export default async function DashboardPage() {
           hint="Prejuizo ou CMV acima de 40%"
         />
       </div>
+
+      {aAcabar.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <PackageOpen className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              A acabar no armazem
+            </CardTitle>
+            <CardDescription>
+              No minimo que voce definiu, ou abaixo. Quem nao tem minimo definido
+              nao aparece aqui.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {aAcabar.slice(0, 8).map((l) => (
+              <div
+                key={l.ingredientId}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm"
+              >
+                <span className="min-w-0 truncate font-medium">{l.name}</span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <span className="tabular-nums text-muted-foreground">
+                    {formatBaseQty(l.qtyBase, l.baseUnit, currency.locale)}
+                    {l.minBase !== null ? (
+                      <> de {formatBaseQty(l.minBase, l.baseUnit, currency.locale)}</>
+                    ) : null}
+                  </span>
+                  <Badge
+                    variant={l.level === 'BAIXO' ? 'warning' : 'destructive'}
+                  >
+                    {l.level === 'BAIXO'
+                      ? 'a acabar'
+                      : l.level === 'ACABOU'
+                        ? 'acabou'
+                        : 'negativo'}
+                  </Badge>
+                </span>
+              </div>
+            ))}
+            {aAcabar.length > 8 ? (
+              <p className="text-xs text-muted-foreground">
+                e mais {aAcabar.length - 8}.
+              </p>
+            ) : null}
+            <Link
+              href="/estoque"
+              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+            >
+              Ver o estoque
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {alerts.length > 0 ? (
         <Card>

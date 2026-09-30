@@ -310,3 +310,96 @@ export interface StockLine {
 export function stockValue(lines: StockLine[]): number {
   return lines.reduce((acc, l) => acc + l.value, 0);
 }
+
+// ---------------------------------------------------------------------------
+// Alerta de estoque baixo
+// ---------------------------------------------------------------------------
+
+/**
+ * Em que estado esta o saldo de um insumo face ao minimo que se quer ter.
+ *
+ * `SEM_MINIMO` nao e um alerta: e a ausencia de um. Um minimo por insumo e
+ * trabalho de quem cadastra, e obrigar a preencher onze campos antes de a
+ * aplicacao servir para alguma coisa seria trocar um problema por outro.
+ * Enquanto ninguem definir o minimo, o insumo nao se queixa.
+ *
+ * `ACABOU` e separado de `BAIXO` porque sao decisoes diferentes: um entra na
+ * lista de compras desta semana, o outro ja parou a producao.
+ */
+export type StockLevel = 'NEGATIVO' | 'ACABOU' | 'BAIXO' | 'OK' | 'SEM_MINIMO';
+
+export function stockLevel(qtyBase: number, minBase: number | null): StockLevel {
+  // Um saldo negativo e um erro de registo, nao uma falta de compras: produziu-se
+  // sem dar entrada. Vem antes de tudo, mesmo sem minimo definido, porque ha
+  // sempre o que corrigir.
+  if (qtyBase < 0) return 'NEGATIVO';
+  if (minBase === null || !Number.isFinite(minBase) || minBase <= 0) {
+    return 'SEM_MINIMO';
+  }
+  if (qtyBase <= 0) return 'ACABOU';
+  // `<=` e nao `<`: o minimo e o ponto em que se compra, nao o ponto em que
+  // ja faltou. Estar exatamente no minimo ja e motivo para repor.
+  return qtyBase <= minBase ? 'BAIXO' : 'OK';
+}
+
+/** Se este estado deve aparecer como aviso. */
+export function isAlert(level: StockLevel): boolean {
+  return level === 'NEGATIVO' || level === 'ACABOU' || level === 'BAIXO';
+}
+
+export interface LowStockLine {
+  ingredientId: string;
+  name: string;
+  baseUnit: BaseUnit;
+  qtyBase: number;
+  minBase: number | null;
+  level: StockLevel;
+  /** Quanto falta para voltar ao minimo. Zero quando nao ha minimo. */
+  missingBase: number;
+}
+
+/**
+ * Os insumos que pedem atencao, do mais grave para o menos.
+ *
+ * A ordem dentro de cada gravidade e pela **fracao** do minimo que resta, e
+ * nao pela quantidade em falta: faltar meio quilo de fermento, de que se usa
+ * pouco, e mais urgente que faltar meio quilo de farinha, de que ha sacos.
+ */
+export function lowStock(
+  linhas: Array<{
+    ingredientId: string;
+    name: string;
+    baseUnit: BaseUnit;
+    qtyBase: number;
+    minBase: number | null;
+  }>,
+): LowStockLine[] {
+  const ordem: Record<StockLevel, number> = {
+    NEGATIVO: 0,
+    ACABOU: 1,
+    BAIXO: 2,
+    OK: 3,
+    SEM_MINIMO: 4,
+  };
+
+  return linhas
+    .map((l) => {
+      const level = stockLevel(l.qtyBase, l.minBase);
+      const min = l.minBase ?? 0;
+      return {
+        ...l,
+        level,
+        missingBase: min > 0 ? Math.max(0, min - l.qtyBase) : 0,
+      };
+    })
+    .filter((l) => isAlert(l.level))
+    .sort((a, b) => {
+      const porGravidade = ordem[a.level] - ordem[b.level];
+      if (porGravidade !== 0) return porGravidade;
+
+      const fa = a.minBase && a.minBase > 0 ? a.qtyBase / a.minBase : 0;
+      const fb = b.minBase && b.minBase > 0 ? b.qtyBase / b.minBase : 0;
+      if (fa !== fb) return fa - fb;
+      return a.name.localeCompare(b.name, 'pt');
+    });
+}
