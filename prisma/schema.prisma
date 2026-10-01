@@ -664,6 +664,10 @@ model ShoppingList {
   /// lista fechada ja nao se edita — corrigir e com um ajuste no Estoque.
   closedAt DateTime?
 
+  /// Ordens de producao ja juntadas a esta lista. Juntar a mesma duas vezes
+  /// somava tudo a dobrar sem nada a avisar.
+  orderIds String[] @default([])
+
   items ShoppingItem[]
 
   createdAt DateTime @default(now())

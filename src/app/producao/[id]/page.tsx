@@ -133,9 +133,8 @@ export default async function OrdemPage({
       items: group.lines.map((l) => ({
         id: l.ingredient.id,
         name: l.ingredient.name,
-        buy: `${l.packsToBuy}x ${num(l.ingredient.purchaseQty)} ${
-          UNIT_LABEL[l.ingredient.purchaseUnit]
-        }`,
+        // Como na aba Compras: "2× 0,395 kg", com virgula e na unidade de exibicao.
+        buy: `${l.packsToBuy}× ${formatBaseQty(l.packSizeBase, l.baseUnit, currency)}`,
         cost: formatMoney(l.cost, currency),
         costValue: l.cost,
         detail: [

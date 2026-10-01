@@ -202,6 +202,7 @@ Três regras:
 - **Riscar não mexe no estoque; só fechar.** `closeShoppingList` dá entrada do que foi riscado ao preço **pago** (é isso que acerta o custo médio), com a mesma guarda atómica do *Recebi esta compra*: dois telemóveis a fechar ao mesmo tempo entram uma vez.
 - **O preço pago fica registado para a loja**, mas só passa a ser o **em uso** se o comprador marcar "usar daqui para a frente", se o insumo não tinha nenhum, ou se é da própria loja do preço em uso (a loja mudou o preço — é a realidade). Um preço mais barato noutra loja não muda o custo das fichas sem ninguém decidir.
 - Uma lista que veio de uma ordem dá entrada por aqui **ou** pelo *Recebi esta compra* da ordem — não pelos dois.
+- **Uma linha por insumo.** Juntar o que já está por comprar (ou "não havia") soma a essa linha; "achei mais barato" corrige-a (preço, loja, embalagem, quantidade); "de uma produção" soma ao que lá está, e a mesma ordem só entra uma vez (`ShoppingList.orderIds`, com guarda atómica). A exceção é o que já está no carrinho: precisar de mais é uma linha nova, para não misturar o apanhado com o que falta.
 
 As escritas partilhadas (`gravarPlano`, `lerEstados`, `sincronizarEmUso`) vivem em `lib/escritas.ts` e não num ficheiro `'use server'`: tudo o que esses exportam fica chamável do browser, e estas gravam sem validar.
 

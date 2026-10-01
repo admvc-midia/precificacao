@@ -3,9 +3,10 @@
 /**
  * A lista de compras do comprador, dentro do supermercado.
  *
- * Como a checklist da producao, e para usar de pe, com uma mao: a linha
- * inteira e o alvo de toque, o riscado esvanece mas nao some, e o topo diz
- * sempre quanto falta. A diferenca e que aqui cada toque vai ao servidor —
+ * Como a checklist da producao, e para usar de pe, com uma mao: uma lista
+ * so, sem grupos por loja, uma linha por item (ver `LinhaCompra`). O circulo
+ * risca; a linha abre loja, preco e botoes. O riscado desce para "No
+ * carrinho", fechado, e o topo diz sempre quanto falta. A diferenca e que aqui cada toque vai ao servidor —
  * a lista e partilhada (o dono ve o progresso), e e ela que da entrada no
  * estoque ao fechar. O toque responde logo (`useOptimistic`); se o servidor
  * recusar, a linha volta ao que era e a mensagem aparece.
@@ -20,9 +21,9 @@ import { useActionState, useMemo, useOptimistic, useState, useTransition } from 
 import {
   AlertTriangle,
   BellRing,
-  Check,
   ClipboardList,
   PackageCheck,
+  Pencil,
   Plus,
   Search,
   Store,
@@ -32,6 +33,7 @@ import {
 } from 'lucide-react';
 
 import { ActionForm, ConfirmDelete, FormDialog, SubmitButton } from '@/components/action-form';
+import { LinhaCompra, SecaoFechada } from '@/components/compras/linha-compra';
 import { Paginacao } from '@/components/paginacao';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -121,7 +123,11 @@ export interface OrdemAberta {
 
 // ---------------------------------------------------------------------------
 
-const ITENS_POR_LOJA = 15;
+/** Os botoes do detalhe de um item: compactos, para caberem os tres numa fila. */
+const BOTAO_DETALHE = 'h-8 gap-1 px-2 text-xs text-muted-foreground';
+
+/** Por comprar, por pagina. */
+const POR_PAGINA = 20;
 const SEM_LOJA = 'Sem loja definida';
 
 /** Numero para dentro de um campo: virgula, sem milhares, sem zeros a mais. */
@@ -169,7 +175,12 @@ export function ListaViva({
   );
   const [, startTransition] = useTransition();
   const [erro, setErro] = useState<string | null>(null);
+  // Lista vazia: as ferramentas de juntar ja abertas, que e o que ha a fazer.
+  const [juntar, setJuntar] = useState(itens.length === 0 && aberta);
   const [painel, setPainel] = useState(itens.length === 0 && aberta);
+  // Um detalhe aberto de cada vez: a lista nao cresce sem se dar por isso.
+  const [aberto, setAberto] = useState<string | null>(null);
+  const [pedida, setPedida] = useState(1);
 
   function mudarEstado(id: string, status: Estado) {
     setErro(null);
@@ -183,64 +194,70 @@ export function ListaViva({
     });
   }
 
-  const contam = otimista.filter((i) => i.status !== 'MISSING');
+  // O que falta fica no topo; o que esta no carrinho e o que nao havia descem
+  // para secoes fechadas. Nao se rola por cima do que ja esta resolvido.
+  const porComprar = otimista.filter((i) => i.status === 'PENDING');
   const comprados = otimista.filter((i) => i.status === 'BOUGHT');
-  const previsto = contam.reduce((a, i) => a + i.packs * i.price, 0);
+  const naoHavia = otimista.filter((i) => i.status === 'MISSING');
+  const contam = porComprar.length + comprados.length;
+  const previsto = [...porComprar, ...comprados].reduce((a, i) => a + i.packs * i.price, 0);
   const noCarrinho = comprados.reduce((a, i) => a + i.packs * i.price, 0);
-  const porComprar = otimista.filter((i) => i.status === 'PENDING').length;
-  const naoHavia = otimista.length - contam.length;
 
-  // Por loja, na ordem alfabetica; "sem loja" no fim.
-  const grupos = useMemo(() => {
-    const m = new Map<string, { id: string; nome: string; itens: ItemLista[] }>();
-    for (const i of otimista) {
-      const k = i.supplierId ?? 'sem';
-      if (!m.has(k)) m.set(k, { id: k, nome: i.supplierName ?? SEM_LOJA, itens: [] });
-      m.get(k)!.itens.push(i);
-    }
-    return [...m.values()].sort((a, b) =>
-      a.id === 'sem' ? 1 : b.id === 'sem' ? -1 : a.nome.localeCompare(b.nome),
-    );
-  }, [otimista]);
+  const p = pagina(porComprar.length, POR_PAGINA, pedida);
+
+  // A linha por resolver de cada insumo: o painel avisa que juntar vai somar
+  // ou corrigir essa linha, em vez de criar outra (ver addShoppingItem).
+  const naLista = new Map<string, ItemLista>();
+  for (const i of [...porComprar, ...naoHavia]) if (!naLista.has(i.ingredientId)) naLista.set(i.ingredientId, i);
+
+  const linha = (i: ItemLista) => (
+    <LinhaItem
+      key={i.id}
+      item={i}
+      aberta={aberta}
+      lojas={lojas}
+      currency={currency}
+      onEstado={mudarEstado}
+      aberto={aberto === i.id}
+      onAbrir={() => setAberto((a) => (a === i.id ? null : i.id))}
+    />
+  );
 
   return (
-    <div className="space-y-4">
-      {/* Progresso: colado ao topo, e o que se consulta a meio da volta. */}
-      <div className="sticky top-14 z-10 rounded-lg border bg-background/95 p-3 backdrop-blur">
+    <div className="space-y-3">
+      {/* Uma linha de progresso, colada ao topo: e o que se consulta a meio. */}
+      <div className="sticky top-14 z-10 rounded-lg border bg-background/95 px-3 py-2 backdrop-blur">
         <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-medium">
-              {comprados.length} de {contam.length} no carrinho
-              {naoHavia > 0 ? (
-                <span className="font-normal text-muted-foreground"> · {naoHavia} nao havia</span>
-              ) : null}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              no carrinho <strong className="tabular-nums">{formatMoney(noCarrinho, currency)}</strong>{' '}
-              de {formatMoney(previsto, currency)} previstos
-            </p>
-          </div>
+          <p className="min-w-0 text-sm">
+            <strong className="tabular-nums">
+              {comprados.length} de {contam}
+            </strong>{' '}
+            <span className="text-muted-foreground">
+              · <span className="tabular-nums">{formatMoney(noCarrinho, currency)}</span> de{' '}
+              <span className="tabular-nums">{formatMoney(previsto, currency)}</span>
+            </span>
+          </p>
           {aberta ? (
             <FecharCompra
               listId={listId}
               comprados={comprados.length}
               total={formatMoney(noCarrinho, currency)}
-              porComprar={porComprar}
-              naoHavia={naoHavia}
+              porComprar={porComprar.length}
+              naoHavia={naoHavia.length}
             />
           ) : null}
         </div>
         <div
-          className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"
+          className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted"
           role="progressbar"
           aria-valuenow={comprados.length}
           aria-valuemin={0}
-          aria-valuemax={contam.length}
+          aria-valuemax={contam}
           aria-label="Itens no carrinho"
         >
           <div
             className="h-full rounded-full bg-primary transition-all"
-            style={{ width: `${contam.length ? (comprados.length / contam.length) * 100 : 0}%` }}
+            style={{ width: `${contam ? (comprados.length / contam) * 100 : 0}%` }}
           />
         </div>
       </div>
@@ -252,29 +269,49 @@ export function ListaViva({
       ) : null}
 
       {aberta ? (
-        <div className="flex flex-wrap gap-2">
+        <div className="space-y-2">
           <Button
             type="button"
-            variant={painel ? 'secondary' : 'default'}
-            onClick={() => setPainel((v) => !v)}
-            aria-expanded={painel}
+            variant={juntar ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() => setJuntar((v) => !v)}
+            aria-expanded={juntar}
           >
-            {painel ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {painel ? 'Fechar painel' : 'Juntar insumo / achei mais barato'}
+            {juntar ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            Juntar
           </Button>
-          <ActionForm action={addBelowMinimum} className="space-y-2">
-            <input type="hidden" name="listId" value={listId} />
-            <SubmitButton variant="outline" pendingLabel="A juntar…">
-              <BellRing className="h-4 w-4" />
-              Juntar o que esta abaixo do minimo
-            </SubmitButton>
-          </ActionForm>
-          {ordens.length > 0 ? <DeUmaProducao listId={listId} ordens={ordens} /> : null}
+          {juntar ? (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={painel ? 'secondary' : 'default'}
+                onClick={() => setPainel((v) => !v)}
+                aria-expanded={painel}
+              >
+                <Search className="h-4 w-4" />
+                Procurar insumo / achei mais barato
+              </Button>
+              <ActionForm action={addBelowMinimum} className="space-y-2">
+                <input type="hidden" name="listId" value={listId} />
+                <SubmitButton size="sm" variant="outline" pendingLabel="A juntar…">
+                  <BellRing className="h-4 w-4" />
+                  Abaixo do minimo
+                </SubmitButton>
+              </ActionForm>
+              {ordens.length > 0 ? <DeUmaProducao listId={listId} ordens={ordens} /> : null}
+            </div>
+          ) : null}
+          {juntar && painel ? (
+            <PainelAdicionar
+              listId={listId}
+              catalogo={catalogo}
+              lojas={lojas}
+              currency={currency}
+              naLista={naLista}
+            />
+          ) : null}
         </div>
-      ) : null}
-
-      {aberta && painel ? (
-        <PainelAdicionar listId={listId} catalogo={catalogo} lojas={lojas} currency={currency} />
       ) : null}
 
       {otimista.length === 0 ? (
@@ -282,83 +319,40 @@ export function ListaViva({
           Lista vazia. Junte insumos com o botao acima.
         </p>
       ) : (
-        grupos.map((g) => (
-          <GrupoLoja
-            key={g.id}
-            nome={g.nome}
-            itens={g.itens}
-            aberta={aberta}
-            lojas={lojas}
-            currency={currency}
-            onEstado={mudarEstado}
-          />
-        ))
+        <>
+          {porComprar.length > 0 ? (
+            <section className="rounded-lg border bg-card" aria-label="Por comprar">
+              <ul className="divide-y">{porComprar.slice(p.inicio, p.fim).map(linha)}</ul>
+              <Paginacao p={p} onChange={setPedida} className="border-t px-4 py-2" />
+            </section>
+          ) : aberta ? (
+            <p className="rounded-lg border bg-card px-4 py-3 text-center text-sm text-muted-foreground">
+              Tudo no carrinho. Falta so <strong>Fechar compra</strong>.
+            </p>
+          ) : null}
+          <SecaoFechada titulo={aberta ? 'No carrinho' : 'Comprado'} n={comprados.length}>
+            {comprados.map(linha)}
+          </SecaoFechada>
+          <SecaoFechada titulo="Nao havia" n={naoHavia.length}>
+            {naoHavia.map(linha)}
+          </SecaoFechada>
+        </>
       )}
 
-      {!aberta ? null : (
+      {aberta ? (
         <p className="text-xs text-muted-foreground">
-          Riscar nao mexe no estoque: so <strong>Fechar compra</strong> da entrada, ao preco
-          pago. Lista: {listName}.
+          Toque no circulo para riscar e na linha para ver loja e preco. Riscar nao mexe
+          no estoque: so <strong>Fechar compra</strong> da entrada, ao preco pago. Lista:{' '}
+          {listName}.
         </p>
-      )}
+      ) : null}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Uma loja
+// Um item
 // ---------------------------------------------------------------------------
-
-function GrupoLoja({
-  nome,
-  itens,
-  aberta,
-  lojas,
-  currency,
-  onEstado,
-}: {
-  nome: string;
-  itens: ItemLista[];
-  aberta: boolean;
-  lojas: Loja[];
-  currency: CurrencyConfig;
-  onEstado: (id: string, status: Estado) => void;
-}) {
-  const [pedida, setPedida] = useState(1);
-  const p = pagina(itens.length, ITENS_POR_LOJA, pedida);
-  const total = itens
-    .filter((i) => i.status !== 'MISSING')
-    .reduce((a, i) => a + i.packs * i.price, 0);
-  const porFazer = itens.filter((i) => i.status === 'PENDING').length;
-
-  return (
-    <section className="overflow-hidden rounded-lg border bg-card">
-      <div className="flex items-center justify-between gap-2 border-b bg-muted/40 px-4 py-3">
-        <p className="flex min-w-0 items-center gap-2 font-medium">
-          <Store className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-          <span className="truncate">{nome}</span>
-          {porFazer === 0 ? (
-            <Check className="h-4 w-4 shrink-0 text-emerald-600" aria-label="loja completa" />
-          ) : null}
-        </p>
-        <span className="shrink-0 font-medium tabular-nums">{formatMoney(total, currency)}</span>
-      </div>
-      <ul className="divide-y">
-        {itens.slice(p.inicio, p.fim).map((i) => (
-          <LinhaItem
-            key={i.id}
-            item={i}
-            aberta={aberta}
-            lojas={lojas}
-            currency={currency}
-            onEstado={onEstado}
-          />
-        ))}
-      </ul>
-      <Paginacao p={p} onChange={setPedida} className="border-t px-4 py-2" />
-    </section>
-  );
-}
 
 function TextoDiferenca({ c }: { c: Comparacao | null }) {
   if (!c || c.diferenca === null || c.veredicto === 'igual') return null;
@@ -380,12 +374,16 @@ function LinhaItem({
   lojas,
   currency,
   onEstado,
+  aberto,
+  onAbrir,
 }: {
   item: ItemLista;
   aberta: boolean;
   lojas: Loja[];
   currency: CurrencyConfig;
   onEstado: (id: string, status: Estado) => void;
+  aberto: boolean;
+  onAbrir: () => void;
 }) {
   const feito = item.status === 'BOUGHT';
   const faltou = item.status === 'MISSING';
@@ -397,76 +395,64 @@ function LinhaItem({
   );
   const embalagem = formatBaseQty(fromDisplay(item.packQtyDisplay, item.baseUnit), item.baseUnit, currency);
 
-  const conteudo = (
-    <div className="min-w-0 flex-1">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <span className={cn('font-medium', (feito || faltou) && 'text-muted-foreground line-through')}>
-          {item.name}
-        </span>
-        <span className={cn('shrink-0 tabular-nums', feito || faltou ? 'text-muted-foreground' : 'font-medium')}>
-          {formatMoney(item.packs * item.price, currency)}
-        </span>
-      </div>
-      <p className="mt-0.5 text-sm">
-        {campo(item.packs)}× {embalagem}{' '}
-        <span className="text-muted-foreground">
-          a {formatMoney(item.price, currency)}
-          {perBase !== null ? ` · ${formatCostPerUnit(perBase, item.baseUnit, currency)}` : ''}
-        </span>
-      </p>
-      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-        {faltou ? <Badge variant="secondary">Nao havia</Badge> : null}
-        <TextoDiferenca c={comp} />
-        {item.useAsCurrent ? <Badge variant="secondary">vai passar a preco em uso</Badge> : null}
-        {item.note ? <span>{item.note}</span> : null}
-      </div>
-    </div>
-  );
-
-  if (!aberta) {
-    return (
-      <li className={cn('flex items-start gap-3 px-4 py-3', !feito && 'opacity-60')}>
-        {feito ? (
-          <PackageCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-label="comprado" />
-        ) : (
-          <X className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-label="nao comprado" />
-        )}
-        {conteudo}
-      </li>
-    );
-  }
-
   return (
-    <li className={cn('flex items-start gap-1 pr-2', (feito || faltou) && 'bg-muted/30')}>
-      {/* A linha inteira risca — um quadradinho de 16px nao se acerta com o
-          polegar a andar. Tocar num "nao havia" mete-o no carrinho: afinal havia. */}
-      <label className="flex min-h-16 flex-1 cursor-pointer items-start gap-3 py-3 pl-4 transition-colors hover:bg-accent/40">
-        <input
-          type="checkbox"
-          checked={feito}
-          onChange={() => onEstado(item.id, feito ? 'PENDING' : 'BOUGHT')}
-          className="mt-0.5 h-5 w-5 shrink-0 rounded border-input accent-primary"
-          aria-label={`${item.name}: ${feito ? 'no carrinho' : 'por comprar'}`}
-        />
-        {conteudo}
-      </label>
-      <div className="flex shrink-0 flex-col items-center py-2">
-        <EditarItem item={item} lojas={lojas} />
-        {!feito ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            title={faltou ? 'Afinal havia' : 'Nao havia'}
-            onClick={() => onEstado(item.id, faltou ? 'PENDING' : 'MISSING')}
-            className="text-muted-foreground"
-          >
-            <AlertTriangle className="h-4 w-4" />
-            <span className="sr-only">{faltou ? 'Afinal havia' : 'Nao havia'}</span>
-          </Button>
-        ) : null}
+    <LinhaCompra
+      nome={item.name}
+      quantidade={`${campo(item.packs)}× ${embalagem}`}
+      preco={formatMoney(item.packs * item.price, currency)}
+      feito={feito}
+      apagado={faltou}
+      aberto={aberto}
+      // Riscar um "nao havia" mete-o no carrinho: afinal havia.
+      onRiscar={aberta ? () => onEstado(item.id, feito ? 'PENDING' : 'BOUGHT') : undefined}
+      onAbrir={onAbrir}
+    >
+      {/* Texto corrido, nao flex: com nomes de loja compridos, o flex partia
+          a linha em duas colunas. */}
+      <p>
+        <Store className="mr-1.5 inline h-3.5 w-3.5 align-[-2px] text-muted-foreground" aria-hidden />
+        <span className="font-medium">{item.supplierName ?? SEM_LOJA}</span>{' '}
+        <span className="text-muted-foreground">· {formatMoney(item.price, currency)} a embalagem</span>
+      </p>
+      <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        {perBase !== null ? <span>{formatCostPerUnit(perBase, item.baseUnit, currency)}</span> : null}
+        <TextoDiferenca c={comp} />
+        <span>· em casa {formatBaseQty(item.stockBase, item.baseUnit, currency)}</span>
+        {item.useAsCurrent ? <Badge variant="secondary">vai passar a preco em uso</Badge> : null}
       </div>
-    </li>
+      {item.note ? <p className="text-xs text-muted-foreground">{item.note}</p> : null}
+      {aberta ? (
+        // Lado a lado, sempre, e sem quebrar: compactos para os tres caberem
+        // numa fila mesmo num telemovel de 360 px.
+        <div className="-ml-2 flex flex-nowrap items-center gap-0.5 pt-1">
+          <EditarItem item={item} lojas={lojas} />
+          {!feito ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onEstado(item.id, faltou ? 'PENDING' : 'MISSING')}
+              className={BOTAO_DETALHE}
+            >
+              <AlertTriangle className="h-4 w-4" />
+              {faltou ? 'Afinal havia' : 'Nao havia'}
+            </Button>
+          ) : null}
+          <ConfirmDelete
+            action={removeShoppingItem}
+            fields={{ id: item.id }}
+            title={`Tirar "${item.name}" da lista?`}
+            confirmLabel="Tirar"
+            trigger={
+              <Button variant="ghost" size="sm" className={cn(BOTAO_DETALHE, 'hover:text-destructive')}>
+                <Trash2 className="h-4 w-4" />
+                Remover
+              </Button>
+            }
+          />
+        </div>
+      ) : null}
+    </LinhaCompra>
   );
 }
 
@@ -505,68 +491,60 @@ function CampoLoja({
 function EditarItem({ item, lojas }: { item: ItemLista; lojas: Loja[] }) {
   const unidade = displayUnitOf(item.baseUnit);
   return (
-    <div className="flex">
-      <FormDialog
-        action={updateShoppingItem}
-        title={item.name}
-        description="Corrija o que for diferente no supermercado. O preco novo fica registado para a loja ao fechar a compra."
-      >
-        <input type="hidden" name="id" value={item.id} />
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Embalagens" htmlFor={`packs-${item.id}`}>
-            <Input id={`packs-${item.id}`} name="packs" inputMode="decimal" defaultValue={campo(item.packs)} />
-          </Field>
-          <Field label="Preco da embalagem" htmlFor={`price-${item.id}`}>
-            <Input id={`price-${item.id}`} name="price" inputMode="decimal" defaultValue={campo(item.price)} />
-          </Field>
-        </div>
-        <Field label="Tamanho da embalagem" htmlFor={`qty-${item.id}`}>
-          <QtyInput
-            id={`qty-${item.id}`}
-            name="packQty"
-            unitLabel={DISPLAY_UNIT_LABEL[item.baseUnit]}
-            unitName="packUnit"
-            unitValue={unidade}
-            defaultValue={campo(item.packQtyDisplay)}
-          />
+    <FormDialog
+      action={updateShoppingItem}
+      title={item.name}
+      description="Corrija o que for diferente no supermercado. O preco novo fica registado para a loja ao fechar a compra."
+      trigger={
+        <Button type="button" variant="ghost" size="sm" className={BOTAO_DETALHE}>
+          <Pencil className="h-4 w-4" />
+          Editar
+        </Button>
+      }
+    >
+      <input type="hidden" name="id" value={item.id} />
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Embalagens" htmlFor={`packs-${item.id}`}>
+          <Input id={`packs-${item.id}`} name="packs" inputMode="decimal" defaultValue={campo(item.packs)} />
         </Field>
-        <Field label="Loja" htmlFor={`loja-${item.id}`}>
-          <CampoLoja lojas={lojas} inicial={item.supplierId} id={`loja-${item.id}`} />
+        <Field label="Preco da embalagem" htmlFor={`price-${item.id}`}>
+          <Input id={`price-${item.id}`} name="price" inputMode="decimal" defaultValue={campo(item.price)} />
         </Field>
-        <input type="hidden" name="useAsCurrentSent" value="1" />
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="useAsCurrent"
-            value="1"
-            defaultChecked={item.useAsCurrent}
-            className="mt-0.5 h-4 w-4 accent-primary"
-          />
-          <span>
-            Usar este preco daqui para a frente
-            <span className="block text-xs text-muted-foreground">
-              Muda o custo das fichas que usam este insumo. Sem isto, o preco fica so
-              registado para a loja.
-            </span>
+      </div>
+      <Field label="Tamanho da embalagem" htmlFor={`qty-${item.id}`}>
+        <QtyInput
+          id={`qty-${item.id}`}
+          name="packQty"
+          unitLabel={DISPLAY_UNIT_LABEL[item.baseUnit]}
+          unitName="packUnit"
+          unitValue={unidade}
+          defaultValue={campo(item.packQtyDisplay)}
+        />
+      </Field>
+      <Field label="Loja" htmlFor={`loja-${item.id}`}>
+        <CampoLoja lojas={lojas} inicial={item.supplierId} id={`loja-${item.id}`} />
+      </Field>
+      <input type="hidden" name="useAsCurrentSent" value="1" />
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="useAsCurrent"
+          value="1"
+          defaultChecked={item.useAsCurrent}
+          className="mt-0.5 h-4 w-4 accent-primary"
+        />
+        <span>
+          Usar este preco daqui para a frente
+          <span className="block text-xs text-muted-foreground">
+            Muda o custo das fichas que usam este insumo. Sem isto, o preco fica so
+            registado para a loja.
           </span>
-        </label>
-        <Field label="Nota" htmlFor={`nota-${item.id}`}>
-          <Input id={`nota-${item.id}`} name="note" defaultValue={item.note ?? ''} placeholder="Opcional" />
-        </Field>
-      </FormDialog>
-      <ConfirmDelete
-        action={removeShoppingItem}
-        fields={{ id: item.id }}
-        title={`Tirar "${item.name}" da lista?`}
-        confirmLabel="Tirar"
-        trigger={
-          <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive">
-            <Trash2 className="h-4 w-4" />
-            <span className="sr-only">Tirar da lista</span>
-          </Button>
-        }
-      />
-    </div>
+        </span>
+      </label>
+      <Field label="Nota" htmlFor={`nota-${item.id}`}>
+        <Input id={`nota-${item.id}`} name="note" defaultValue={item.note ?? ''} placeholder="Opcional" />
+      </Field>
+    </FormDialog>
   );
 }
 
@@ -651,6 +629,7 @@ const MAX_RESULTADOS = 8;
 
 function PainelAdicionar({
   listId,
+  naLista,
   catalogo,
   lojas,
   currency,
@@ -659,6 +638,7 @@ function PainelAdicionar({
   catalogo: ItemCatalogo[];
   lojas: Loja[];
   currency: CurrencyConfig;
+  naLista: Map<string, ItemLista>;
 }) {
   const [busca, setBusca] = useState('');
   const [escolhido, setEscolhido] = useState<ItemCatalogo | null>(null);
@@ -736,6 +716,7 @@ function PainelAdicionar({
                     className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm hover:bg-accent/50"
                   >
                     <span className="min-w-0 flex-1 truncate font-medium">{c.name}</span>
+                    {naLista.has(c.id) ? <Badge variant="secondary">na lista</Badge> : null}
                     {e.situacao !== 'ok' ? (
                       <Badge className="border-transparent bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
                         {e.situacao === 'sem-estoque' ? 'sem estoque' : 'abaixo do minimo'}
@@ -763,6 +744,7 @@ function PainelAdicionar({
           setTamanho={setTamanho}
           acao={acao}
           voltar={() => setEscolhido(null)}
+          jaNaLista={naLista.get(escolhido.id)}
         />
       )}
     </section>
@@ -780,6 +762,7 @@ function FichaDoInsumo({
   setTamanho,
   acao,
   voltar,
+  jaNaLista,
 }: {
   c: ItemCatalogo;
   listId: string;
@@ -791,6 +774,8 @@ function FichaDoInsumo({
   setTamanho: (v: string) => void;
   acao: (f: FormData) => void;
   voltar: () => void;
+  /** A linha deste insumo ainda por comprar nesta lista, se houver. */
+  jaNaLista?: ItemLista;
 }) {
   const unidade = displayUnitOf(c.baseUnit);
   const rotulo = DISPLAY_UNIT_LABEL[c.baseUnit];
@@ -868,6 +853,14 @@ function FichaDoInsumo({
         </p>
       ) : null}
 
+      {jaNaLista ? (
+        <p className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+          Ja esta na lista ({campo(jaNaLista.packs)}× a {formatMoney(jaNaLista.price, currency)},{' '}
+          {jaNaLista.supplierName ?? SEM_LOJA}). <strong>Juntar</strong> corrige essa linha com o
+          preco, a loja e a quantidade daqui — nao cria outra.
+        </p>
+      ) : null}
+
       <form action={acao} className="space-y-3">
         <input type="hidden" name="listId" value={listId} />
         <input type="hidden" name="ingredientId" value={c.id} />
@@ -894,7 +887,13 @@ function FichaDoInsumo({
             />
           </Field>
           <Field label="Quantas" htmlFor="add-packs">
-            <Input id="add-packs" name="packs" inputMode="decimal" defaultValue="1" required />
+            <Input
+              id="add-packs"
+              name="packs"
+              inputMode="decimal"
+              defaultValue={jaNaLista ? campo(jaNaLista.packs) : '1'}
+              required
+            />
           </Field>
           <Field label="Loja" htmlFor="add-loja">
             <CampoLoja lojas={lojas} inicial={c.emUso.supplierId} id="add-loja" />

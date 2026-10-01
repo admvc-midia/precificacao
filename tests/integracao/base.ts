@@ -175,6 +175,8 @@ export async function limpar(): Promise<void> {
   await prisma.productionOrderLine.deleteMany({
     where: { OR: [{ recipeId: { in: fichas } }] },
   });
+  // Ordens marcadas inteiras (as linhas vao em cascata).
+  await prisma.productionOrder.deleteMany({ where: { name: { startsWith: MARCA } } });
   await prisma.recipe.deleteMany({ where: { id: { in: fichas } } });
   await prisma.stockMovement.deleteMany({ where: { ingredientId: { in: insumos } } });
   await prisma.purchaseListLine.deleteMany({

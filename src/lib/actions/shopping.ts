@@ -83,6 +83,17 @@ async function lerLoja(form: FormData): Promise<string | null | undefined> {
   return (await prisma.supplier.create({ data: { name: nome } })).id;
 }
 
+/**
+ * A linha deste insumo que ainda esta por resolver (por comprar ou "nao
+ * havia"). E nela que se soma ou se corrige, para nao haver duas.
+ */
+function linhaAberta(listId: string, ingredientId: string) {
+  return prisma.shoppingItem.findFirst({
+    where: { listId, ingredientId, status: { in: ['PENDING', 'MISSING'] } },
+    orderBy: { sortOrder: 'asc' },
+  });
+}
+
 function lerEmbalagens(valor: FormDataEntryValue | null): number {
   const n = parseQty(String(valor ?? ''));
   if (!Number.isFinite(n) || n <= 0) throw new Error('Quantas embalagens? Tem de ser mais que zero.');
@@ -142,8 +153,16 @@ export async function deleteShoppingList(_prev: ActionState, form: FormData): Pr
  * preco — o "achei mais barato" — usa o que o comprador escreveu. Com
  * `bought=1`, entra ja riscado: e o que se comprou por oportunidade.
  *
- * O mesmo insumo por comprar na mesma loja soma embalagens em vez de duplicar
- * a linha.
+ * **Uma linha por insumo.** Se o insumo ja esta por comprar (ou "nao havia")
+ * nesta lista:
+ *  - sem preco, somam-se as embalagens a essa linha;
+ *  - com preco (achei mais barato), essa linha passa a ter o preco, a loja, a
+ *    embalagem e a quantidade escritos — o comprador mudou onde compra, nao
+ *    quer duas linhas do mesmo;
+ *  - com `bought=1`, essa linha fica riscada.
+ * A excecao e o que ja esta no carrinho: precisar de mais entra numa linha
+ * nova, por comprar. Somar a linha riscada misturava o que ja foi apanhado
+ * com o que ainda falta.
  */
 export async function addShoppingItem(_prev: ActionState, form: FormData): Promise<ActionState> {
   try {
@@ -184,16 +203,26 @@ export async function addShoppingItem(_prev: ActionState, form: FormData): Promi
       packUnit = insumo.purchaseUnit;
     }
 
-    const igual = comPreco || comprado
-      ? null
-      : await prisma.shoppingItem.findFirst({
-          where: { listId: lista.id, ingredientId, supplierId, status: 'PENDING' },
-        });
+    const igual = await linhaAberta(lista.id, ingredientId);
+    const status = comprado ? ('BOUGHT' as const) : ('PENDING' as const);
 
-    if (igual) {
+    if (igual && comPreco) {
       await prisma.shoppingItem.update({
         where: { id: igual.id },
-        data: { packs: num(igual.packs) + packs },
+        data: {
+          packs,
+          supplierId,
+          price,
+          packQty,
+          packUnit,
+          status,
+          useAsCurrent: form.get('useAsCurrent') === '1',
+        },
+      });
+    } else if (igual) {
+      await prisma.shoppingItem.update({
+        where: { id: igual.id },
+        data: { packs: num(igual.packs) + packs, status },
       });
     } else {
       const ultimo = await prisma.shoppingItem.findFirst({
@@ -221,9 +250,11 @@ export async function addShoppingItem(_prev: ActionState, form: FormData): Promi
     revalidar(lista.id);
     return {
       ok: true,
-      message: igual
-        ? `"${insumo.name}" ja estava na lista: somei ${packs} embalagem(ns).`
-        : comprado
+      message: igual && comPreco
+        ? `"${insumo.name}" ja estava na lista: atualizei o preco e a loja${comprado ? ' e pus no carrinho' : ''}.`
+        : igual
+          ? `"${insumo.name}" ja estava na lista: somei ${packs} embalagem(ns).`
+          : comprado
           ? `"${insumo.name}" entrou na lista, ja no carrinho.`
           : `"${insumo.name}" entrou na lista.`,
     };
@@ -293,7 +324,8 @@ export async function addBelowMinimum(_prev: ActionState, form: FormData): Promi
 }
 
 /**
- * Copia para aqui o que uma ordem de producao manda comprar. A ordem nao muda:
+ * Copia para aqui o que uma ordem de producao manda comprar — somando ao que
+ * ja esta por comprar, e uma vez so por ordem. A ordem nao muda:
  * continua a ter a sua lista e o seu "Recebi esta compra" — use um ou outro
  * para dar entrada, nao os dois.
  */
@@ -320,33 +352,78 @@ export async function addFromOrder(_prev: ActionState, form: FormData): Promise<
       return { ok: true, message: 'O estoque ja cobre essa ordem: nada a comprar.' };
     }
 
-    const ultimo = await prisma.shoppingItem.findFirst({
-      where: { listId: lista.id },
-      orderBy: { sortOrder: 'desc' },
-      select: { sortOrder: true },
-    });
-    let ordemItem = (ultimo?.sortOrder ?? -1) + 1;
-    await prisma.shoppingItem.createMany({
-      data: linhas.map((l) => ({
-        listId: lista.id,
-        ingredientId: l.ingredient.id,
-        packs: l.packsToBuy,
-        supplierId: l.ingredient.supplierId ?? null,
-        price: l.ingredient.purchasePrice,
-        packQty: l.ingredient.purchaseQty,
-        packUnit: l.ingredient.purchaseUnit,
-        refPricePerBase: precoPorBase({
-          price: l.ingredient.purchasePrice,
-          packQty: l.ingredient.purchaseQty,
-          packUnit: l.ingredient.purchaseUnit,
-        }),
-        note: `Para "${ordem.name}"`,
-        sortOrder: ordemItem++,
-      })),
-    });
+    const nota = `Para "${ordem.name}"`;
+    let somados = 0;
+    await prisma.$transaction(
+      async (tx) => {
+        // Guarda atomica: so passa quem marcar a ordem como juntada. Dois
+        // toques seguidos no botao (ou dois telemoveis) entram uma vez.
+        const marcada = await tx.shoppingList.updateMany({
+          where: { id: lista.id, NOT: { orderIds: { has: orderId } } },
+          data: { orderIds: { push: orderId } },
+        });
+        if (marcada.count !== 1) {
+          throw new Error(`"${ordem.name}" ja foi juntada a esta lista.`);
+        }
+
+        const abertas = await tx.shoppingItem.findMany({
+          where: { listId: lista.id, status: { in: ['PENDING', 'MISSING'] } },
+          orderBy: { sortOrder: 'asc' },
+        });
+        const porInsumo = new Map<string, (typeof abertas)[number]>();
+        for (const a of abertas) if (!porInsumo.has(a.ingredientId)) porInsumo.set(a.ingredientId, a);
+
+        const ultimo = await tx.shoppingItem.findFirst({
+          where: { listId: lista.id },
+          orderBy: { sortOrder: 'desc' },
+          select: { sortOrder: true },
+        });
+        let ordemItem = (ultimo?.sortOrder ?? -1) + 1;
+
+        for (const l of linhas) {
+          const ja = porInsumo.get(l.ingredient.id);
+          if (ja) {
+            // Uma linha por insumo: soma, e a nota passa a dizer as duas origens.
+            await tx.shoppingItem.update({
+              where: { id: ja.id },
+              data: {
+                packs: num(ja.packs) + l.packsToBuy,
+                status: 'PENDING',
+                note: ja.note ? (ja.note.includes(nota) ? ja.note : `${ja.note} · ${nota}`) : nota,
+              },
+            });
+            somados++;
+          } else {
+            await tx.shoppingItem.create({
+              data: {
+                listId: lista.id,
+                ingredientId: l.ingredient.id,
+                packs: l.packsToBuy,
+                supplierId: l.ingredient.supplierId ?? null,
+                price: l.ingredient.purchasePrice,
+                packQty: l.ingredient.purchaseQty,
+                packUnit: l.ingredient.purchaseUnit,
+                refPricePerBase: precoPorBase({
+                  price: l.ingredient.purchasePrice,
+                  packQty: l.ingredient.purchaseQty,
+                  packUnit: l.ingredient.purchaseUnit,
+                }),
+                note: nota,
+                sortOrder: ordemItem++,
+              },
+            });
+          }
+        }
+      },
+      { timeout: 20000, maxWait: 10000 },
+    );
 
     revalidar(lista.id);
-    return { ok: true, message: `${linhas.length} insumo(s) de "${ordem.name}" entraram na lista.` };
+    const novos = linhas.length - somados;
+    return {
+      ok: true,
+      message: `"${ordem.name}": ${novos} insumo(s) novo(s)${somados ? `, ${somados} somado(s) ao que ja estava na lista` : ''}.`,
+    };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };
   }

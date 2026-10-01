@@ -29,6 +29,7 @@
  */
 
 import { useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 
 import { useActionFormState } from '@/components/action-form';
 import { Field, Select } from '@/components/ui/form-controls';
@@ -398,9 +399,28 @@ export function IngredientForm({
       </div>
 
       {/* ------------------------------------------------ alergenios */}
-      <div className="rounded-md border bg-muted/40 p-3">
-        <p className="text-sm font-medium">Alergenios</p>
-        <p className="mb-3 mt-0.5 text-xs text-muted-foreground">
+      {/* Fechado por omissao: usa-se pouco, e catorze caixas empurravam o resto
+          do formulario para baixo. O resumo no titulo diz o essencial sem abrir.
+          Fechar um <details> nao tira os campos do formulario: o que estiver
+          marcado continua a ser enviado. */}
+      <details className="group rounded-md border bg-muted/40">
+        <summary className="flex cursor-pointer list-none items-center gap-2 p-3 text-sm [&::-webkit-details-marker]:hidden">
+          <ChevronDown
+            className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+            aria-hidden
+          />
+          <span className="font-medium">Alergenios</span>
+          <span className="text-muted-foreground">
+            ·{' '}
+            {v.allergens.length === 0
+              ? 'nenhum declarado'
+              : v.allergens.map((a) => ALLERGEN_LABEL[a as keyof typeof ALLERGEN_LABEL]).join(', ')}
+            {' · '}
+            {v.allergensReviewed ? 'verificado' : 'por verificar'}
+          </span>
+        </summary>
+        <div className="px-3 pb-3">
+        <p className="mb-3 text-xs text-muted-foreground">
           Os catorze do Anexo II do Regulamento (UE) 1169/2011. As fichas que
           usarem este insumo passam a mostra-los.
         </p>
@@ -454,7 +474,8 @@ export function IngredientForm({
             </label>
           ))}
         </div>
-      </div>
+        </div>
+      </details>
 
       <Field label="Notas" htmlFor={id('notes')}>
         <Textarea

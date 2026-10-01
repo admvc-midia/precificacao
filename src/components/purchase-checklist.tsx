@@ -6,28 +6,26 @@
  * E o unico ecra desta aplicacao que se usa de pe, com uma mao, possivelmente
  * com o carrinho na outra. Por isso:
  *
- *  - cada item risca-se com um toque, e o alvo de toque e a linha inteira,
- *    nao o quadradinho;
- *  - o que ja foi apanhado esvanece mas nao desaparece — precisa de se poder
- *    desfazer, e ver o que ja esta no carrinho tranquiliza;
+ *  - uma lista so, uma linha por item (nome, quantidade, preco); a loja, o
+ *    preciso/tenho/falta e a dica de preco abrem ao tocar na linha;
+ *  - o circulo risca (ver `LinhaCompra`), e o que ja foi apanhado desce para
+ *    "No carrinho", fechado: sai do caminho sem desaparecer, e desfaz-se la;
  *  - o cabecalho diz sempre quanto falta gastar, que e a pergunta que se faz
  *    a meio das compras;
  *  - o progresso fica guardado neste telemovel. Nao vai para o servidor: e
  *    conveniencia de quem esta a fazer a volta, nao um dado do negocio.
  *
- * Uma unica marcacao serve os dois tamanhos: os detalhes (preciso/tenho/falta)
- * vao numa segunda linha que se quebra sozinha no telemovel.
  */
 
 import { useMemo, useState } from 'react';
-import { Check, MapPin, Phone, Store, Tag } from 'lucide-react';
+import { MapPin, Phone, Store, Tag } from 'lucide-react';
 
+import { LinhaCompra, SecaoFechada } from '@/components/compras/linha-compra';
 import { Paginacao } from '@/components/paginacao';
 import { Button } from '@/components/ui/button';
 import { formatMoney, type CurrencyConfig } from '@/lib/money';
 import { pagina } from '@/lib/paginacao';
 import { useStoredString } from '@/lib/use-stored-state';
-import { cn } from '@/lib/utils';
 
 export interface ChecklistItem {
   id: string;
@@ -58,8 +56,8 @@ export interface ChecklistGroup {
   items: ChecklistItem[];
 }
 
-/** Por loja. Menos que as listas normais: cada item aqui ocupa tres linhas. */
-const ITENS_POR_LOJA = 15;
+/** Por comprar, por pagina. */
+const POR_PAGINA = 20;
 
 export function PurchaseChecklist({
   orderId,
@@ -112,33 +110,91 @@ export function PurchaseChecklist({
 
   const tudoFeito = todos.length > 0 && feitos === todos.length;
 
-  // Pagina de cada loja. Os riscados nao mudam de sitio ao paginar: um item
-  // que salta para outra pagina ao ser tocado perde-se de vista.
-  const [paginas, setPaginas] = useState<Record<string, number>>({});
+  // Uma lista so, sem grupos por loja: a loja aparece ao abrir o item. O que
+  // falta fica no topo; o que ja esta no carrinho desce para uma secao fechada.
+  const [aberto, setAberto] = useState<string | null>(null);
+  const [pedida, setPedida] = useState(1);
+  const lojaDe = useMemo(() => {
+    const m = new Map<string, ChecklistGroup>();
+    for (const g of groups) for (const i of g.items) m.set(i.id, g);
+    return m;
+  }, [groups]);
+  const porFazer = todos.filter((i) => !checked.has(i.id));
+  const noCarrinho = todos.filter((i) => checked.has(i.id));
+  const p = pagina(porFazer.length, POR_PAGINA, pedida);
+
+  const linha = (item: ChecklistItem) => {
+    const feito = checked.has(item.id);
+    const loja = lojaDe.get(item.id);
+    return (
+      <LinhaCompra
+        key={item.id}
+        nome={item.name}
+        quantidade={item.buy}
+        preco={item.cost}
+        feito={feito}
+        aberto={aberto === item.id}
+        onRiscar={() => alternar(item.id)}
+        onAbrir={() => setAberto((a) => (a === item.id ? null : item.id))}
+      >
+        {loja ? (
+          <div>
+            <p className="flex items-center gap-1.5 font-medium">
+              <Store className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              {loja.supplier}
+            </p>
+            {loja.address ? (
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <MapPin className="h-3 w-3 shrink-0" aria-hidden />
+                {loja.address}
+              </p>
+            ) : null}
+            {loja.phone ? (
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Phone className="h-3 w-3 shrink-0" aria-hidden />
+                <a href={`tel:${loja.phone}`} className="hover:underline">
+                  {loja.phone}
+                </a>
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        <p className="text-xs text-muted-foreground">
+          {item.detail}
+          {item.leftover ? ` · ${item.leftover}` : ''}
+        </p>
+        {item.betterPrice && !feito ? (
+          <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+            <Tag className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+            <span>
+              Em <strong>{item.betterPrice.supplier}</strong> poupava{' '}
+              <strong>{item.betterPrice.saving}</strong> — {item.betterPrice.detail}
+            </span>
+          </p>
+        ) : null}
+      </LinhaCompra>
+    );
+  };
 
   return (
-    <div className="space-y-4">
-      {/* Cabecalho de progresso: fica colado ao topo enquanto se rola, porque
-          e a informacao que se quer consultar a meio das compras. */}
-      <div className="sticky top-14 z-10 rounded-lg border bg-background/95 p-3 backdrop-blur">
+    <div className="space-y-3">
+      {/* Uma linha de progresso, colada ao topo enquanto se rola. */}
+      <div className="sticky top-14 z-10 rounded-lg border bg-background/95 px-3 py-2 backdrop-blur">
         <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-medium">
-              {feitos} de {todos.length} itens no carrinho
-            </p>
-            <p className="text-xs text-muted-foreground">
+          <p className="min-w-0 text-sm">
+            <strong className="tabular-nums">
+              {feitos} de {todos.length}
+            </strong>{' '}
+            <span className="text-muted-foreground">
               {tudoFeito ? (
-                'Compra completa.'
+                '· compra completa'
               ) : (
                 <>
-                  faltam gastar{' '}
-                  <strong className="tabular-nums">
-                    {formatMoney(restante, currency)}
-                  </strong>
+                  · faltam <span className="tabular-nums">{formatMoney(restante, currency)}</span>
                 </>
               )}
-            </p>
-          </div>
+            </span>
+          </p>
           {feitos > 0 ? (
             <Button
               variant="ghost"
@@ -150,9 +206,8 @@ export function PurchaseChecklist({
             </Button>
           ) : null}
         </div>
-
         <div
-          className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"
+          className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted"
           role="progressbar"
           aria-valuenow={feitos}
           aria-valuemin={0}
@@ -166,117 +221,15 @@ export function PurchaseChecklist({
         </div>
       </div>
 
-      {groups.map((group) => {
-        const porFazer = group.items.filter((i) => !checked.has(i.id)).length;
-        const p = pagina(group.items.length, ITENS_POR_LOJA, paginas[group.id] ?? 1);
-
-        return (
-          <section key={group.id} className="overflow-hidden rounded-lg border bg-card">
-            <div className="flex flex-wrap items-start justify-between gap-2 border-b bg-muted/40 px-4 py-3">
-              <div className="min-w-0">
-                <p className="flex items-center gap-2 font-medium">
-                  <Store className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                  {group.supplier}
-                  {porFazer === 0 ? (
-                    <Check className="h-4 w-4 text-emerald-600" aria-label="loja completa" />
-                  ) : null}
-                </p>
-                {group.address ? (
-                  <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <MapPin className="h-3 w-3 shrink-0" aria-hidden />
-                    {group.address}
-                  </p>
-                ) : null}
-                {group.phone ? (
-                  <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Phone className="h-3 w-3 shrink-0" aria-hidden />
-                    <a href={`tel:${group.phone}`} className="hover:underline">
-                      {group.phone}
-                    </a>
-                  </p>
-                ) : null}
-              </div>
-              <span className="shrink-0 tabular-nums font-medium">{group.total}</span>
-            </div>
-
-            <ul className="divide-y">
-              {group.items.slice(p.inicio, p.fim).map((item) => {
-                const feito = checked.has(item.id);
-                return (
-                  <li key={item.id}>
-                    {/* A linha inteira e o alvo de toque — um quadradinho de
-                        16px nao se acerta com o polegar a andar. */}
-                    <label
-                      className={cn(
-                        'flex min-h-16 cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-accent/40',
-                        feito && 'bg-muted/30',
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={feito}
-                        onChange={() => alternar(item.id)}
-                        className="mt-0.5 h-5 w-5 shrink-0 rounded border-input accent-primary"
-                      />
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                          <span
-                            className={cn(
-                              'font-medium',
-                              feito && 'text-muted-foreground line-through',
-                            )}
-                          >
-                            {item.name}
-                          </span>
-                          <span
-                            className={cn(
-                              'shrink-0 tabular-nums',
-                              feito ? 'text-muted-foreground line-through' : 'font-medium',
-                            )}
-                          >
-                            {item.cost}
-                          </span>
-                        </div>
-
-                        <p
-                          className={cn(
-                            'mt-0.5 text-sm',
-                            feito ? 'text-muted-foreground' : 'text-foreground',
-                          )}
-                        >
-                          {item.buy}
-                        </p>
-
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {item.detail}
-                          {item.leftover ? ` · ${item.leftover}` : ''}
-                        </p>
-
-                        {item.betterPrice && !feito ? (
-                          <p className="mt-1 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
-                            <Tag className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
-                            <span>
-                              Em <strong>{item.betterPrice.supplier}</strong> poupava{' '}
-                              <strong>{item.betterPrice.saving}</strong> —{' '}
-                              {item.betterPrice.detail}
-                            </span>
-                          </p>
-                        ) : null}
-                      </div>
-                    </label>
-                  </li>
-                );
-              })}
-            </ul>
-            <Paginacao
-              p={p}
-              onChange={(n) => setPaginas((atual) => ({ ...atual, [group.id]: n }))}
-              className="border-t px-4 py-2"
-            />
-          </section>
-        );
-      })}
+      {porFazer.length > 0 ? (
+        <section className="rounded-lg border bg-card" aria-label="Por comprar">
+          <ul className="divide-y">{porFazer.slice(p.inicio, p.fim).map(linha)}</ul>
+          <Paginacao p={p} onChange={setPedida} className="border-t px-4 py-2" />
+        </section>
+      ) : null}
+      <SecaoFechada titulo="No carrinho" n={noCarrinho.length}>
+        {noCarrinho.map(linha)}
+      </SecaoFechada>
     </div>
   );
 }

@@ -17,6 +17,7 @@ vi.mock('next/navigation', () => ({
 import { saveIngredient } from '@/lib/actions/ingredients';
 import {
   addBelowMinimum,
+  addFromOrder,
   addShoppingItem,
   closeShoppingList,
   setShoppingItemStatus,
@@ -108,6 +109,107 @@ describe('juntar a lista', () => {
     const item = await itemDe(lista.id, insumo.id);
     // Faltam 1,3 kg; embalagens de 1 kg: 2.
     expect(Number(item.packs)).toBe(2);
+  });
+});
+
+describe('uma linha por insumo', () => {
+  const acheiMaisBarato = (listId: string, ingredientId: string, extra: Record<string, string> = {}) =>
+    addShoppingItem(
+      { ok: true },
+      form({
+        listId,
+        ingredientId,
+        packs: '4',
+        price: '5,50',
+        packQty: '1',
+        packUnit: 'KG',
+        supplierId: 'novo',
+        newSupplierName: nome('Lidl'),
+        ...extra,
+      }),
+    );
+
+  it('achei mais barato corrige a linha que ja la estava, nao cria outra', async () => {
+    const { insumo } = await insumoNaLoja();
+    const lista = await novaLista();
+    await addShoppingItem({ ok: true }, form({ listId: lista.id, ingredientId: insumo.id, packs: '2' }));
+
+    const r = await acheiMaisBarato(lista.id, insumo.id);
+    expect(r.ok, r.message).toBe(true);
+    expect(r.message).toMatch(/ja estava na lista/);
+
+    const itens = await prisma.shoppingItem.findMany({ where: { listId: lista.id } });
+    expect(itens).toHaveLength(1);
+    expect(Number(itens[0].price)).toBe(5.5);
+    expect(Number(itens[0].packs)).toBe(4);
+    expect(itens[0].status).toBe('PENDING');
+  });
+
+  it('"comprei" de um insumo que ja la estava risca essa mesma linha', async () => {
+    const { insumo } = await insumoNaLoja();
+    const lista = await novaLista();
+    await addShoppingItem({ ok: true }, form({ listId: lista.id, ingredientId: insumo.id, packs: '2' }));
+
+    await acheiMaisBarato(lista.id, insumo.id, { bought: '1' });
+    const itens = await prisma.shoppingItem.findMany({ where: { listId: lista.id } });
+    expect(itens).toHaveLength(1);
+    expect(itens[0].status).toBe('BOUGHT');
+  });
+
+  it('juntar um "nao havia" soma e volta a por comprar', async () => {
+    const { insumo } = await insumoNaLoja();
+    const lista = await novaLista();
+    await addShoppingItem({ ok: true }, form({ listId: lista.id, ingredientId: insumo.id, packs: '1' }));
+    const item = await itemDe(lista.id, insumo.id);
+    await setShoppingItemStatus({ ok: true }, form({ id: item.id, status: 'MISSING' }));
+
+    await addShoppingItem({ ok: true }, form({ listId: lista.id, ingredientId: insumo.id, packs: '2' }));
+    const itens = await prisma.shoppingItem.findMany({ where: { listId: lista.id } });
+    expect(itens).toHaveLength(1);
+    expect(Number(itens[0].packs)).toBe(3);
+    expect(itens[0].status).toBe('PENDING');
+  });
+
+  it('o que ja esta no carrinho nao se mistura: precisar de mais e uma linha nova', async () => {
+    const { insumo } = await insumoNaLoja();
+    const lista = await novaLista();
+    await addShoppingItem({ ok: true }, form({ listId: lista.id, ingredientId: insumo.id, packs: '1' }));
+    const item = await itemDe(lista.id, insumo.id);
+    await setShoppingItemStatus({ ok: true }, form({ id: item.id, status: 'BOUGHT' }));
+
+    await addShoppingItem({ ok: true }, form({ listId: lista.id, ingredientId: insumo.id, packs: '2' }));
+    const itens = await prisma.shoppingItem.findMany({ where: { listId: lista.id }, orderBy: { sortOrder: 'asc' } });
+    expect(itens.map((i) => [i.status, Number(i.packs)])).toEqual([
+      ['BOUGHT', 1],
+      ['PENDING', 2],
+    ]);
+  });
+
+  it('de uma producao: soma ao que ja la esta, e a mesma ordem so entra uma vez', async () => {
+    const { insumo } = await insumoNaLoja();
+    const ficha = await prisma.recipe.create({
+      data: { name: nome('Tosta'), kind: 'PRODUCT', yieldQty: 1, yieldUnit: 'UN' },
+    });
+    await prisma.recipeItem.create({ data: { recipeId: ficha.id, ingredientId: insumo.id, qty: 0.5, unit: 'KG' } });
+    const ordem = await prisma.productionOrder.create({
+      data: { name: nome('Ordem'), lines: { create: { recipeId: ficha.id, qty: 3 } } },
+    });
+    const lista = await novaLista();
+    await addShoppingItem({ ok: true }, form({ listId: lista.id, ingredientId: insumo.id, packs: '1' }));
+
+    // 3 x 0,5 kg = 1,5 kg, sem estoque: 2 embalagens de 1 kg, somadas a 1.
+    const r1 = await addFromOrder({ ok: true }, form({ listId: lista.id, orderId: ordem.id }));
+    expect(r1.ok, r1.message).toBe(true);
+    expect(r1.message).toMatch(/1 somado/);
+    const itens = await prisma.shoppingItem.findMany({ where: { listId: lista.id } });
+    expect(itens).toHaveLength(1);
+    expect(Number(itens[0].packs)).toBe(3);
+    expect(itens[0].note).toContain(ordem.name);
+
+    const r2 = await addFromOrder({ ok: true }, form({ listId: lista.id, orderId: ordem.id }));
+    expect(r2.ok).toBe(false);
+    expect(r2.message).toMatch(/ja foi juntada/);
+    expect(Number((await itemDe(lista.id, insumo.id)).packs)).toBe(3);
   });
 });
 

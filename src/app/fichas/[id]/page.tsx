@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowRight, Plus, Printer } from 'lucide-react';
+import { ArrowRight, ChevronDown, Plus, Printer } from 'lucide-react';
 
 import { AjudaLink } from '@/components/ajuda-link';
 import { ActionForm, ConfirmDelete, FormDialog } from '@/components/action-form';
@@ -25,6 +25,7 @@ import {
 import { AllergenPanel } from '@/components/allergen-panel';
 import { FotoProduto } from '@/components/foto-produto';
 import { fotoSrc } from '@/lib/foto-url';
+import { cn } from '@/lib/utils';
 import { CompositionTable } from '@/components/composition-table';
 import { QtyInput } from '@/components/ui/qty-input';
 import { RecipeFields } from '@/components/forms/fields';
@@ -35,7 +36,7 @@ import { formatMoney } from '@/lib/money';
 import { computeRecipeCost, flattenRecipe } from '@/lib/pricing/cost';
 import type { RecipeCost } from '@/lib/pricing/types';
 import { getPricingData, getRecipeDetail, getSuppliers } from '@/lib/queries';
-import { collectAllergens, type Allergen } from '@/lib/pricing/allergens';
+import { ALLERGEN_LABEL, collectAllergens, type Allergen } from '@/lib/pricing/allergens';
 import {
   baseUnitOf,
   displayQtyValue,
@@ -287,17 +288,39 @@ export default async function FichaPage({
           </Card>
 
           {recipe.items.length > 0 ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Alergenios</CardTitle>
-                <CardDescription>
+            // Fechado por omissao (usa-se pouco), mas o titulo diz sempre o
+            // essencial: o que contem, ou quantos insumos faltam verificar.
+            // Um alergenio nunca fica escondido atras de um clique.
+            <details className="group rounded-lg border bg-card text-card-foreground shadow-sm">
+              <summary className="flex cursor-pointer list-none items-start gap-2 p-4 [&::-webkit-details-marker]:hidden">
+                <ChevronDown
+                  className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+                  aria-hidden
+                />
+                <span className="min-w-0">
+                  <span className="block font-semibold">Alergenios</span>
+                  <span
+                    className={cn(
+                      'block text-sm',
+                      alergenios.complete ? 'text-muted-foreground' : 'text-amber-700 dark:text-amber-400',
+                    )}
+                  >
+                    {alergenios.present.length > 0
+                      ? `Contem ${alergenios.present.map((a) => ALLERGEN_LABEL[a]).join(', ')}`
+                      : alergenios.complete
+                        ? 'Nenhum declarado'
+                        : 'Nenhum declarado ate agora'}
+                    {alergenios.complete ? '' : ` · ${alergenios.unreviewed.length} insumo(s) por verificar`}
+                  </span>
+                </span>
+              </summary>
+              <div className="px-4 pb-4">
+                <p className="mb-3 text-sm text-muted-foreground">
                   Juntados a partir dos insumos, sub-receitas incluidas.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+                </p>
                 <AllergenPanel report={alergenios} />
-              </CardContent>
-            </Card>
+              </div>
+            </details>
           ) : null}
 
           {cost ? (

@@ -178,9 +178,12 @@ const SECOES: Secao[] = [
             perde peso a limpar (fruta, carne). Se não perde, deixe como está.
           </li>
           <li>
-            <strong>Alergénios</strong> — marque os que tem e depois{' '}
-            <strong>&quot;já verifiquei este insumo&quot;</strong>, mesmo que não tenha
-            nenhum. Sem essa caixa, as fichas avisam que há insumos por verificar.
+            <strong>Alergénios</strong> — a secção vem fechada (toque em{' '}
+            <em>Alergénios</em> para abrir; o título diz o que já está marcado). Marque os
+            que tem e depois <strong>&quot;já verifiquei este insumo&quot;</strong>, mesmo
+            que não tenha nenhum. Sem essa caixa, as fichas avisam que há insumos por
+            verificar. Na ficha técnica, o cartão de alergénios também vem fechado, com o
+            resumo no título; a ficha impressa mostra sempre a lista toda.
           </li>
           <li>
             <strong>Avisar abaixo de</strong> — opcional: a quantidade em que já quer ir
@@ -298,9 +301,9 @@ const SECOES: Secao[] = [
             produtos com as quantidades (por exemplo, 10 bolos, 100 brigadeiros).
           </li>
           <li>
-            A app desce por todas as fichas e mostra o que falta comprar,{' '}
-            <strong>dividido por loja</strong> e em embalagens inteiras. No telemóvel, vá
-            riscando no supermercado.
+            A app desce por todas as fichas e mostra o que falta comprar, em embalagens
+            inteiras, numa lista só. No telemóvel, toque no <strong>círculo</strong> para
+            riscar; toque na linha para ver a loja, quanto precisa e onde fica mais barato.
           </li>
           <li>
             Ao chegar, <strong>Recebi esta compra</strong> — põe as embalagens no estoque.
@@ -348,17 +351,17 @@ const SECOES: Secao[] = [
             sábado&quot;).
           </li>
           <li>
-            Junte o que comprar: <strong>Juntar insumo</strong> (procura nos insumos
-            cadastrados), <strong>Juntar o que está abaixo do mínimo</strong>, ou{' '}
-            <strong>De uma produção</strong>.
+            Em <strong>+ Juntar</strong>: <em>Procurar insumo</em> (nos insumos
+            cadastrados), <em>Abaixo do mínimo</em>, ou <em>De uma produção</em>.
           </li>
           <li>
-            No supermercado, toque na linha para a <strong>riscar</strong>. Se o preço, a
-            loja ou a embalagem forem outros, corrija no lápis. O triângulo marca{' '}
-            <em>&quot;não havia&quot;</em>.
+            No supermercado, toque no <strong>círculo</strong> para riscar — o item desce
+            para <em>No carrinho</em>. Toque no resto da linha para ver a loja, o preço e
+            os botões <em>Editar</em> (preço, loja ou embalagem diferentes),{' '}
+            <em>Não havia</em> e <em>Remover</em>.
           </li>
           <li>
-            <strong>Achei mais barato:</strong> em <em>Juntar insumo</em>, escolha o insumo
+            <strong>Achei mais barato:</strong> em <em>+ Juntar → Procurar insumo</em>, escolha o insumo
             e escreva o preço que está a ver. A app mostra o estoque, o mínimo, para quantos
             dias chega e quanto mais barato (ou caro) é que o preço em uso. Depois{' '}
             <em>Juntar à lista</em> ou <em>Comprei — pôr no carrinho</em>.
@@ -374,6 +377,12 @@ const SECOES: Secao[] = [
           <em>&quot;usar este preço daqui para a frente&quot;</em>. Se a loja do preço em
           uso mudou o preço, esse passa a valer, porque é a realidade.
         </Nota>
+        <p>
+          <strong>Sem repetidos:</strong> cada insumo tem uma linha só. Juntar o que já lá
+          está soma as embalagens; <em>achei mais barato</em> corrige essa linha (o painel
+          avisa &quot;já está na lista&quot;); a mesma produção só se junta uma vez. Só o
+          que já está no carrinho fica à parte — precisar de mais é uma linha nova.
+        </p>
         <p>
           Uma lista que veio de uma produção dá entrada por aqui <em>ou</em> pelo{' '}
           <em>Recebi esta compra</em> da ordem — não pelos dois, senão o estoque entra a
