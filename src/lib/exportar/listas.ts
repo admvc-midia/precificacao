@@ -35,9 +35,9 @@ export const LISTAS = [
     descricao: 'Compras, producao, quebras, amostras, ajustes e contagens.',
   },
   {
-    id: 'vendas',
-    titulo: 'Vendas',
-    descricao: 'Quantidades e faturacao por mes e produto.',
+    id: 'encomendas',
+    titulo: 'Encomendas',
+    descricao: 'Uma linha por produto de cada encomenda: cliente, entrega, estado, preco e pagamento.',
   },
   {
     id: 'despesas',

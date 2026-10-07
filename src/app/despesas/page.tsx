@@ -11,7 +11,6 @@
  * que precifica a casa toda nao muda por baixo dos pes de ninguem.
  */
 
-import Link from 'next/link';
 import { Plus, Power, Wallet } from 'lucide-react';
 
 import { AjudaLink } from '@/components/ajuda-link';
@@ -42,7 +41,8 @@ import {
   totalMonthly,
   type ExpensePeriod,
 } from '@/lib/pricing/expenses';
-import { getSettings } from '@/lib/queries';
+import { grossByMonth, typicalMonth } from '@/lib/pricing/encomendas';
+import { currentPeriod, getAllDeliveredLines, getSettings } from '@/lib/queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,25 +92,21 @@ export default async function DespesasPage() {
 
   // ------------------------------------------------ a receita do mes
   //
-  // A faturacao escrita a mao ganha ao que as vendas dizem: quem a escreveu
-  // fe-lo justamente para responder "e se", ou porque ainda nao ha vendas.
+  // A faturacao escrita a mao ganha ao que as encomendas dizem: quem a
+  // escreveu fe-lo justamente para responder "e se", ou porque ainda nao ha
+  // encomendas entregues.
   const escrita = s.expectedMonthlyRevenue === null ? null : num(s.expectedMonthlyRevenue);
 
-  const vendas = await prisma.salesRecord.groupBy({
-    by: ['period'],
-    _sum: { revenue: true },
-    orderBy: { period: 'desc' },
-    take: 3,
-  });
-  const comReceita = vendas.filter((v) => v._sum.revenue !== null);
-  const mediaVendas =
-    comReceita.length > 0
-      ? comReceita.reduce((a, v) => a + num(v._sum.revenue), 0) / comReceita.length
-      : null;
-
-  const semReceitaPreenchida = await prisma.salesRecord.count({
-    where: { revenue: null },
-  });
+  const tipico = typicalMonth(
+    grossByMonth(await getAllDeliveredLines(), {
+      vatMode: s.vatMode,
+      vatRate: num(s.vatRate),
+    }),
+    currentPeriod(),
+  );
+  const mediaVendas = tipico?.average ?? null;
+  // So o mes corrente, ainda a meio: a media sai baixa e os fixos altos.
+  const soMesCorrente = tipico !== null && tipico.months.every((m) => m >= currentPeriod());
 
   const brutoMes = escrita ?? mediaVendas;
   const liquidoMes = brutoMes === null ? null : netFromGross(brutoMes, num(s.vatRate));
@@ -255,9 +251,9 @@ export default async function DespesasPage() {
               label="Faturacao mensal esperada, com IVA"
               htmlFor="rev"
               hint={
-                mediaVendas !== null
-                  ? `Deixe vazio para usar a media das vendas registadas: ${formatMoney(mediaVendas, currency)}.`
-                  : 'Ainda nao ha vendas registadas de onde tirar este valor.'
+                tipico !== null
+                  ? `Deixe vazio para usar a media das encomendas entregues (${tipico.months.join(', ')}): ${formatMoney(tipico.average, currency)}.`
+                  : 'Ainda nao ha encomendas entregues de onde tirar este valor.'
               }
             >
               <Input
@@ -273,15 +269,11 @@ export default async function DespesasPage() {
             </SubmitButton>
           </ActionForm>
 
-          {semReceitaPreenchida > 0 ? (
+          {escrita === null && soMesCorrente ? (
             <Alert tone="info">
-              Ha {semReceitaPreenchida} registo(s) de venda sem a receita preenchida.
-              Esses nao entram na media, por isso ela fica mais baixa do que a
-              realidade. Preencha-os em{' '}
-              <Link href="/vendas" className="underline">
-                Vendas
-              </Link>
-              , ou escreva a faturacao aqui a mao.
+              So ha entregas neste mes, que ainda vai a meio: a faturacao sai mais
+              baixa do que a de um mes inteiro, e a percentagem de custos fixos mais
+              alta. Espere pelo fim do mes, ou escreva a faturacao aqui a mao.
             </Alert>
           ) : null}
 

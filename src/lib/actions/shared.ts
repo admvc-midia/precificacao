@@ -8,6 +8,9 @@
 
 import { z } from 'zod';
 
+import { parseDecimal, parseQty } from '@/lib/money';
+import type { PurchaseUnit } from '@/lib/units';
+
 export interface ActionState {
   ok: boolean;
   message?: string;
@@ -74,4 +77,41 @@ export function errorMessage(err: unknown): string {
     return err.message;
   }
   return 'Erro inesperado.';
+}
+
+export interface DadosDePreco {
+  supplierId: string | null;
+  purchasePrice: number;
+  purchaseQty: number;
+  purchaseUnit: PurchaseUnit;
+  sku: string | null;
+  notes: string | null;
+}
+
+/**
+ * Le e valida os campos de preco de um formulario.
+ *
+ * Vive aqui e nao em `offers.ts`: num ficheiro 'use server' cada export e uma
+ * action chamavel do browser, e isto e um auxiliar das actions, nao uma delas.
+ */
+export function lerPreco(form: FormData): DadosDePreco {
+  const purchasePrice = parseDecimal(String(form.get('purchasePrice') ?? ''));
+  const purchaseQty = parseQty(String(form.get('purchaseQty') ?? ''));
+  const purchaseUnit = PURCHASE_UNIT.parse(
+    String(form.get('purchaseUnit') ?? 'KG'),
+  ) as PurchaseUnit;
+
+  if (purchasePrice <= 0) throw new Error('O preco tem de ser maior que zero.');
+  if (purchaseQty <= 0) {
+    throw new Error('O tamanho da embalagem tem de ser maior que zero.');
+  }
+
+  return {
+    supplierId: String(form.get('supplierId') ?? '') || null,
+    purchasePrice,
+    purchaseQty,
+    purchaseUnit,
+    sku: String(form.get('sku') ?? '').trim() || null,
+    notes: String(form.get('notes') ?? '').trim() || null,
+  };
 }

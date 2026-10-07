@@ -22,6 +22,7 @@ import { prisma } from '../src/lib/db';
 import { copiaCompleta, copiaEmJson } from '../src/lib/exportar/gerar';
 import { nomeDoFicheiro } from '../src/lib/exportar/listas';
 import { blobConfigurado, lerFoto } from '../src/lib/fotos';
+import { apagarOriginal, lerOriginal, listarOriginais, orfaos } from '../src/lib/livro/ficheiros';
 
 // A tarefa agendada corre isto fora do Next, que e quem costuma ler o .env.
 // O Prisma le o DATABASE_URL sozinho; o token do Blob nao. Nao substitui o que
@@ -61,9 +62,14 @@ try {
 
   // Fotos: so as que ainda nao estao na pasta. Uma que falhe nao estraga a
   // copia — fica para a proxima semana, e o registo diz qual foi.
-  const caminhos = (
-    copia.tabelas.Recipe as { photoPath?: string | null; photoThumbPath?: string | null }[]
-  ).flatMap((r) => [r.photoPath, r.photoThumbPath]).filter((c): c is string => Boolean(c));
+  // As das fichas e as das receitas do livro.
+  const comFoto = [
+    ...(copia.tabelas.Recipe as { photoPath?: string | null; photoThumbPath?: string | null }[]),
+    ...(copia.tabelas.BookRecipe as { photoPath?: string | null; photoThumbPath?: string | null }[]),
+  ];
+  const caminhos = comFoto
+    .flatMap((r) => [r.photoPath, r.photoThumbPath])
+    .filter((c): c is string => Boolean(c));
   if (caminhos.length > 0) {
     if (!blobConfigurado()) {
       console.warn(`${caminhos.length} foto(s) por copiar: falta BLOB_READ_WRITE_TOKEN no .env.`);
@@ -84,6 +90,38 @@ try {
         }
       }
       console.log(`Fotos: ${novas} nova(s), ${caminhos.length} no total.`);
+    }
+  }
+
+  // PDFs originais do livro de receitas: copiam-se como as fotos, e os
+  // esquecidos (importacoes abandonadas ha mais de um dia) apagam-se do Blob.
+  // Uma falha aqui nao estraga a copia, que ja esta gravada.
+  if (blobConfigurado()) {
+    try {
+      const usados = new Set(
+        (copia.tabelas.BookRecipe as { sourceFilePath?: string | null }[])
+          .map((r) => r.sourceFilePath)
+          .filter((c): c is string => Boolean(c)),
+      );
+      const pastaOriginais = join(destino, 'originais');
+      mkdirSync(pastaOriginais, { recursive: true });
+      let novos = 0;
+      for (const c of usados) {
+        const alvo = join(pastaOriginais, basename(c));
+        if (existsSync(alvo)) continue;
+        const f = await lerOriginal(c);
+        if (!f) {
+          console.warn(`Original ${c} nao existe no Blob.`);
+          continue;
+        }
+        writeFileSync(alvo, Buffer.from(await new Response(f.stream).arrayBuffer()));
+        novos++;
+      }
+      const esquecidos = orfaos(await listarOriginais(), usados);
+      for (const c of esquecidos) await apagarOriginal(c);
+      console.log(`Originais: ${novos} novo(s), ${usados.size} no total; ${esquecidos.length} esquecido(s) apagado(s).`);
+    } catch (err) {
+      console.warn('Originais nao tratados:', err instanceof Error ? err.message : err);
     }
   }
 

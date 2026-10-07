@@ -19,9 +19,11 @@ npm run dev
 Verificação:
 
 ```bash
-npm test      # 126 testes da matemática de custos, preços e estoque
-npm run lint  # ESLint com as regras do Next — apanha o que o tsc não vê
+npm test                 # ~330 testes sem base: custos, preços, estoque, datas, sessões, diff
+npm run lint             # ESLint com as regras do Next — apanha o que o tsc não vê
 npx tsc --noEmit
+npm run test:db:preparar # uma vez (e depois de mudar o schema): cria o schema dos testes
+npm run test:db          # ~80 testes das Server Actions, no schema precificaragao_teste
 ```
 
 O `lint` corre o ESLint diretamente: o `next lint` foi removido no Next 16. Ele apanha uma classe de problemas que o TypeScript ignora e que só apareceria no browser — listas sem `key`, `setState` dentro de efeitos, hooks mal usados.
@@ -43,7 +45,7 @@ e defina `DIRECT_URL` com a connection string sem pooler. O schema não declara 
 ### Deploy na Vercel
 
 1. Importe o repositório.
-2. Defina as variáveis de ambiente: `DATABASE_URL` e **`APP_PASSWORD`**. Sem a segunda ninguém entra, nem você — ver "A aplicação fecha por omissão" mais abaixo.
+2. Defina as variáveis de ambiente: `DATABASE_URL`, **`APP_PASSWORD`** (uma frase, só para criar a primeira conta de dono), **`SESSION_SECRET`** (32+ caracteres aleatórios, gerados com `npx tsx tools/novo-segredo.mts` — assina as sessões) e `BLOB_READ_WRITE_TOKEN` (fotos e PDFs, ou ligue o store em Storage → Connect). Sem as duas primeiras de segurança ninguém entra, nem você — ver "A aplicação fecha por omissão" mais abaixo.
 
    A `DATABASE_URL` de produção **não é a mesma** do seu computador. Em serverless cada pedido é um cliente novo, e o pooler do Supabase em modo sessão (porta `5432`) tem tecto de 15 ligações: meia dúzia de pedidos esgota-o e as páginas rebentam com um erro de render genérico, que não aponta para a porta nenhuma. Use o modo transação:
 
@@ -53,7 +55,7 @@ e defina `DIRECT_URL` com a connection string sem pooler. O schema não declara 
 
    `pgbouncer=true` desliga os prepared statements, que o modo transação não suporta; `connection_limit=1` evita que cada instância abra mais do que precisa. O `schema=` não é opcional aqui — esta base é partilhada com outro projeto.
 3. O `build` já corre `prisma generate`; o `postinstall` também, para o caso do cache de dependências da Vercel.
-4. Na primeira vez, corra `npm run db:push` apontando para o banco de produção.
+4. Na primeira vez, corra `npm run db:push` apontando para o banco de produção. Depois, abra a app: sem contas, a página de entrada pede a `APP_PASSWORD` e cria a conta de dono; as restantes criam-se em ⚙ → Utilizadores.
 
 #### "No Output Directory named 'public' found after the Build completed"
 
@@ -229,10 +231,24 @@ Em Configurações, **Casas decimais**: automático (até 4) ou 2. Só muda a le
 
 Em **⚙ → Exportar dados** (`/exportar`) há duas coisas:
 
-- **Listas em CSV** para o Excel — insumos, fornecedores, preços por fornecedor, fichas, preços sugeridos, movimentos, vendas e despesas. Ponto e vírgula entre colunas, vírgula decimal, BOM UTF-8: é o que o Excel em português abre sem assistente. Quantidades em kg/L/un, nunca gramas; texto que começa por `=`, `+`, `-` ou `@` leva apóstrofo, para não virar fórmula.
-- **Cópia completa** em JSON — todas as tabelas tal como estão. As tabelas são lidas do próprio schema (`Prisma.dmmf`), não de uma lista escrita à mão: o `dump-dados.mts` antigo esquecia as despesas, e ninguém deu por isso.
+- **Listas em CSV** para o Excel — insumos, fornecedores, preços por fornecedor, fichas, preços sugeridos, movimentos, encomendas e despesas. Ponto e vírgula entre colunas, vírgula decimal, BOM UTF-8: é o que o Excel em português abre sem assistente. Quantidades em kg/L/un, nunca gramas; texto que começa por `=`, `+`, `-` ou `@` leva apóstrofo, para não virar fórmula.
+- **Cópia completa** em JSON — todas as tabelas tal como estão. As tabelas são lidas do próprio schema (`Prisma.dmmf`), não de uma lista escrita à mão: um script antigo com a lista à mão esquecia as despesas, e ninguém deu por isso. **Sem segredos**: os hashes das palavras-passe e qualquer campo com nome de segredo (`password`, `hash`, `token`, `secret`) ficam de fora (`camposFora` em `lib/exportar/gerar.ts`).
 
-A mesma cópia corre sozinha: `prisma/copia-seguranca.mts <pasta> [quantas]` grava e apaga as mais antigas (12 por omissão), e `tools/agendar-copia.ps1` cria a tarefa do Windows — segundas às 10h, ou assim que o computador for ligado, para `OneDrive\Copias\precificacao`. O registo da última fica em `ultima-copia.log`, ao lado. Só lê a base.
+A mesma cópia corre sozinha: `prisma/copia-seguranca.mts <pasta> [quantas]` grava e apaga as mais antigas (12 por omissão), copia as fotos e os PDFs originais do livro de receitas, e apaga do Blob os PDFs de importações abandonadas há mais de 24 h. `tools/agendar-copia.ps1` cria a tarefa do Windows — segundas às 10h, ou assim que o computador for ligado, para `OneDrive\Copias\precificacao`. O registo da última fica em `ultima-copia.log`, ao lado.
+
+### Encomendas, clientes e pós-venda
+
+A casa trabalha por encomenda, e a venda **é** a encomenda (`CustomerOrder`): conta nos resultados quando é marcada como entregue, no mês de Lisboa em que o foi (`lib/datas.ts`). Cada linha guarda o preço combinado e o **custo do dia** — o lucro de setembro não muda porque a farinha subiu em outubro. "Produzir as marcadas" soma várias encomendas numa ordem de produção. Clientes com origem, quem indicou, gostos e aniversário; o pós-venda agenda-se ao entregar, só para quem deu consentimento (RGPD), com a mensagem do WhatsApp já escrita. `/vendas` (Resultados do mês) e `/relatorio` só leem. As contas puras vivem em `lib/pricing/encomendas.ts`, `clientes.ts` e `relatorio.ts`.
+
+### Contas, permissões e registo
+
+Três perfis (`UserRole`): **dono** (tudo), **cozinha** (o livro de receitas, sem custos) e **leitura**. O acesso decide-se em três sítios, de propósito redundantes: o `proxy.ts` (lista de rotas por perfil, pelo cookie assinado), o layout (confirma na base, a cada página, que a conta continua ativa e igual) e **cada action** (`exigirDono`, `exigirEditorDoLivro` em `lib/sessao.ts`) — uma action é chamável de qualquer página, e o menu escondido não protege nada. **Uma action nova tem de começar por um destes.**
+
+Palavras-passe em scrypt; 5 falhas seguidas bloqueiam a conta, 20 da mesma origem bloqueiam a origem, ambos 15 minutos. Sessões de 12 horas, ou 30 dias com "manter neste aparelho". O `AuditLog` regista entradas, contas, configurações, preços, estoque, encomendas e o que se apaga (`lib/registo.ts`; página `/registo`), e só se escreve.
+
+### Livro de receitas
+
+Receitas (`BookRecipe`) com versões (`BookRecipeVersion`): a 1 é a original e nunca muda; cada alteração cria a seguinte, com autor e motivo. A comparação é um diff de linhas e palavras próprio (`lib/livro/diff.ts`, LCS — sem dependência). Livros com secções e impressão pelo diálogo do browser (capa, índice, uma receita por folha). A importação lê o texto de PDFs com `unpdf` e separa-o por heurística (`lib/livro/importar.ts`); abre sempre num ecrã de revisão. PDFs digitalizados não têm texto e não se leem.
 
 **Repor a partir de uma cópia não está feito**, de propósito: a base é partilhada com outro projeto, e uma reposição automática é o tipo de script que se escreve com calma no dia em que for preciso, não antes.
 
@@ -320,7 +336,7 @@ tools/verify_pricing.py   segunda derivação das fórmulas, em Python
 
 **Tudo se mede a peso ou a unidade — não há litros.** O formulário de insumo oferece duas famílias: peso (kg/g) e unidades. Os líquidos vão à balança. A razão é que converter volume em peso exige a densidade — 1 L de óleo são 920 g, de mel são 1400 g — e a app não tem como a saber; adivinhar 1,0 dava um custo errado em silêncio, que é a pior espécie de erro numa app de custos. `src/lib/units.ts` continua a converter L e ml, porque um CSV de fornecedor pode trazê-los e internamente funcionam: o que desapareceu foi a opção no ecrã.
 
-**Limpar os dados é um script com ensaio, não um botão.** `prisma/reset-dados.mts` esvazia insumos, fichas, produções, estoque e vendas, e **mantém** configurações e canais. Sem `--apply` não apaga nada, só diz o que apagaria. Apaga tabela a tabela pelo Prisma, na ordem de filho para pai, e nunca com `TRUNCATE` ou `--accept-data-loss`: este Postgres é partilhado com outro projeto, que vive no schema `public`. O script conta as linhas desse outro projeto no fim, para o provar. Há também `prisma/dump-dados.mts`, que grava tudo em JSON antes.
+**Limpar os dados é um script com ensaio, não um botão.** `prisma/reset-dados.mts` esvazia insumos, fichas, produções, estoque, encomendas, clientes e as listas de compras, e **mantém** configurações, canais, contas e o livro de receitas. Sem `--apply` não apaga nada, só diz o que apagaria. Apaga tabela a tabela pelo Prisma, na ordem de filho para pai, e nunca com `TRUNCATE` ou `--accept-data-loss`: este Postgres é partilhado com outro projeto, que vive no schema `public`. O script conta as linhas desse outro projeto no fim, para o provar. Antes de o correr, faça uma cópia (`prisma/copia-seguranca.mts`).
 
 **Uma unidade base para calcular, outra para mostrar.** A base de dados guarda tudo em gramas e unidades, porque um insumo a 1,69 EUR/kg custa 0,00169 por grama e arredondar isso a cada receita acumula erro. O ecrã nunca mostra gramas: quantidades leem-se `0,015 kg`, custos leem-se `1,69 EUR/kg`. A conversão vive toda em `src/lib/units.ts` (`toDisplay`/`fromDisplay`), e os formulários convertem nas duas pontas. Nada escala automaticamente conforme o valor — uma lista onde uma linha diz `900 g` e a de baixo diz `1,2 kg` não se compara de relance, que é para o que a lista serve.
 
@@ -330,11 +346,11 @@ tools/verify_pricing.py   segunda derivação das fórmulas, em Python
 
 **O ponto decimal e ambiguo, e ja custou dinheiro.** Em pt-PT `1.234` sao mil duzentos e trinta e quatro; no teclado do telemovel `0.200` sao dois decimos. A regra antiga — "ponto seguido de tres digitos e milhar" — lia `0.200` como 200, e foi assim que 0,200 kg de fermento entraram na base como 200 kg, com o insumo a custar 0,01 EUR/kg em vez de 10,00. A regra nova acrescenta o que torna o caso inequivoco: **um grupo de milhar nunca comeca por zero**. Alem disso, ha agora duas funcoes: `parseDecimal` para dinheiro, onde o agrupamento faz sentido, e `parseQty` para quantidades, onde o ponto e sempre decimal — o tamanho de uma embalagem nunca se escreve com separador de milhar. O leitor de CSV usa as mesmas regras, porque sofria o mesmo engano.
 
-**A aplicacao fecha por omissao.** Sem `APP_PASSWORD` definida ninguem entra — nem sequer fica aberta com um aviso. Publicar sem definir a variavel deixa-o de fora ate a definir, e a pagina de entrada diz exatamente o que fazer. E a escolha certa para uma ferramenta que so tinha protecao nenhuma: o risco de ficar trancado durante dois minutos e menor que o de ter os custos e as margens da casa a mercê de quem apanhe o link.
+**A aplicacao fecha por omissao.** Sem `APP_PASSWORD` e `SESSION_SECRET` definidas ninguem entra — nem sequer fica aberta com um aviso. Publicar sem as definir deixa-o de fora ate as definir, e a pagina de entrada diz exatamente o que fazer. O risco de ficar trancado durante dois minutos e menor que o de ter os custos e as margens da casa a mercê de quem apanhe o link.
 
-Nao ha contas de utilizador, e e deliberado. Nada na aplicacao pertence a uma pessoa e nao a outra: nao ha autoria, nao ha permissoes, nao ha historico por utilizador. Email, recuperacao de palavra-passe e tabela de utilizadores seriam trabalho e superficie de ataque para distinguir pessoas que a aplicacao nao precisa de distinguir. E uma palavra-passe partilhada e um cookie assinado, e troca-la expulsa toda a gente.
+Ate outubro de 2026 nao havia contas, e a chave do cookie saia da `APP_PASSWORD`. As duas coisas mudaram com o livro de receitas, que precisa de autoria e de permissoes. E a chave passou a ser uma variavel propria, aleatoria: a `APP_PASSWORD` e uma frase que alguem escreve, e quem apanhasse um cookie podia tentar adivinha-la offline, sem limite de tentativas, e forjar uma sessao de dono. Agora a `APP_PASSWORD` so serve para criar a primeira conta. A data de validade vai **dentro** do que e assinado, para ninguem esticar a sessao mexendo no cookie.
 
-A chave que assina o cookie e derivada da propria palavra-passe em vez de ser uma segunda variavel. Uma variavel poe-se; duas esquecem-se — e uma configuracao de seguranca por fazer nao protege nada. Nao enfraquece: quem partisse a chave por forca bruta partia a palavra-passe pelo mesmo esforco, e entrava pela porta. A data de validade vai **dentro** do que e assinado, para ninguem esticar a sessao mexendo no cookie.
+**Cabecalhos de seguranca em `next.config.mjs`.** CSP nas paginas (scripts so do proprio sitio, sem molduras, sem plugins, formularios so para o proprio sitio — com `'unsafe-inline'` nos scripts porque o Next poe scripts seus na pagina), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, HSTS em producao, e sem `X-Powered-By`. A CSP nao vai nas rotas `/api`, que entregam ficheiros: o leitor de PDF do browser nao abre debaixo dela.
 
 O porteiro esta em `src/proxy.ts`, e nao `middleware.ts`: o Next 16 renomeou a convencao. Corre no Node.js, o que permite assinar com `node:crypto` em vez de reescrever tudo em Web Crypto.
 
@@ -342,15 +358,15 @@ O porteiro esta em `src/proxy.ts`, e nao `middleware.ts`: o Next 16 renomeou a c
 
 O nível está em `lowStock`/`stockLevel` (`lib/pricing/stock.ts`), fora do React e do Prisma como o resto do motor. Três decisões lá dentro: estar **exatamente** no mínimo já pede reposição (o mínimo é o ponto em que se compra, não aquele em que já faltou); "acabou" é separado de "a acabar" porque são decisões diferentes — uma entra na lista de compras, a outra já parou a produção; e um saldo **negativo** vem antes de tudo mesmo sem mínimo definido, porque não é falta de compras, é produção registada sem a entrada. A ordem dentro de cada gravidade é pela **fração** do mínimo que resta, não pela quantidade em falta: faltar meio quilo de fermento é mais urgente do que faltar meio quilo de farinha.
 
-**Ha uma rota de diagnostico: `/api/saude`.** Quando um Server Component falha em producao, o React esconde a mensagem e deixa so um numero — a verdadeira fica nos registos do servidor, que nem sempre sao faceis de alcancar. Esta rota tenta falar com o banco e devolve o erro tal como e, com o codigo do Prisma, mais o que a aplicacao ve da ligacao: anfitriao, porta, parametros, e se a porta e a de sessao ou a de transacao. Nao sai dali nem a palavra-passe nem as credenciais do banco, e so se ve com sessao iniciada, porque o `proxy.ts` cobre a rota como cobre as paginas.
+**Ha uma rota de diagnostico: `/api/saude`.** Quando um Server Component falha em producao, o React esconde a mensagem e deixa so um numero — a verdadeira fica nos registos do servidor, que nem sempre sao faceis de alcancar. Esta rota tenta falar com o banco e devolve o erro tal como e, com o codigo do Prisma, mais o que a aplicacao ve da ligacao: anfitriao, porta, parametros, e se a porta e a de sessao ou a de transacao. Nao sai dali nem a palavra-passe nem as credenciais do banco, e so o dono a ve: o `proxy.ts` cobre a rota pelo cookie assinado. De proposito, nao confirma a conta na base como as outras rotas — existe para quando a base falha.
 
 **O seed recusa-se a correr por cima de dados.** Ele chama-se idempotente, e e — para os registos que ele proprio cria. Numa base com dados a serio nao e inofensivo: apaga as linhas de qualquer ficha cujo nome bata com uma das suas, apaga as cotacoes do insumo de carne, e junta vinte e tal registos de demonstracao aos verdadeiros, que depois ha que distinguir um a um. Agora conta o que encontra, diz o que faria, e sai. `--forcar` para quem souber o que esta a fazer.
 
 **O CI nao tem base de dados, de proposito.** O motor de custos, as unidades, as despesas e a sessao sao funcoes puras e testam-se sem Postgres nenhum. O que depende da base verifica-se a mao contra uma base descartavel — ligar um runner publico a base real seria risco sem ganho. A `DATABASE_URL` no workflow e falsa e so existe porque o `prisma generate` exige que a variavel declarada no schema esteja definida; nada se liga a ela, e o `next build` passa porque todas as rotas sao dinamicas e nenhuma corre durante a compilacao.
 
-**Duas suites: uma sem base de dados, outra contra ela.** `npm test` corre o motor de custos, as unidades, as despesas e a sessao — funcoes puras, sem Postgres nenhum. E o que o CI faz e o que funciona logo apos clonar. `npm run test:db` corre os testes das Server Actions contra a base a serio, que e onde estiveram os defeitos que mais custaram: o preco em uso que nao se copiava para o insumo, o estoque que nascia sem entrada no livro.
+**Duas suites: uma sem base de dados, outra contra ela.** `npm test` corre o motor de custos, as unidades, as despesas, as datas, a sessao e o diff — funcoes puras, sem Postgres nenhum. E o que o CI faz e o que funciona logo apos clonar. `npm run test:db` corre os testes das Server Actions contra uma base a serio, que e onde estiveram os defeitos que mais custaram: o preco em uso que nao se copiava para o insumo, o estoque que nascia sem entrada no livro.
 
-Nao ha base de testes separada, e por isso tudo o que os segundos escrevem tem de ser reversivel e provado como tal. Tres defesas em `tests/integracao/base.ts`: nada se cria sem o prefixo `ZZTEMP-` e a limpeza apaga so por ele; a configuracao, que e um singleton e nao se pode prefixar, fotografa-se antes e repoe-se depois; e conta-se o que e do utilizador antes e depois, falhando se um numero mudar. A terceira e a rede que apanha o que as outras duas nao previram — e ha um ficheiro que a testa a ela, porque uma verificacao que passa sempre e indistinguivel de uma verificacao avariada.
+Essa base e o schema `precificaragao_teste`, no mesmo Postgres: a ligacao do `.env` com o schema trocado (`tests/integracao/base-de-testes.ts`), e os testes recusam-se a correr noutro. Ate outubro de 2026 escreviam na base da casa, e as defesas de entao ficaram: nada se cria sem o prefixo `ZZTEMP-`; a configuracao fotografa-se antes e repoe-se depois; e conta-se o que nao e de teste antes e depois, falhando se um numero mudar — com um ficheiro que testa a propria rede, porque uma verificacao que passa sempre e indistinguivel de uma avariada. As actions recebem uma sessao falsa (`sessao-falsa.ts`, com `comoSe(perfil)` para provar o que cada perfil nao pode fazer).
 
 **Alergenios: dois campos por insumo, nao um.** A lista diz o que ele contem; a marca de verificado diz se alguem olhou. Um produto que leva farinha e ovos mostraria "sem alergenios" enquanto ninguem preenchesse nada — e isso nao e informacao em falta, e informacao errada, a unica saida deste produto que pode mandar alguem para o hospital. Um insumo por verificar entra no resultado como **duvida**, nunca como ausencia, e a ficha separa os dois numeros. `collectAllergens` recebe as linhas ja achatadas, por isso as sub-receitas vem resolvidas, que e o que a lei quer. Vestigios por contaminacao cruzada nao sao modelados de todo: fingir que eram seria pior que a sua ausencia.
 

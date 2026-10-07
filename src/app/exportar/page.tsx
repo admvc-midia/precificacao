@@ -20,7 +20,7 @@ export const dynamic = 'force-dynamic';
  * uma centena avisa antes de se guardar um ficheiro vazio como copia.
  */
 async function contagens(): Promise<Record<ListaId, number>> {
-  const [insumos, fornecedores, ofertas, fichas, precos, movimentos, vendas, despesas] =
+  const [insumos, fornecedores, ofertas, fichas, precos, movimentos, encomendas, despesas] =
     await prisma.$transaction([
       prisma.ingredient.count(),
       prisma.supplier.count(),
@@ -28,10 +28,10 @@ async function contagens(): Promise<Record<ListaId, number>> {
       prisma.recipeItem.count(),
       prisma.recipe.count({ where: { kind: 'PRODUCT' } }),
       prisma.stockMovement.count(),
-      prisma.salesRecord.count(),
+      prisma.customerOrderLine.count(),
       prisma.expense.count(),
     ]);
-  return { insumos, fornecedores, ofertas, fichas, precos, movimentos, vendas, despesas };
+  return { insumos, fornecedores, ofertas, fichas, precos, movimentos, encomendas, despesas };
 }
 
 export default async function ExportarPage() {
@@ -85,7 +85,7 @@ export default async function ExportarPage() {
               <a
                 href={`/api/exportar/${l.id}`}
                 download
-                className="flex h-full items-start gap-3 rounded-lg border bg-card p-4 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex h-full items-start gap-3 rounded-lg border bg-card p-4 transition-colors hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <FileSpreadsheet
                   className="mt-0.5 h-5 w-5 shrink-0 text-primary"

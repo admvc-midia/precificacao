@@ -1,4 +1,4 @@
-# Guia rápido — Vendas e CMV real
+# Guia rápido — Resultados do mês e CMV real
 
 Escrito para: o dono da lanchonete que vai usar a app, não para quem programa.
 
@@ -53,27 +53,23 @@ pelas sub-receitas — o ovo e o óleo dentro da maionese saem também. Sai a qu
 **com fator de correção**: se a alcatra perde 20% na limpeza, saem do armazém 250 g para
 cada 200 g que vão ao prato.
 
-### 3. Lançar as vendas
+### 3. Entregar as encomendas
 
-Em **Vendas**, escolha o mês e escreva quantas unidades de cada produto saíram. Dois
-minutos por mês.
+Em **Encomendas**, quando a encomenda sai, carregue em **"Entregue"**.
 
-A receita é opcional: em branco, a app usa o preço que ela própria calculou. Preencha
-se quiser a receita real, que costuma ser diferente por causa de promoções.
-
-> **Deixar a quantidade em branco apaga o lançamento** desse produto. Não é o mesmo que
-> lançar zero — "não vendi" e "não lancei" são coisas diferentes, e a engenharia de
-> cardápio precisa de as distinguir.
+As vendas não se lançam à mão: são as encomendas entregues, com o preço combinado
+(descontos incluídos), no mês em que foram entregues. Uma encomenda que fica esquecida
+em *Pronta* não conta.
 
 ---
 
 ## Como ler o resultado
 
-No topo da página de **Vendas** ficam quatro números:
+Em **Resultados → Resultados do mês**, o cartão *CMV teórico e real* tem três números
+(a receita sem IVA está no topo da página):
 
 | | O que é |
 |---|---|
-| **Receita líquida** | O que faturou, já sem IVA |
 | **CMV teórico** | O que as fichas dizem que o vendido devia ter custado |
 | **CMV real** | O que de facto saiu do armazém, mais as quebras |
 | **Desvio** | A diferença entre os dois |
@@ -102,7 +98,7 @@ Se vai oferecer produto — num evento, na caixa de correio, para provar — cri
 produção com **"É para oferecer"** marcado.
 
 Os insumos saem do estoque na mesma. A diferença é que esse custo **não entra no CMV**:
-é custo de marketing, não custo do que foi vendido. A página de Vendas mostra-o à parte.
+é custo de marketing, não custo do que foi vendido. A página Resultados do mês mostra-o à parte.
 
 Se não marcar, uma campanha de amostras faz o CMV subir e você vai procurar desperdício
 que não existe — foi produto que saiu de propósito, sem receita associada.
@@ -122,7 +118,7 @@ só, no arranque.
 
 ## Engenharia de cardápio
 
-Mais abaixo na página de Vendas, a matriz cruza **o que vende** com **o que dá margem**.
+Mais abaixo em Resultados do mês, a matriz cruza **o que vende** com **o que dá margem**.
 Cada ponto é um produto, e a posição diz tudo:
 
 ```
@@ -154,8 +150,8 @@ As linhas de corte são as médias da sua própria casa, não um padrão de fora
 2. Compre                     →  a lista sai dividida por loja, risque no telemóvel
 3. Recebi esta compra         →  entra no estoque
 4. Produzi                    →  sai do estoque
-5. No fim do mês, Vendas      →  lance as unidades
-6. Leia o desvio              →  e vá atrás dele
+5. Entregue                   →  a encomenda conta como venda
+6. No fim do mês, Resultados  →  leia o desvio e vá atrás dele
 ```
 
 Os passos 3 e 4 são os que se esquecem, e são os que fazem tudo o resto funcionar.

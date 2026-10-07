@@ -5,6 +5,7 @@
 
 import { cache } from 'react';
 
+import { intervaloDoMes, mesAtual, mesEmLisboa } from '@/lib/datas';
 import { prisma } from '@/lib/db';
 import {
   buildCostContext,
@@ -287,34 +288,265 @@ export async function getMovementTotals(period: string) {
   };
 }
 
-export async function getSales(period: string) {
-  return prisma.salesRecord.findMany({
-    where: { period },
-    include: { recipe: { select: { id: true, name: true, kind: true } } },
-  });
-}
-
+/** Meses com encomendas entregues. */
 export async function getSalesPeriods(): Promise<string[]> {
-  const rows = await prisma.salesRecord.findMany({
-    distinct: ['period'],
-    select: { period: true },
-    orderBy: { period: 'desc' },
+  const entregas = await prisma.customerOrder.findMany({
+    where: { status: 'DELIVERED', deliveredAt: { not: null } },
+    select: { deliveredAt: true },
   });
-  return rows.map((r) => r.period);
+  const meses = new Set(entregas.map((e) => mesEmLisboa(e.deliveredAt!)));
+  return [...meses].sort().reverse();
 }
 
-/** "2026-09" -> [1 set 00:00 UTC, 1 out 00:00 UTC). */
+/** "2026-09" -> [1 set 00:00, 1 out 00:00), em hora de Lisboa. Ver `lib/datas.ts`. */
 export function monthRange(period: string): { start: Date; end: Date } {
-  const [ano, mes] = period.split('-').map(Number);
-  const start = new Date(Date.UTC(ano, mes - 1, 1));
-  const end = new Date(Date.UTC(mes === 12 ? ano + 1 : ano, mes === 12 ? 0 : mes, 1));
-  return { start, end };
+  return intervaloDoMes(period);
 }
 
-/** O mes corrente em "AAAA-MM". */
+/** O mes corrente em "AAAA-MM", em Lisboa. */
 export function currentPeriod(): string {
-  const now = new Date();
-  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+  return mesAtual();
+}
+
+// ---------------------------------------------------------------------------
+// Encomendas
+// ---------------------------------------------------------------------------
+
+const ENCOMENDA_LISTA = {
+  customer: { select: { id: true, name: true, phone: true } },
+  channel: { select: { id: true, name: true } },
+  lines: {
+    select: { qty: true, unitPrice: true, recipe: { select: { name: true } } },
+    orderBy: { id: 'asc' },
+  },
+} as const;
+
+/** Por entregar, da entrega mais proxima para a mais distante. */
+export async function getOpenCustomerOrders(take?: number) {
+  return prisma.customerOrder.findMany({
+    where: { status: { notIn: ['DELIVERED', 'CANCELLED'] } },
+    include: ENCOMENDA_LISTA,
+    orderBy: [{ dueAt: 'asc' }, { number: 'asc' }],
+    take,
+  });
+}
+
+/** Entregues e canceladas, das mais recentes para tras. Pagina na base. */
+export async function getClosedCustomerOrdersPage(pagina: number, porPagina: number) {
+  const where = { status: { in: ['DELIVERED', 'CANCELLED'] as Array<'DELIVERED' | 'CANCELLED'> } };
+  const total = await prisma.customerOrder.count({ where });
+  const p = paginar(total, porPagina, pagina);
+  const rows = await prisma.customerOrder.findMany({
+    where,
+    include: ENCOMENDA_LISTA,
+    orderBy: [{ dueAt: 'desc' }, { number: 'desc' }],
+    skip: p.inicio,
+    take: porPagina,
+  });
+  return { rows, p, total };
+}
+
+export async function getCustomerOrder(id: string) {
+  return prisma.customerOrder.findUnique({
+    where: { id },
+    include: {
+      customer: true,
+      channel: true,
+      productionOrder: { select: { id: true, name: true, producedAt: true } },
+      lines: {
+        include: { recipe: { select: { id: true, name: true } } },
+        orderBy: { id: 'asc' },
+      },
+    },
+  });
+}
+
+export async function getCustomers() {
+  return prisma.customer.findMany({
+    select: { id: true, name: true, phone: true, contactConsentAt: true },
+    orderBy: { name: 'asc' },
+  });
+}
+
+/** As encomendas entregues num mes, com o que e preciso para o lucro de cada uma. */
+export async function getDeliveredOrders(period: string) {
+  const { start, end } = monthRange(period);
+  return prisma.customerOrder.findMany({
+    where: { status: 'DELIVERED', deliveredAt: { gte: start, lt: end } },
+    include: { lines: true, channel: true },
+  });
+}
+
+/**
+ * Encomendas entregues entre dois meses (inclusive), com tudo o que o
+ * relatorio cruza: linhas, canal, e o cliente com a origem e quem o indicou.
+ */
+export async function getDeliveredOrdersBetween(fromPeriod: string, toPeriod: string) {
+  const { start } = monthRange(fromPeriod);
+  const { end } = monthRange(toPeriod);
+  return prisma.customerOrder.findMany({
+    where: { status: 'DELIVERED', deliveredAt: { gte: start, lt: end } },
+    include: {
+      lines: { include: { recipe: { select: { id: true, name: true } } } },
+      channel: true,
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          source: true,
+          referredBy: { select: { id: true, name: true } },
+        },
+      },
+    },
+    orderBy: { deliveredAt: 'asc' },
+  });
+}
+
+/** Todas as linhas entregues, com o dia — para a faturacao de cada mes. */
+export async function getAllDeliveredLines() {
+  const rows = await prisma.customerOrderLine.findMany({
+    where: { order: { status: 'DELIVERED', deliveredAt: { not: null } } },
+    select: { qty: true, unitPrice: true, order: { select: { deliveredAt: true } } },
+  });
+  return rows.map((r) => ({
+    deliveredAt: r.order.deliveredAt!,
+    qty: num(r.qty),
+    unitPrice: num(r.unitPrice),
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Clientes e pos-venda
+// ---------------------------------------------------------------------------
+
+const ENCOMENDA_DO_CLIENTE = {
+  select: {
+    id: true,
+    number: true,
+    status: true,
+    dueAt: true,
+    deliveredAt: true,
+    rating: true,
+    feedbackAt: true,
+    feedbackComment: true,
+    lines: { select: { qty: true, unitPrice: true, recipe: { select: { name: true } } } },
+  },
+  orderBy: { dueAt: 'desc' },
+} as const;
+
+/** Todos os clientes, com as encomendas resumidas para as contas da lista. */
+export async function getCustomersWithOrders() {
+  return prisma.customer.findMany({
+    include: {
+      referredBy: { select: { id: true, name: true } },
+      _count: { select: { referrals: true } },
+      orders: ENCOMENDA_DO_CLIENTE,
+    },
+    orderBy: { name: 'asc' },
+  });
+}
+
+export async function getCustomerDetail(id: string) {
+  return prisma.customer.findUnique({
+    where: { id },
+    include: {
+      referredBy: { select: { id: true, name: true } },
+      referrals: { select: { id: true, name: true }, orderBy: { name: 'asc' } },
+      orders: ENCOMENDA_DO_CLIENTE,
+      reminders: { orderBy: [{ doneAt: 'asc' }, { dueAt: 'asc' }] },
+    },
+  });
+}
+
+/**
+ * Pos-vendas por fazer: entregues, sem resposta, com dia marcado, e de quem
+ * aceitou ser contactado. A condicao do consentimento repete-se aqui de
+ * proposito — se alguem o retirar por um caminho que nao limpe o dia
+ * marcado, a lista continua a nao lhe escrever.
+ */
+export async function getPendingFollowUps() {
+  return prisma.customerOrder.findMany({
+    where: {
+      status: 'DELIVERED',
+      feedbackAt: null,
+      followUpDueAt: { not: null },
+      customer: { contactConsentAt: { not: null } },
+    },
+    include: {
+      customer: { select: { id: true, name: true, phone: true } },
+      lines: {
+        select: { id: true, qty: true, recipe: { select: { name: true } } },
+        orderBy: { id: 'asc' },
+      },
+    },
+    orderBy: { followUpDueAt: 'asc' },
+  });
+}
+
+/** As ultimas opinioes registadas. */
+export async function getRecentFeedback(take: number) {
+  return prisma.customerOrder.findMany({
+    where: { feedbackAt: { not: null } },
+    include: {
+      customer: { select: { id: true, name: true } },
+      lines: { select: { qty: true, rating: true, recipe: { select: { name: true } } } },
+    },
+    orderBy: { feedbackAt: 'desc' },
+    take,
+  });
+}
+
+export async function getOpenReminders() {
+  return prisma.reminder.findMany({
+    where: { doneAt: null },
+    include: {
+      customer: { select: { id: true, name: true } },
+      order: { select: { id: true, number: true } },
+    },
+    orderBy: { dueAt: 'asc' },
+  });
+}
+
+export async function getRecentlyDoneReminders(take: number) {
+  return prisma.reminder.findMany({
+    where: { doneAt: { not: null } },
+    include: {
+      customer: { select: { id: true, name: true } },
+      order: { select: { id: true, number: true } },
+    },
+    orderBy: { doneAt: 'desc' },
+    take,
+  });
+}
+
+/** Clientes com aniversario e consentimento — so a esses se pode escrever. */
+export async function getBirthdayCustomers() {
+  return prisma.customer.findMany({
+    where: {
+      birthDay: { not: null },
+      birthMonth: { not: null },
+      contactConsentAt: { not: null },
+    },
+    select: { id: true, name: true, phone: true, birthDay: true, birthMonth: true },
+  });
+}
+
+/** Linhas com nota (ou numa encomenda com nota), para a media por produto. */
+export async function getRatedLines() {
+  const rows = await prisma.customerOrderLine.findMany({
+    where: { OR: [{ rating: { not: null } }, { order: { rating: { not: null } } }] },
+    select: {
+      recipeId: true,
+      rating: true,
+      order: { select: { rating: true, _count: { select: { lines: true } } } },
+    },
+  });
+  return rows.map((r) => ({
+    recipeId: r.recipeId,
+    rating: r.rating,
+    orderRating: r.order.rating,
+    linesInOrder: r.order._count.lines,
+  }));
 }
 
 export async function getQuotes(ingredientId: string) {

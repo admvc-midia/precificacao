@@ -7,10 +7,9 @@
  * mudar e deixar esta rota de fora, ela continua fechada.
  */
 
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
-import { COOKIE, sessaoValida } from '@/lib/auth';
+import { utilizadorAtual } from '@/lib/sessao';
 import { copiaCompleta, copiaEmJson, gerarLista } from '@/lib/exportar/gerar';
 import { eLista, nomeDoFicheiro } from '@/lib/exportar/listas';
 
@@ -27,9 +26,10 @@ function ficheiro(conteudo: string, nome: string, tipo: string) {
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ lista: string }> }) {
-  const jar = await cookies();
-  if (!sessaoValida(jar.get(COOKIE)?.value)) {
-    return new NextResponse('Sessao em falta.', { status: 401 });
+  // O proxy ja so deixa passar o dono; aqui confirma-se na base que a conta continua igual.
+  const eu = await utilizadorAtual();
+  if (eu?.perfil !== 'OWNER') {
+    return new NextResponse('Sem permissao.', { status: 403 });
   }
 
   const { lista } = await params;

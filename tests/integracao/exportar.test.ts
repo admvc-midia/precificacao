@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 vi.mock('next/cache', () => ({ revalidatePath: () => {} }));
 
 import { saveIngredient } from '@/lib/actions/ingredients';
-import { copiaCompleta, gerarLista, tabelasDoSchema } from '@/lib/exportar/gerar';
+import { camposFora, copiaCompleta, gerarLista, tabelasDoSchema } from '@/lib/exportar/gerar';
 import { LISTAS } from '@/lib/exportar/listas';
 import {
   exigirSchemaCerto,
@@ -44,6 +44,25 @@ describe('copia completa', () => {
     expect(tabelas).toEqual(tabelasDoSchema().sort());
     expect(tabelas).toContain('Expense');
     expect(copia.contagem.Ingredient).toBe(await prisma.ingredient.count());
+  });
+
+  it('nunca leva hashes de palavras-passe nem outros segredos', async () => {
+    const conta = await prisma.user.create({
+      data: { username: nome('copia').toLowerCase(), name: 'Copia', passwordHash: 'scrypt$segredo' },
+    });
+    try {
+      const copia = await copiaCompleta();
+      const texto = JSON.stringify(copia);
+      expect(texto).not.toContain('scrypt$segredo');
+      expect(texto).not.toMatch(/"passwordHash"/);
+      // A conta continua la (para se saber quem fez cada versao), so sem o segredo.
+      expect(copia.tabelas.User.some((u) => (u as { id: string }).id === conta.id)).toBe(true);
+      // E qualquer campo com nome de segredo sai, mesmo sem estar na lista.
+      expect(camposFora('User')).toContain('passwordHash');
+      expect(camposFora('Ingredient')).toEqual([]);
+    } finally {
+      await prisma.user.delete({ where: { id: conta.id } });
+    }
   });
 
   it('guarda os decimais como texto, sem perder casas', async () => {

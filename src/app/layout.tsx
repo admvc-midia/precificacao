@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from 'next';
 import { Cormorant_Garamond } from 'next/font/google';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import Script from 'next/script';
 
 import { BottomNav, TopNav } from '@/components/site-nav';
 import { sair } from '@/lib/actions/auth';
+import { utilizadorAtual } from '@/lib/sessao';
 import { COOKIE_TEMA, lerTema, SCRIPT_TEMA } from '@/lib/tema';
 
 import './globals.css';
@@ -50,6 +52,15 @@ export async function generateViewport(): Promise<Viewport> {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const tema = lerTema((await cookies()).get(COOKIE_TEMA)?.value);
 
+  // O proxy so leu o cookie; aqui confirma-se na base que a conta continua
+  // ativa e igual. Se nao, sai — pela rota que pode apagar o cookie.
+  const caminho = (await headers()).get('x-caminho') ?? '';
+  const aberta = caminho === '/entrar' || caminho === '/sair';
+  const eu = aberta ? null : await utilizadorAtual();
+  if (!aberta && !eu) redirect('/sair?motivo=sessao');
+  // Palavra-passe provisoria (dada pelo dono): troca-se antes de mais nada.
+  if (eu?.mustChangePassword && caminho !== '/conta') redirect('/conta?trocar=1');
+
   return (
     // `dark` ja vem do servidor quando a escolha e escuro; em automatico e o
     // script abaixo que decide, e por isso a classe pode diferir da do
@@ -69,7 +80,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body className="min-h-screen bg-background">
         <div className="flex min-h-screen flex-col">
-          <TopNav sair={sair} tema={tema} />
+          <TopNav
+            sair={sair}
+            tema={tema}
+            perfil={eu?.perfil ?? null}
+            nome={eu?.name ?? null}
+          />
 
           {/* pb-24 no telemovel: a barra de baixo e fixa e taparia o fim da
               pagina. Acima de md ela nao existe e o espaco volta ao normal. */}
@@ -83,7 +99,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </div>
           </footer>
 
-          <BottomNav />
+          <BottomNav perfil={eu?.perfil ?? null} />
         </div>
       </body>
     </html>

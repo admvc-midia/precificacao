@@ -13,6 +13,8 @@ import { parseDecimal, parsePercent, parseQty } from '@/lib/money';
 import { buildCostContext } from '@/lib/mappers';
 import { computeRecipeCost } from '@/lib/pricing/cost';
 import { fromDisplay } from '@/lib/units';
+import { alvoDoFormulario, registar, resumoDoFormulario } from '@/lib/registo';
+import { exigirDono } from '@/lib/sessao';
 import {
   BASE_UNIT,
   errorMessage,
@@ -28,6 +30,7 @@ export async function saveRecipe(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    await exigirDono();
     const id = String(form.get('id') ?? '');
     const name = String(form.get('name') ?? '').trim();
     if (!name) throw new Error('O nome da ficha e obrigatorio.');
@@ -75,6 +78,7 @@ export async function deleteRecipe(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const id = String(form.get('id') ?? '');
     if (!id) throw new Error('Ficha nao informada.');
 
@@ -93,6 +97,7 @@ export async function deleteRecipe(
     revalidatePath('/fichas');
     revalidatePath('/precificacao');
     revalidatePath('/');
+    await registar({ quem: eu, acao: 'ficha.apagar', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return { ok: true, message: 'Ficha removida.' };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };
@@ -112,6 +117,7 @@ export async function addRecipeItem(
 ): Promise<ActionState> {
   let createdId: string | null = null;
   try {
+    await exigirDono();
     const recipeId = String(form.get('recipeId') ?? '');
     if (!recipeId) throw new Error('Ficha nao informada.');
 
@@ -175,6 +181,7 @@ export async function updateRecipeItem(
   let previous: { qty: number; unit: 'KG' | 'G' | 'L' | 'ML' | 'UN' } | null = null;
 
   try {
+    await exigirDono();
     if (!id) throw new Error('Linha nao informada.');
 
     const qty = parseQty(String(form.get('qty') ?? ''));
@@ -220,6 +227,7 @@ export async function deleteRecipeItem(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    await exigirDono();
     const id = String(form.get('id') ?? '');
     const recipeId = String(form.get('recipeId') ?? '');
     if (!id) throw new Error('Linha nao informada.');
@@ -242,6 +250,7 @@ export async function saveRecipePricing(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const id = String(form.get('id') ?? '');
     if (!id) throw new Error('Ficha nao informada.');
 
@@ -274,6 +283,7 @@ export async function saveRecipePricing(
     revalidatePath(`/precificacao/${id}`);
     revalidatePath('/precificacao');
     revalidatePath('/');
+    await registar({ quem: eu, acao: 'ficha.precificacao', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return { ok: true, message: 'Precificacao atualizada.' };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };

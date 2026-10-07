@@ -109,7 +109,7 @@ export function DreBreakdown({
           <div
             key={slice.key}
             tabIndex={0}
-            className="viz-seg outline-none ring-offset-2 ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+            className="viz-seg outline-hidden ring-offset-2 ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
             style={{
               flexGrow: slice.value,
               flexBasis: 0,

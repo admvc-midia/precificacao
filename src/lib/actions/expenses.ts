@@ -14,6 +14,8 @@ import { z } from 'zod';
 
 import { prisma } from '@/lib/db';
 import { parseDecimal } from '@/lib/money';
+import { alvoDoFormulario, registar, resumoDoFormulario } from '@/lib/registo';
+import { exigirDono } from '@/lib/sessao';
 import { errorMessage, type ActionState } from './shared';
 
 const EXPENSE_PERIOD = z.enum(['WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY']);
@@ -49,6 +51,7 @@ export async function saveExpense(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    await exigirDono();
     const id = String(form.get('id') ?? '');
 
     const dados = expenseSchema.parse({
@@ -84,12 +87,14 @@ export async function deleteExpense(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const id = String(form.get('id') ?? '');
     if (!id) throw new Error('Despesa nao informada.');
 
     await prisma.expense.delete({ where: { id } });
 
     revalidar();
+    await registar({ quem: eu, acao: 'despesa.apagar', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return { ok: true, message: 'Despesa removida.' };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };
@@ -102,6 +107,7 @@ export async function toggleExpense(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    await exigirDono();
     const id = String(form.get('id') ?? '');
     if (!id) throw new Error('Despesa nao informada.');
 
@@ -131,6 +137,7 @@ export async function saveExpectedRevenue(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const bruto = String(form.get('expectedMonthlyRevenue') ?? '').trim();
     const valor = bruto ? parseDecimal(bruto) : null;
 
@@ -144,6 +151,7 @@ export async function saveExpectedRevenue(
     });
 
     revalidar();
+    await registar({ quem: eu, acao: 'despesas.faturacao-esperada', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return {
       ok: true,
       message:
@@ -167,6 +175,7 @@ export async function applyFixedCostRate(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const rate = parseDecimal(String(form.get('rate') ?? ''));
 
     if (!Number.isFinite(rate) || rate < 0) {
@@ -188,6 +197,7 @@ export async function applyFixedCostRate(
     const para = rate * 100;
 
     revalidar();
+    await registar({ quem: eu, acao: 'despesas.aplicar-custos-fixos', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return {
       ok: true,
       message: `Custos fixos passaram de ${de.toFixed(1)}% para ${para.toFixed(1)}%. Todos os precos sugeridos foram recalculados.`,

@@ -16,6 +16,7 @@ import { revalidatePath } from 'next/cache';
 
 import { prisma } from '@/lib/db';
 import { apagarFotos, gravarFotos, lerImagem, MAX_FOTO, MAX_MINI } from '@/lib/fotos';
+import { exigirDono } from '@/lib/sessao';
 import { errorMessage, type ActionState } from './shared';
 
 function revalidar(id: string) {
@@ -27,6 +28,7 @@ function revalidar(id: string) {
 export async function saveRecipePhoto(_prev: ActionState, form: FormData): Promise<ActionState> {
   let novos: { photoPath: string; photoThumbPath: string } | null = null;
   try {
+    await exigirDono();
     const id = String(form.get('id') ?? '');
     const ficha = await prisma.recipe.findUnique({
       where: { id },
@@ -52,6 +54,7 @@ export async function saveRecipePhoto(_prev: ActionState, form: FormData): Promi
 
 export async function removeRecipePhoto(_prev: ActionState, form: FormData): Promise<ActionState> {
   try {
+    await exigirDono();
     const id = String(form.get('id') ?? '');
     const ficha = await prisma.recipe.findUnique({
       where: { id },

@@ -179,7 +179,7 @@ export function PurchaseChecklist({
   return (
     <div className="space-y-3">
       {/* Uma linha de progresso, colada ao topo enquanto se rola. */}
-      <div className="sticky top-14 z-10 rounded-lg border bg-background/95 px-3 py-2 backdrop-blur">
+      <div className="sticky top-14 z-10 rounded-lg border bg-background/95 px-3 py-2 backdrop-blur-sm">
         <div className="flex items-center justify-between gap-3">
           <p className="min-w-0 text-sm">
             <strong className="tabular-nums">

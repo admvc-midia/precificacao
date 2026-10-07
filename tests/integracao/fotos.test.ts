@@ -7,6 +7,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/cache', () => ({ revalidatePath: () => {} }));
+vi.mock('next/navigation', () => ({
+  redirect: (url: string) => {
+    throw new Error(`REDIRECT ${url}`);
+  },
+}));
 
 const blob = vi.hoisted(() => ({
   gravados: [] as { pathname: string; access: string }[],
@@ -26,6 +31,7 @@ vi.mock('@vercel/blob', () => ({
 }));
 
 import { removeRecipePhoto, saveRecipePhoto } from '@/lib/actions/photos';
+import { apagarReceita, guardarFotoReceita, tirarFotoReceita } from '@/lib/actions/livro';
 import { deleteRecipe, saveRecipe } from '@/lib/actions/recipes';
 import {
   exigirSchemaCerto,
@@ -38,6 +44,7 @@ import {
   reporSettings,
   type Retrato,
 } from './base';
+import { comoSe } from './sessao-falsa';
 
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 1, 2, 3]);
 let antes: Retrato;
@@ -148,6 +155,57 @@ describe('foto da ficha', () => {
 
     const r = await deleteRecipe({ ok: true }, form({ id: f.id }));
     expect(r.ok, r.message).toBe(true);
+    expect(blob.apagados).toEqual(expect.arrayContaining([com.photoPath, com.photoThumbPath]));
+  });
+});
+
+describe('foto da receita do livro', () => {
+  async function receita() {
+    return prisma.bookRecipe.create({
+      data: {
+        title: nome('Receita'),
+        versions: { create: { number: 1, ingredients: 'farinha', steps: 'misturar', authorName: 'Teste' } },
+      },
+    });
+  }
+
+  it('grava na pasta do livro, troca apagando a antiga, e tira', async () => {
+    comoSe('KITCHEN');
+    const r = await receita();
+    const g = await guardarFotoReceita({ ok: true }, comFotos(r.id));
+    expect(g.ok, g.message).toBe(true);
+    const com = await prisma.bookRecipe.findUniqueOrThrow({ where: { id: r.id } });
+    expect(com.photoPath).toMatch(new RegExp(`^livro/fotos/${r.id}-sufixo\\d+\\.jpg$`));
+    expect(blob.gravados.every((x) => x.access === 'private')).toBe(true);
+
+    blob.apagados.length = 0;
+    await guardarFotoReceita({ ok: true }, comFotos(r.id));
+    expect(blob.apagados.sort()).toEqual([com.photoPath, com.photoThumbPath].sort());
+
+    const t = await tirarFotoReceita({ ok: true }, form({ id: r.id }));
+    expect(t.ok, t.message).toBe(true);
+    expect((await prisma.bookRecipe.findUniqueOrThrow({ where: { id: r.id } })).photoPath).toBeNull();
+    comoSe('OWNER');
+  });
+
+  it('a leitura nao poe fotos', async () => {
+    const r = await receita();
+    comoSe('READER');
+    try {
+      const g = await guardarFotoReceita({ ok: true }, comFotos(r.id));
+      expect(g.ok).toBe(false);
+      expect(blob.gravados).toHaveLength(0);
+    } finally {
+      comoSe('OWNER');
+    }
+  });
+
+  it('apagar a receita apaga as fotos', async () => {
+    const r = await receita();
+    await guardarFotoReceita({ ok: true }, comFotos(r.id));
+    const com = await prisma.bookRecipe.findUniqueOrThrow({ where: { id: r.id } });
+    blob.apagados.length = 0;
+    await expect(apagarReceita({ ok: true }, form({ id: r.id }))).rejects.toThrow(/^REDIRECT/);
     expect(blob.apagados).toEqual(expect.arrayContaining([com.photoPath, com.photoThumbPath]));
   });
 });

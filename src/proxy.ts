@@ -1,59 +1,70 @@
 /**
- * Porteiro: nada se ve sem a palavra-passe.
+ * Porteiro: nada se ve sem sessao, e cada perfil so passa onde pode.
  *
  * Chama-se `proxy.ts` e nao `middleware.ts` porque o Next 16 renomeou a
  * convencao. Corre no Node.js, o que permite usar `node:crypto` em
- * `lib/auth.ts` sem reescrever a assinatura em Web Crypto.
+ * `lib/auth.ts`.
+ *
+ * Aqui so se le o cookie assinado — sem ir a base, para nao atrasar cada
+ * pedido. A confirmacao de que a conta continua ativa e com o mesmo perfil
+ * faz-se no layout (paginas) e em cada action (escritas): ver `lib/sessao.ts`.
  *
  * ---------------------------------------------------------------------------
  * FECHA POR OMISSAO
  * ---------------------------------------------------------------------------
- * Sem `APP_PASSWORD` definida, isto **nao** deixa a aplicacao aberta: manda
- * tudo para `/entrar`, que explica o que falta configurar. Uma aplicacao de
- * custos aberta na internet e um problema silencioso — quem apanhe o link
- * altera precos e estoque, e nada no ecra denuncia que assim e.
- *
- * O senao esta dito em voz alta no README: quem publicar sem definir a
- * variavel fica de fora ate a definir.
+ * Sem `APP_PASSWORD` definida, nenhum cookie e valido e tudo vai para
+ * `/entrar`, que explica o que falta configurar.
  */
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-import { COOKIE, sessaoValida } from '@/lib/auth';
+import { COOKIE, inicioDoPerfil, lerSessao, rotaPermitida } from '@/lib/auth';
+
+/** Abertas sem sessao: a porta, e a saida (que apaga um cookie que ja nao vale). */
+const SEM_SESSAO = new Set(['/entrar', '/sair']);
 
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
-  // A propria pagina de entrada, senao nao havia como entrar.
-  if (pathname === '/entrar') return NextResponse.next();
+  // O caminho segue para o layout, que precisa dele para confirmar a sessao
+  // na base sem entrar em ciclo na propria pagina de entrada.
+  const cabecalhos = new Headers(request.headers);
+  cabecalhos.set('x-caminho', pathname);
+  const seguir = () => NextResponse.next({ request: { headers: cabecalhos } });
 
-  if (sessaoValida(request.cookies.get(COOKIE)?.value)) {
-    return NextResponse.next();
+  if (SEM_SESSAO.has(pathname)) return seguir();
+
+  const sessao = lerSessao(request.cookies.get(COOKIE)?.value);
+  if (!sessao) {
+    const destino = new URL('/entrar', request.url);
+    // Para devolver a pessoa ao sitio onde ia, depois de entrar. So caminhos
+    // internos: a action de entrar volta a conferir.
+    if (pathname !== '/') destino.searchParams.set('de', pathname + search);
+    return NextResponse.redirect(destino);
   }
 
-  const destino = new URL('/entrar', request.url);
-  // Para devolver a pessoa ao sitio onde ia, depois de entrar. So caminhos
-  // internos: um `de=https://outro-sitio` seria um redirecionamento aberto.
-  if (pathname !== '/') destino.searchParams.set('de', pathname + search);
+  if (!rotaPermitida(sessao.perfil, pathname)) {
+    // As APIs respondem 403; as paginas mandam para o inicio do perfil.
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ erro: 'Sem permissao.' }, { status: 403 });
+    }
+    return NextResponse.redirect(new URL(inicioDoPerfil(sessao.perfil), request.url));
+  }
 
-  return NextResponse.redirect(destino);
+  return seguir();
 }
 
 export const config = {
   /**
    * Tudo menos o que o browser precisa antes de haver sessao. Sem esta
-   * exclusao, a propria pagina de entrada ficaria sem estilos nem JavaScript,
-   * porque os pedidos deles tambem seriam redirecionados.
-   *
-   * O logotipo e a estampa (em `public/`) tambem: a pagina de entrada mostra-os
-   * antes do login, e nao tem nada da casa.
+   * exclusao, a propria pagina de entrada ficaria sem estilos nem JavaScript.
    *
    * Os ficheiros soltos vao pelo NOME EXATO, com `$` no fim. Um prefixo como
-   * `icon` ou `logo-` deixaria tambem passar, sem palavra-passe, qualquer rota
-   * futura que comecasse assim (`/iconografia`) — e nada avisaria. So as duas
-   * pastas do `_next` ficam por prefixo, porque tem subcaminhos. Um ficheiro
-   * novo em `public/` que a pagina de entrada precise tem de entrar nesta lista.
+   * `icon` ou `logo-` deixaria tambem passar, sem sessao, qualquer rota futura
+   * que comecasse assim (`/iconografia`) — e nada avisaria. So as duas pastas
+   * do `_next` ficam por prefixo, porque tem subcaminhos. Um ficheiro novo em
+   * `public/` que a pagina de entrada precise tem de entrar nesta lista.
    */
   matcher: [
     '/((?!_next/static|_next/image|(?:favicon\\.ico|robots\\.txt|icon\\.svg|apple-icon\\.png|logo-creme\\.png|logo-vinho\\.png|estampa\\.svg|estampa-escura\\.svg)$).*)',

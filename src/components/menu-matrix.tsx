@@ -115,8 +115,8 @@ export function MenuMatrix({
         >
           {/* Fundo dos quadrantes: um tom quase impercetivel nos dois "bons",
               para orientar sem competir com os pontos. */}
-          <rect x={cx} y={T} width={W - R - cx} height={cy - T} className="fill-primary/[0.04]" />
-          <rect x={L} y={T} width={cx - L} height={cy - T} className="fill-primary/[0.02]" />
+          <rect x={cx} y={T} width={W - R - cx} height={cy - T} className="fill-primary/4" />
+          <rect x={L} y={T} width={cx - L} height={cy - T} className="fill-primary/2" />
 
           {/* Moldura e linhas de corte. Hairline, solidas, recessivas. */}
           <rect
@@ -185,7 +185,7 @@ export function MenuMatrix({
                   r={14}
                   fill="transparent"
                   tabIndex={0}
-                  className="mm-hit outline-none"
+                  className="mm-hit outline-hidden"
                 >
                   {/* Uma string so: o <title> do SVG e texto, e o React
                       recusa um array de nodes aqui. */}

@@ -19,8 +19,14 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Field, Select } from '@/components/ui/form-controls';
-import { Input } from '@/components/ui/input';
-import { deleteChannel, saveChannel, saveSettings } from '@/lib/actions/settings';
+import { Input, Textarea } from '@/components/ui/input';
+import {
+  deleteChannel,
+  saveChannel,
+  saveFollowUpSettings,
+  saveSettings,
+} from '@/lib/actions/settings';
+import { CHAVES_MENSAGEM, MENSAGEM_POS_VENDA } from '@/lib/pricing/clientes';
 import { num } from '@/lib/mappers';
 import { formatMoney, SUPPORTED_CURRENCIES, currencyOf } from '@/lib/money';
 import { priceDenominator } from '@/lib/pricing/price';
@@ -321,6 +327,51 @@ export default async function ConfiguracoesPage() {
             </CardContent>
           </Card>
 
+          <Card>
+            <CardHeader>
+              <CardTitle>Pós-venda</CardTitle>
+              <CardDescription>
+                Quando perguntar ao cliente se gostou, e a mensagem que vai no WhatsApp.
+                Só se escreve a quem aceitou ser contactado.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ActionForm action={saveFollowUpSettings}>
+                <Field
+                  label="Dias depois da entrega"
+                  htmlFor="followUpDays"
+                  hint="Conta a partir de quando a encomenda é marcada como entregue."
+                >
+                  <Input
+                    id="followUpDays"
+                    name="followUpDays"
+                    inputMode="numeric"
+                    defaultValue={String(s.followUpDays)}
+                    className="w-24"
+                  />
+                </Field>
+                <Field
+                  label="Mensagem do WhatsApp"
+                  htmlFor="followUpMessage"
+                  hint={
+                    <>
+                      Pode usar {CHAVES_MENSAGEM.join(', ')} — trocam-se pelo primeiro nome do
+                      cliente, o nome da casa, os produtos e o dia da entrega. Apague tudo
+                      para voltar à mensagem de origem.
+                    </>
+                  }
+                >
+                  <Textarea
+                    id="followUpMessage"
+                    name="followUpMessage"
+                    rows={6}
+                    defaultValue={s.followUpMessage ?? MENSAGEM_POS_VENDA}
+                  />
+                </Field>
+                <SubmitButton>Guardar pós-venda</SubmitButton>
+              </ActionForm>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

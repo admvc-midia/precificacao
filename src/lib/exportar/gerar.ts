@@ -12,6 +12,7 @@ import { prisma } from '@/lib/db';
 import { num, numOrNull } from '@/lib/mappers';
 import { ALLERGEN_LABEL, type Allergen } from '@/lib/pricing/allergens';
 import { CATEGORY_LABEL, PERIOD_LABEL, type ExpensePeriod } from '@/lib/pricing/expenses';
+import { PAGAMENTO_LABEL, STATUS_LABEL } from '@/lib/pricing/encomendas';
 import { MOVEMENT_LABEL } from '@/lib/pricing/stock';
 import { priceForRecipe, referenceChannel } from '@/lib/pricing/sugerido';
 import { getCostedRecipes } from '@/lib/queries';
@@ -282,14 +283,60 @@ async function movimentos() {
   );
 }
 
-async function vendas() {
-  const rows = await prisma.salesRecord.findMany({
-    include: { recipe: { select: { name: true } } },
-    orderBy: [{ period: 'desc' }, { recipe: { name: 'asc' } }],
+/**
+ * Uma linha por produto de cada encomenda. A entrega sai como texto
+ * ("2026-10-08 15:30"): e hora de Lisboa guardada como UTC, e um Date
+ * passaria pelo fuso do Excel.
+ */
+async function encomendas() {
+  const rows = await prisma.customerOrderLine.findMany({
+    include: {
+      recipe: { select: { name: true } },
+      order: {
+        include: {
+          customer: { select: { name: true, phone: true } },
+          channel: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: [{ order: { number: 'desc' } }, { id: 'asc' }],
   });
   return montarCsv(
-    ['Mes', 'Produto', 'Quantidade', 'Faturacao'],
-    rows.map((r) => [r.period, r.recipe.name, num(r.qty), numOrNull(r.revenue)]),
+    [
+      'Encomenda',
+      'Entrega',
+      'Estado',
+      'Entregue em',
+      'Cliente',
+      'Telefone',
+      'Canal',
+      'Produto',
+      'Quantidade',
+      'Preco unitario',
+      'Preco de tabela',
+      'Total',
+      'Pago',
+      'Forma de pagamento',
+    ],
+    rows.map((l) => {
+      const e = l.order;
+      return [
+        e.number,
+        e.dueAt.toISOString().slice(0, 16).replace('T', ' '),
+        STATUS_LABEL[e.status],
+        e.deliveredAt,
+        e.customer?.name,
+        e.customer?.phone,
+        e.channel?.name,
+        l.recipe.name,
+        num(l.qty),
+        num(l.unitPrice),
+        numOrNull(l.listPrice),
+        num(l.qty) * num(l.unitPrice),
+        e.paid,
+        e.paymentMethod ? PAGAMENTO_LABEL[e.paymentMethod] : null,
+      ];
+    }),
   );
 }
 
@@ -317,7 +364,7 @@ const GERADORES: Record<ListaId, () => Promise<string>> = {
   fichas,
   precos,
   movimentos,
-  vendas,
+  encomendas,
   despesas,
 };
 
@@ -352,13 +399,42 @@ export interface CopiaCompleta {
   tabelas: Record<string, unknown[]>;
 }
 
+/**
+ * Campos que nunca saem na copia.
+ *
+ * A copia vai para o OneDrive e pode ser descarregada pelo dono: e um ficheiro
+ * que anda por ai. Os hashes das palavras-passe nao tem nada que fazer nele —
+ * repor uma copia nunca precisaria deles (as pessoas definiam palavras-passe
+ * novas), e fora da base sao um alvo para quem os tente adivinhar.
+ *
+ * Alem da lista, qualquer campo com nome de segredo fica de fora: um campo
+ * novo `apiToken` nao entra na copia so porque alguem se esqueceu desta lista.
+ */
+const CAMPOS_FORA: Record<string, string[]> = { User: ['passwordHash'] };
+const PARECE_SEGREDO = /password|hash|token|secret/i;
+
+export function camposFora(modelo: string): string[] {
+  const doModelo = Prisma.dmmf.datamodel.models.find((m) => m.name === modelo);
+  const porNome = (doModelo?.fields ?? []).map((f) => f.name).filter((n) => PARECE_SEGREDO.test(n));
+  return [...new Set([...(CAMPOS_FORA[modelo] ?? []), ...porNome])];
+}
+
 export async function copiaCompleta(): Promise<CopiaCompleta> {
   const cliente = prisma as unknown as Record<string, { findMany: () => Promise<unknown[]> }>;
   const tabelas: Record<string, unknown[]> = {};
   // Uma de cada vez: com o pooler em modo sessao ha poucas ligacoes, e isto
   // nao tem pressa.
   for (const modelo of tabelasDoSchema()) {
-    tabelas[modelo] = await cliente[acessor(modelo)].findMany();
+    const fora = camposFora(modelo);
+    const linhas = await cliente[acessor(modelo)].findMany();
+    // Tira depois de ler, e nao com `omit` na consulta: no Prisma 5 o `omit`
+    // ainda e experimental. O efeito no ficheiro e o mesmo.
+    tabelas[modelo] =
+      fora.length === 0
+        ? linhas
+        : linhas.map((l) =>
+            Object.fromEntries(Object.entries(l as Record<string, unknown>).filter(([k]) => !fora.includes(k))),
+          );
   }
   return {
     app: 'precificaragao',

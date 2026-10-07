@@ -291,7 +291,7 @@ export default async function FichaPage({
             // Fechado por omissao (usa-se pouco), mas o titulo diz sempre o
             // essencial: o que contem, ou quantos insumos faltam verificar.
             // Um alergenio nunca fica escondido atras de um clique.
-            <details className="group rounded-lg border bg-card text-card-foreground shadow-sm">
+            <details className="group rounded-lg border bg-card text-card-foreground shadow-xs">
               <summary className="flex cursor-pointer list-none items-start gap-2 p-4 [&::-webkit-details-marker]:hidden">
                 <ChevronDown
                   className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"

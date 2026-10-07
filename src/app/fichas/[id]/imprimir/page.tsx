@@ -116,7 +116,7 @@ export default async function ImprimirFichaPage({
               width={1200}
               height={342}
               priority
-              className="h-12 w-auto dark:hidden print:!block"
+              className="h-12 w-auto dark:hidden print:block!"
             />
             <Image
               src="/logo-creme.png"
@@ -124,7 +124,7 @@ export default async function ImprimirFichaPage({
               aria-hidden
               width={1200}
               height={342}
-              className="hidden h-12 w-auto dark:block print:!hidden"
+              className="hidden h-12 w-auto dark:block print:hidden!"
             />
             <span className="text-xs text-muted-foreground">Ficha tecnica</span>
           </div>

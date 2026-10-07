@@ -41,7 +41,7 @@ async function confirmarBaseVazia(): Promise<void> {
     fichas: await prisma.recipe.count(),
     despesas: await prisma.expense.count(),
     'movimentos de estoque': await prisma.stockMovement.count(),
-    vendas: await prisma.salesRecord.count(),
+    encomendas: await prisma.customerOrder.count(),
   };
 
   const ocupado = Object.entries(contagem).filter(([, n]) => n > 0);

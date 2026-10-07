@@ -20,11 +20,12 @@ import { revalidatePath } from 'next/cache';
 
 import { prisma } from '@/lib/db';
 import { num } from '@/lib/mappers';
-import { parseDecimal, parseQty } from '@/lib/money';
 import { rankOffers } from '@/lib/pricing/offers';
-import { baseUnitOf, type PurchaseUnit } from '@/lib/units';
+import { baseUnitOf } from '@/lib/units';
 import { sincronizarEmUso } from '@/lib/escritas';
-import { errorMessage, PURCHASE_UNIT, type ActionState } from './shared';
+import { alvoDoFormulario, registar, resumoDoFormulario } from '@/lib/registo';
+import { exigirDono } from '@/lib/sessao';
+import { errorMessage, lerPreco, type ActionState } from './shared';
 
 function revalidar() {
   revalidatePath('/insumos');
@@ -35,38 +36,6 @@ function revalidar() {
   revalidatePath('/fichas', 'layout');
   revalidatePath('/precificacao', 'layout');
   revalidatePath('/');
-}
-
-export interface DadosDePreco {
-  supplierId: string | null;
-  purchasePrice: number;
-  purchaseQty: number;
-  purchaseUnit: PurchaseUnit;
-  sku: string | null;
-  notes: string | null;
-}
-
-/** Le e valida os campos de preco de um formulario. */
-export async function lerPreco(form: FormData): Promise<DadosDePreco> {
-  const purchasePrice = parseDecimal(String(form.get('purchasePrice') ?? ''));
-  const purchaseQty = parseQty(String(form.get('purchaseQty') ?? ''));
-  const purchaseUnit = PURCHASE_UNIT.parse(
-    String(form.get('purchaseUnit') ?? 'KG'),
-  ) as PurchaseUnit;
-
-  if (purchasePrice <= 0) throw new Error('O preco tem de ser maior que zero.');
-  if (purchaseQty <= 0) {
-    throw new Error('O tamanho da embalagem tem de ser maior que zero.');
-  }
-
-  return {
-    supplierId: String(form.get('supplierId') ?? '') || null,
-    purchasePrice,
-    purchaseQty,
-    purchaseUnit,
-    sku: String(form.get('sku') ?? '').trim() || null,
-    notes: String(form.get('notes') ?? '').trim() || null,
-  };
 }
 
 /**
@@ -81,11 +50,12 @@ export async function saveOffer(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const ingredientId = String(form.get('ingredientId') ?? '');
     if (!ingredientId) throw new Error('Insumo nao informado.');
 
     const id = String(form.get('id') ?? '');
-    const dados = await lerPreco(form);
+    const dados = lerPreco(form);
 
     const insumo = await prisma.ingredient.findUnique({
       where: { id: ingredientId },
@@ -170,6 +140,7 @@ export async function saveOffer(
     });
 
     revalidar();
+    await registar({ quem: eu, acao: 'preco.guardar', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return { ok: true, message: mensagem };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };
@@ -182,6 +153,7 @@ export async function setOfferInUse(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const id = String(form.get('id') ?? '');
     if (!id) throw new Error('Preco nao informado.');
 
@@ -197,6 +169,7 @@ export async function setOfferInUse(
     await prisma.$transaction((tx) => sincronizarEmUso(tx, oferta.ingredientId, id));
 
     revalidar();
+    await registar({ quem: eu, acao: 'preco.usar', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return {
       ok: true,
       message: `"${oferta.ingredient.name}" passou a usar o preco de ${
@@ -213,6 +186,7 @@ export async function deleteOffer(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const id = String(form.get('id') ?? '');
     if (!id) throw new Error('Preco nao informado.');
 
@@ -256,6 +230,7 @@ export async function deleteOffer(
     });
 
     revalidar();
+    await registar({ quem: eu, acao: 'preco.apagar', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return { ok: true, message: mensagem };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };

@@ -17,9 +17,15 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/integracao/**/*.test.ts'],
     fileParallelism: false,
+    // Pela ordem: primeiro a ligacao vai para o schema dos testes (antes de
+    // qualquer import do Prisma); depois a sessao de dono falsa, porque sem
+    // pedido nao ha cookie.
+    setupFiles: ['tests/integracao/base-de-testes.ts', 'tests/integracao/sessao-falsa.ts'],
     // As chamadas a base sao lentas em comparacao com o resto.
     testTimeout: 30_000,
-    hookTimeout: 30_000,
+    // A preparacao (retrato + limpeza) faz uma ida a base por tabela, e sao
+    // cada vez mais tabelas; 30 s ja nao chegavam numa ligacao lenta.
+    hookTimeout: 60_000,
   },
   resolve: {
     alias: {

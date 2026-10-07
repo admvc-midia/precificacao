@@ -14,7 +14,7 @@
  * aconteceu.
  */
 
-import { createContext, use, useActionState, useState } from 'react';
+import { createContext, use, useActionState, useState, useTransition } from 'react';
 import { useFormStatus } from 'react-dom';
 import { CheckCircle2, Loader2, Pencil, Trash2, XCircle } from 'lucide-react';
 
@@ -111,6 +111,70 @@ export function ActionForm({
       <EstadoDaAction.Provider value={state}>{children}</EstadoDaAction.Provider>
       <FormMessage state={state} showSuccess={showSuccess} />
     </form>
+  );
+}
+
+/**
+ * Como o `ActionForm`, mas nao limpa os campos quando o servidor recusa.
+ *
+ * Um `<form action={...}>` e reposto pelo React depois de cada envio — num
+ * formulario curto nao se nota, mas numa receita inteira escrita a mao, uma
+ * recusa ("falta o titulo") apagava tudo. Aqui o envio faz-se a mao, numa
+ * transicao, e o formulario fica como estava.
+ */
+export function ActionFormKeep({
+  action,
+  children,
+  className,
+}: {
+  action: ActionFn;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const [state, formAction, pending] = useActionState(action, INITIAL);
+  const [, startTransition] = useTransition();
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        const dados = new FormData(e.currentTarget);
+        startTransition(() => formAction(dados));
+      }}
+      className={cn('space-y-4', className)}
+      aria-busy={pending}
+    >
+      <EstadoDaAction.Provider value={state}>
+        <Pendente.Provider value={pending}>{children}</Pendente.Provider>
+      </EstadoDaAction.Provider>
+      <FormMessage state={state} />
+    </form>
+  );
+}
+
+/**
+ * Se o `ActionFormKeep` a volta esta a enviar. O `useFormStatus` nao ve um
+ * envio feito a mao, por isso o botao le daqui.
+ */
+const Pendente = createContext(false);
+
+export function KeepSubmitButton({
+  children,
+  pendingLabel,
+  ...props
+}: ButtonProps & { pendingLabel?: string }) {
+  const pending = use(Pendente);
+  return (
+    <Button type="submit" disabled={pending || props.disabled} {...props}>
+      {pending ? (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          {pendingLabel ?? 'A guardar…'}
+        </>
+      ) : (
+        children
+      )}
+    </Button>
   );
 }
 

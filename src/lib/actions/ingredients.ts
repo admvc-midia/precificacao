@@ -14,12 +14,14 @@ import { prisma } from '@/lib/db';
 import { num } from '@/lib/mappers';
 import { parseDecimal, parseQty } from '@/lib/money';
 import { baseUnitOf, fromDisplay, toBase, type PurchaseUnit } from '@/lib/units';
-import { lerPreco } from './offers';
 import { findSimilarNames } from '@/lib/pricing/offers';
+import { alvoDoFormulario, registar, resumoDoFormulario } from '@/lib/registo';
+import { exigirDono } from '@/lib/sessao';
 import {
   ALLERGEN,
   CATEGORY,
   errorMessage,
+  lerPreco,
   PURCHASE_UNIT,
   QUOTE_SOURCE,
   type ActionState,
@@ -96,6 +98,7 @@ export async function saveIngredient(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const id = String(form.get('id') ?? '');
     const data = readIngredient(form);
 
@@ -167,7 +170,7 @@ export async function saveIngredient(
 
       // O insumo nasce com o seu primeiro preco, senao ficava com custo zero
       // e as fichas que o usassem mentiam em silencio.
-      const preco = await lerPreco(form);
+      const preco = lerPreco(form);
 
       if (baseUnitOf(preco.purchaseUnit) !== payload.baseUnit) {
         throw new Error(
@@ -241,6 +244,7 @@ export async function saveIngredient(
     revalidatePath('/precificacao', 'layout');
     revalidatePath('/estoque');
     revalidatePath('/');
+    await registar({ quem: eu, acao: 'insumo.guardar', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return { ok: true, message: id ? 'Insumo atualizado.' : 'Insumo criado.' };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };
@@ -255,6 +259,7 @@ export async function deleteIngredient(
   if (!id) return { ok: false, message: 'Insumo nao informado.' };
 
   try {
+    const eu = await exigirDono();
     // Apagar um insumo usado numa ficha corromperia o custo dela em silencio.
     const usage = await prisma.recipeItem.count({ where: { ingredientId: id } });
     if (usage > 0) {
@@ -267,6 +272,7 @@ export async function deleteIngredient(
     await prisma.ingredient.delete({ where: { id } });
     revalidatePath('/insumos');
     revalidatePath('/');
+    await registar({ quem: eu, acao: 'insumo.apagar', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return { ok: true, message: 'Insumo removido.' };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };
@@ -279,6 +285,7 @@ export async function applyQuote(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const ingredientId = String(form.get('ingredientId') ?? '');
     const price = parseDecimal(String(form.get('price') ?? ''));
     const qty = parseQty(String(form.get('qty') ?? ''));
@@ -311,6 +318,7 @@ export async function applyQuote(
     revalidatePath('/insumos');
     revalidatePath('/precificacao');
     revalidatePath('/');
+    await registar({ quem: eu, acao: 'insumo.aplicar-cotacao', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return { ok: true, message: 'Preco atualizado e registado no historico.' };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };
@@ -326,6 +334,7 @@ export async function saveSupplier(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    await exigirDono();
     const id = String(form.get('id') ?? '');
     const name = String(form.get('name') ?? '').trim();
     if (!name) throw new Error('O nome do fornecedor e obrigatorio.');
@@ -357,12 +366,14 @@ export async function deleteSupplier(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const id = String(form.get('id') ?? '');
     if (!id) throw new Error('Fornecedor nao informado.');
     // Os insumos ficam sem fornecedor (onDelete: SetNull), nao desaparecem.
     await prisma.supplier.delete({ where: { id } });
     revalidatePath('/fornecedores');
     revalidatePath('/insumos');
+    await registar({ quem: eu, acao: 'fornecedor.apagar', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return { ok: true, message: 'Fornecedor removido.' };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };

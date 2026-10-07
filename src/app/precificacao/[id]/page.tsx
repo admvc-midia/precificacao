@@ -11,7 +11,7 @@ import {
 import { PriceExplorer } from '@/components/price-explorer';
 import { RecipeQuickView, type QuickViewLine } from '@/components/recipe-quick-view';
 import { ProductSwitcher } from '@/components/product-switcher';
-import { Alert, Separator } from '@/components/ui/badge';
+import { Alert, Badge, Separator } from '@/components/ui/badge';
 import {
   Card,
   CardContent,
@@ -32,7 +32,8 @@ import {
   priceFromTargetCmv,
   priceFromTargetMargin,
 } from '@/lib/pricing/price';
-import { getPricingData, getRecipeDetail } from '@/lib/queries';
+import { formatRating, productRatings } from '@/lib/pricing/clientes';
+import { getPricingData, getRatedLines, getRecipeDetail } from '@/lib/queries';
 import { formatBaseQty, formatCostPerUnit, type BaseUnit } from '@/lib/units';
 
 export const dynamic = 'force-dynamic';
@@ -43,8 +44,13 @@ export default async function PrecificarPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [recipe, data] = await Promise.all([getRecipeDetail(id), getPricingData()]);
+  const [recipe, data, avaliadas] = await Promise.all([
+    getRecipeDetail(id),
+    getPricingData(),
+    getRatedLines(),
+  ]);
   if (!recipe) notFound();
+  const nota = productRatings(avaliadas.filter((l) => l.recipeId === id)).get(id) ?? null;
 
   const { settings, currency, channels } = data;
   const ctx = buildCostContext(data.ingredientRows, data.recipeRows);
@@ -203,6 +209,14 @@ export default async function PrecificarPage({
           <h1 className="text-2xl font-semibold tracking-tight">{recipe.name}
             <AjudaLink secao="precificacao" />
           </h1>
+          {nota ? (
+            <Badge
+              variant={nota.average >= 4 ? 'success' : nota.average >= 3 ? 'warning' : 'destructive'}
+              title="Nota dos clientes no pós-venda"
+            >
+              {formatRating(nota.average)} · {nota.count} opinião(ões)
+            </Badge>
+          ) : null}
         </div>
         <ProductSwitcher current={id} products={produtos} />
       </header>

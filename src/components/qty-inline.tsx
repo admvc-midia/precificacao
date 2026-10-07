@@ -113,7 +113,7 @@ export function QtyInline({
         title="Clique para alterar a quantidade"
         aria-label={`Alterar a quantidade de ${itemName}: ${display}`}
         className={cn(
-          'group inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 tabular-nums outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
+          'group inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 tabular-nums outline-hidden transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
           className,
         )}
       >

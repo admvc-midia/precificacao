@@ -18,7 +18,13 @@ export type SecaoAjuda =
   | 'despesas'
   | 'painel'
   | 'exportar'
-  | 'compras';
+  | 'compras'
+  | 'encomendas'
+  | 'clientes'
+  | 'pos-venda'
+  | 'relatorio'
+  | 'receitas'
+  | 'utilizadores';
 
 export function AjudaLink({ secao }: { secao: SecaoAjuda }) {
   return (

@@ -2,10 +2,13 @@
  * Esvaziar os dados de trabalho, mantendo a configuracao.
  *
  * Serve para limpar o que se cadastrou a experimentar e comecar com dados a
- * serio. Apaga insumos, fornecedores, fichas, producoes, estoque e vendas.
+ * serio. Apaga insumos, fornecedores, fichas, producoes, estoque, encomendas,
+ * clientes e lembretes.
  * **Nao** toca em `Settings` nem nos canais de venda: sao a configuracao da
  * casa (nome, moeda, IVA, custos fixos, margem, comissoes), custaram a
- * afinar e nao se reconstroem a partir de um talao.
+ * afinar e nao se reconstroem a partir de um talao. Tambem nao toca nas
+ * **contas** (sem elas ninguem entrava) nem no **livro de receitas** (e o
+ * conteudo da casa, nao dados de ensaio; a ligacao a ficha apaga-se sozinha).
  *
  * ---------------------------------------------------------------------------
  * ESTE BANCO E PARTILHADO
@@ -35,9 +38,15 @@ const aplicar = process.argv.includes('--apply');
  * do script.
  */
 const APAGAR = [
-  ['Vendas', () => prisma.salesRecord.deleteMany()],
+  // As encomendas seguram as fichas (Restrict): vao primeiro.
+  ['Lembretes', () => prisma.reminder.deleteMany()],
+  ['Linhas de encomenda', () => prisma.customerOrderLine.deleteMany()],
+  ['Encomendas', () => prisma.customerOrder.deleteMany()],
+  ['Clientes', () => prisma.customer.deleteMany()],
   ['Movimentos de estoque', () => prisma.stockMovement.deleteMany()],
   ['Linhas de lista de compras', () => prisma.purchaseListLine.deleteMany()],
+  ['Itens das listas (Compras)', () => prisma.shoppingItem.deleteMany()],
+  ['Listas (Compras)', () => prisma.shoppingList.deleteMany()],
   ['Linhas de producao', () => prisma.productionOrderLine.deleteMany()],
   ['Ordens de producao', () => prisma.productionOrder.deleteMany()],
   ['Itens de ficha', () => prisma.recipeItem.deleteMany()],
@@ -50,9 +59,14 @@ const APAGAR = [
 
 async function contagens() {
   return {
-    Vendas: await prisma.salesRecord.count(),
+    Lembretes: await prisma.reminder.count(),
+    'Linhas de encomenda': await prisma.customerOrderLine.count(),
+    Encomendas: await prisma.customerOrder.count(),
+    Clientes: await prisma.customer.count(),
     'Movimentos de estoque': await prisma.stockMovement.count(),
     'Linhas de lista de compras': await prisma.purchaseListLine.count(),
+    'Itens das listas (Compras)': await prisma.shoppingItem.count(),
+    'Listas (Compras)': await prisma.shoppingList.count(),
     'Linhas de producao': await prisma.productionOrderLine.count(),
     'Ordens de producao': await prisma.productionOrder.count(),
     'Itens de ficha': await prisma.recipeItem.count(),
@@ -98,6 +112,9 @@ async function main() {
   for (const c of canais) {
     console.log(`  canal: ${c.name}${c.active ? '' : ' (inativo)'}`);
   }
+  console.log(
+    `  ${await prisma.user.count()} conta(s) · ${await prisma.bookRecipe.count()} receita(s) do livro · ${await prisma.cookbook.count()} livro(s)`,
+  );
 
   if (!aplicar) {
     console.log('\nPara apagar mesmo: npx tsx prisma/reset-dados.mts --apply');

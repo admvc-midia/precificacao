@@ -10,6 +10,7 @@ import { Field } from '@/components/ui/form-controls';
 import { Input, Textarea } from '@/components/ui/input';
 import { createOrder, deleteOrder } from '@/lib/actions/production';
 import { getCostedRecipes, getProductionOrders } from '@/lib/queries';
+import { exigirSessao } from '@/lib/sessao';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +21,9 @@ const COLUMNS: ListColumn[] = [
 ];
 
 export default async function ProducaoPage() {
+  const eu = await exigirSessao();
+  // A cozinha ve as ordens e entra nelas; criar e apagar e com o dono.
+  const dono = eu.perfil === 'OWNER';
   const [orders, { recipes, currency }] = await Promise.all([
     getProductionOrders(),
     getCostedRecipes(),
@@ -106,12 +110,14 @@ export default async function ProducaoPage() {
             Abrir
             <ArrowRight className="h-3.5 w-3.5" />
           </Link>
+          {dono ? (
           <ConfirmDelete
             action={deleteOrder}
             fields={{ id: order.id }}
             title={`Remover a ordem "${order.name}"?`}
             description="A ordem e a lista de compras guardada sao apagadas. Os insumos e fichas nao sao afetados."
           />
+          ) : null}
         </>
       ),
     };
@@ -144,7 +150,7 @@ export default async function ProducaoPage() {
         rows={rows}
         searchPlaceholder="Procurar ordem…"
         empty="Nenhuma ordem ainda. Crie a primeira — por exemplo, a producao do proximo fim de semana."
-        toolbar={<NovaOrdem />}
+        toolbar={dono ? <NovaOrdem /> : undefined}
       />
     </div>
   );

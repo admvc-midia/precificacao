@@ -34,6 +34,8 @@ import {
 } from '@/lib/pricing/stock';
 import { toBase, type PurchaseUnit } from '@/lib/units';
 import { gravarPlano, lerEstados } from '@/lib/escritas';
+import { alvoDoFormulario, registar, resumoDoFormulario } from '@/lib/registo';
+import { exigirDono, exigirPerfil } from '@/lib/sessao';
 import { errorMessage, PURCHASE_UNIT, type ActionState } from './shared';
 
 // ---------------------------------------------------------------------------
@@ -49,6 +51,7 @@ export async function receivePurchase(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const orderId = String(form.get('orderId') ?? '');
     if (!orderId) throw new Error('Ordem nao informada.');
 
@@ -103,6 +106,7 @@ export async function receivePurchase(
     });
 
     revalidarTudo(orderId);
+    await registar({ quem: eu, acao: 'estoque.receber-compra', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return {
       ok: true,
       message: `${plano.length} insumo(s) deram entrada no estoque.`,
@@ -127,6 +131,8 @@ export async function recordProduction(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    // A cozinha regista o que produziu; o custo calcula-se sem ela o ver.
+    const eu = await exigirPerfil('OWNER', 'KITCHEN');
     const orderId = String(form.get('orderId') ?? '');
     if (!orderId) throw new Error('Ordem nao informada.');
 
@@ -170,6 +176,7 @@ export async function recordProduction(
     });
 
     revalidarTudo(orderId);
+    await registar({ quem: eu, acao: 'estoque.produzir', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return {
       ok: true,
       message: order.promotional
@@ -190,6 +197,7 @@ export async function recordAdjustment(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const ingredientId = String(form.get('ingredientId') ?? '');
     if (!ingredientId) throw new Error('Insumo nao informado.');
 
@@ -230,6 +238,7 @@ export async function recordAdjustment(
     await gravarPlano(plano, null);
 
     revalidarTudo();
+    await registar({ quem: eu, acao: 'estoque.ajuste', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return {
       ok: true,
       message: tipo === 'WASTE' ? 'Quebra registada.' : 'Ajuste registado.',
@@ -249,6 +258,7 @@ export async function countInventory(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const ingredientId = String(form.get('ingredientId') ?? '');
     if (!ingredientId) throw new Error('Insumo nao informado.');
 
@@ -287,6 +297,7 @@ export async function countInventory(
     const sinal = ajuste.qtyBase > 0 ? 'a mais' : 'em falta';
 
     revalidarTudo();
+    await registar({ quem: eu, acao: 'estoque.contagem', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return {
       ok: true,
       message: `Contagem registada: ${Math.abs(ajuste.qtyBase).toFixed(2)} ${unidade} ${sinal}.`,
@@ -312,6 +323,7 @@ export async function setCostBasis(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const ingredientId = String(form.get('ingredientId') ?? '');
     if (!ingredientId) throw new Error('Insumo nao informado.');
 
@@ -333,6 +345,7 @@ export async function setCostBasis(
     });
 
     revalidarTudo();
+    await registar({ quem: eu, acao: 'estoque.custo', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return {
       ok: true,
       message: `Saldo de "${ing.name}" valorizado ao preco de compra atual.`,

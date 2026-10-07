@@ -2,7 +2,7 @@
  * Ajuda: a versao publicada e um passo a passo de cada parte da app.
  *
  * Escrita para quem usa a app na casa, nao para quem a programa — o
- * `README.md` e para isso. O `GUIA.md` aprofunda Vendas e CMV real; aqui fica
+ * `README.md` e para isso. O `GUIA.md` aprofunda Resultados do mes e CMV real; aqui fica
  * o essencial de cada area, pela ordem em que se usam.
  *
  * Cada secao tem um `id` que as paginas usam no "?" ao lado do titulo
@@ -82,11 +82,12 @@ const SECOES: Secao[] = [
             <strong>Precificação</strong> — o preço sugerido de cada produto, e o que sobra.
           </li>
           <li>
-            <strong>Produção e compras</strong> — no dia a dia: planear, comprar, receber,
-            produzir.
+            <strong>Encomendas</strong> e <strong>Produção e compras</strong> — no dia a
+            dia: anotar o pedido, planear, comprar, receber, produzir, entregar.
           </li>
           <li>
-            <strong>Vendas</strong> e <strong>Despesas fixas</strong> — no fim de cada mês.
+            <strong>Resultados do mês</strong> e <strong>Despesas fixas</strong> — no fim de
+            cada mês.
           </li>
         </Passos>
         <p>
@@ -335,6 +336,267 @@ const SECOES: Secao[] = [
     ),
   },
   {
+    id: 'encomendas',
+    titulo: 'Encomendas',
+    resumo: 'O que os clientes pediram, para quando, e quanto deu de lucro.',
+    href: '/encomendas',
+    conteudo: (
+      <>
+        <Passos>
+          <li>
+            Em <strong>Encomendas → Nova encomenda</strong>, escreva o nome do cliente. Se já
+            encomendou antes, aparece na lista; com o mesmo telefone, a app reconhece-o.
+          </li>
+          <li>
+            Pergunte se <strong>aceita ser contactado depois</strong> (para saber se gostou,
+            avisar de novidades) e marque só se disser que sim. Sem isso, o nome e o telefone
+            servem só para esta encomenda — é o que pede o RGPD.
+          </li>
+          <li>
+            Escolha os produtos e as quantidades. O preço vem da tabela (o da Precificação);
+            se combinou outro, escreva-o — a app mostra o desconto.
+          </li>
+          <li>
+            Dia e hora, se o cliente levanta ou se entregam (com a morada), e notas como
+            &quot;escrever Parabéns Ana&quot;.
+          </li>
+          <li>
+            Na lista, marque as encomendas pedidas e carregue em{' '}
+            <strong>Produzir as marcadas</strong>: cria uma ordem de produção com tudo somado,
+            e daí segue o caminho de sempre — lista de compras, receber, produzir.
+          </li>
+          <li>
+            Quando estiver feita, <strong>Está pronta</strong>; quando sair,{' '}
+            <strong>Entregue</strong>. Registe o pagamento e a forma.
+          </li>
+        </Passos>
+        <Nota>
+          Só as encomendas <strong>entregues</strong> contam nos Resultados do mês, no mês em que foram
+          entregues. Uma que o cliente desmarcou fica como <em>Cancelada</em> — não a apague,
+          para se ver depois quantas se perderam.
+        </Nota>
+        <p>
+          <strong>Lucro da encomenda:</strong> o preço combinado menos IVA, insumos,
+          embalagens, custos fixos e as taxas. O custo dos insumos é o do dia em que o produto
+          entrou na encomenda — se a farinha subir depois, o lucro dessa encomenda não muda. A{' '}
+          <strong>taxa de cartão</strong> só conta se pagar com cartão; enquanto não se sabe
+          como paga, conta-se com ela.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'clientes',
+    titulo: 'Clientes',
+    resumo: 'Quem encomenda, do que gosta, quem trouxe quem.',
+    href: '/clientes',
+    conteudo: (
+      <>
+        <p>
+          Os clientes nascem sozinhos ao criar uma encomenda. Em{' '}
+          <strong>Clientes → Clientes</strong> vê a lista, com o que cada um gastou e a nota
+          média que deu.
+        </p>
+        <Passos>
+          <li>
+            Abra um cliente. Em <strong>Contacto</strong> (lápis): telefone,{' '}
+            <strong>aniversário</strong> (dia/mês, sem o ano), <strong>como nos
+            conheceu</strong> e <strong>quem indicou</strong>.
+          </li>
+          <li>
+            Em <strong>Gostos</strong>: do que gosta, do que não gosta, e notas (&quot;encomenda
+            sempre para o aniversário do filho&quot;).
+          </li>
+          <li>
+            <strong>Nova encomenda</strong> no topo da ficha já abre com o cliente escolhido.
+          </li>
+        </Passos>
+        <Nota>
+          <strong>Alergias e doenças não vão para a ficha</strong> — são dados de saúde, com
+          regras mais apertadas no RGPD. Escreva-as nas notas de cada encomenda, que é onde a
+          cozinha as lê.
+        </Nota>
+        <p>
+          Os selos da lista: <em>voltou</em> (encomendou mais de uma vez), <em>sem
+          encomendar há…</em> (mais de 60 dias) e <em>anos em…</em> (aniversário nos próximos
+          7 dias). Se um cliente pedir para ser esquecido, <strong>Apagar cliente</strong> no
+          fim da ficha apaga os dados dele; as encomendas ficam, sem nome.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'pos-venda',
+    titulo: 'Pós-venda e lembretes',
+    resumo: 'Perguntar se gostou, aniversários, e o que houver a fazer.',
+    href: '/pos-venda',
+    conteudo: (
+      <>
+        <p>
+          Quando uma encomenda é marcada como <strong>Entregue</strong>, a app agenda o
+          pós-venda para 2 dias depois (muda-se em Configurações) — só para clientes que
+          aceitaram ser contactados.
+        </p>
+        <Passos>
+          <li>
+            Em <strong>Clientes → Pós-venda</strong>, cada cliente a contactar tem um botão{' '}
+            <strong>WhatsApp</strong> que abre a conversa com a mensagem já escrita, e um{' '}
+            <strong>Ligar</strong>.
+          </li>
+          <li>
+            Quando ele responder, <strong>Registar opinião</strong>: como falou, a nota de 1 a
+            5, a nota de cada produto (opcional) e o que disse.
+          </li>
+          <li>
+            Se não atender, <strong>Não atendeu</strong> — volta amanhã. Se não for para
+            contactar, <strong>Não contactar</strong>.
+          </li>
+        </Passos>
+        <p>
+          A nota de cada produto aparece na <strong>Precificação</strong> e no{' '}
+          <strong>Relatório</strong>. Um produto com boa margem e nota baixa é um aviso.
+        </p>
+        <p>
+          <strong>Lembretes</strong>: escreva o que há a fazer e o dia (&quot;ligar ao Rui
+          sobre o bolo de casamento&quot;), ligado ou não a um cliente. Toque no círculo
+          quando estiver feito. Os <strong>aniversários</strong> da semana aparecem sozinhos.
+          O Painel avisa quando há alguma coisa para hoje.
+        </p>
+        <Nota>
+          A mensagem do WhatsApp muda-se em <strong>Configurações → Pós-venda</strong>.{' '}
+          {'{nome}'}, {'{loja}'}, {'{produtos}'} e {'{dia}'} trocam-se sozinhos pelos dados
+          da encomenda.
+        </Nota>
+      </>
+    ),
+  },
+  {
+    id: 'relatorio',
+    titulo: 'Relatório de vendas',
+    resumo: 'Faturação, lucro, produtos, clientes e origens num período.',
+    href: '/relatorio',
+    conteudo: (
+      <>
+        <p>
+          Em <strong>Resultados → Relatório de vendas</strong>, escolha o período (por
+          omissão, os últimos 6 meses). Tudo sai das encomendas entregues.
+        </p>
+        <Passos>
+          <li>
+            No topo: encomendas, faturação, lucro e <strong>ticket médio</strong> (quanto
+            gasta cada encomenda, em média).
+          </li>
+          <li>
+            <strong>Faturação por mês</strong>, em barras e em tabela.
+          </li>
+          <li>
+            <strong>Por produto</strong>: unidades, faturação, CMV e a nota dos clientes.
+          </li>
+          <li>
+            <strong>Melhores clientes</strong>, <strong>a esfriar</strong> (bons clientes
+            que não encomendam há mais de 60 dias — bons para um contacto),{' '}
+            <strong>de onde vêm</strong> e <strong>quem mais indica</strong>.
+          </li>
+        </Passos>
+        <p>O botão Excel descarrega todas as encomendas, uma linha por produto.</p>
+      </>
+    ),
+  },
+  {
+    id: 'receitas',
+    titulo: 'Livro de receitas',
+    resumo: 'As receitas da casa, de onde vieram, e cada alteração da cozinha.',
+    href: '/receitas',
+    conteudo: (
+      <>
+        <Passos>
+          <li>
+            Em <strong>Receitas → Nova receita</strong>, escreva a receita tal como veio da fonte
+            (da avó, do curso, do livro), com <strong>de onde veio</strong>. Esta fica como a{' '}
+            <strong>versão original</strong> e nunca mais muda.
+          </li>
+          <li>
+            Ou <strong>Importar</strong>: escolha um PDF (ou cole o texto). A app separa o
+            título, os ingredientes e o modo de preparo; confira ao lado do texto original e
+            guarde. O PDF fica guardado junto da receita.
+          </li>
+          <li>
+            Para mudar uma receita, <strong>Alterar receita</strong>: muda o que quiser, diz
+            porquê, e fica como <strong>versão 2</strong> (3, 4…), com o nome de quem a fez. A
+            anterior não se perde.
+          </li>
+          <li>
+            <strong>Comparar com a original</strong> mostra o que mudou: riscado a vermelho o
+            que saiu, a verde o que entrou, e numa linha alterada só as palavras que mudaram
+            (&quot;<del>200</del> 150 g de açúcar&quot;).
+          </li>
+          <li>
+            Em <strong>Livros</strong>, junte receitas num livro (&quot;Receitas da família&quot;),
+            por secções, e <strong>Imprimir / PDF</strong>: capa, índice e uma receita por
+            folha. Pode imprimir com as versões da cozinha ou com as originais.
+          </li>
+        </Passos>
+        <Nota>
+          Na lista, a busca encontra pelo nome, por um ingrediente, pela origem ou pela
+          etiqueta, sem ligar a acentos. Uma receita que já não se usa <strong>arquiva-se</strong>{' '}
+          (sai das listas e dos livros, mas não se perde); só o dono a apaga de vez.
+        </Nota>
+        <p>
+          <strong>Ficha técnica:</strong> o dono pode ligar a receita à ficha com os custos.
+          Quando a cozinha altera a receita depois da última alteração da ficha, a app avisa para
+          conferir as quantidades — a ficha não muda sozinha.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'utilizadores',
+    titulo: 'Contas e permissões',
+    resumo: 'Quem entra, e o que cada um pode fazer.',
+    href: '/utilizadores',
+    conteudo: (
+      <>
+        <p>Cada pessoa entra com a sua conta. Há três perfis:</p>
+        <Passos>
+          <li>
+            <strong>Dono</strong> — tudo: custos, encomendas, clientes, configurações e contas.
+          </li>
+          <li>
+            <strong>Cozinha</strong> — o livro de receitas: ver, criar, alterar (cada alteração é
+            uma versão com o nome dela) e arquivar. Vê também as <strong>encomendas</strong>{' '}
+            (o que fazer, quantas e para quando) e as <strong>ordens de produção</strong>: avança
+            a encomenda no pipeline e regista o que produziu. Não vê preços, custos, pagamentos nem
+            o telefone do cliente; criar, cancelar ou reabrir uma encomenda é com o dono.
+          </li>
+          <li>
+            <strong>Leitura</strong> — o livro de receitas, só para ler e imprimir.
+          </li>
+        </Passos>
+        <p>
+          Em <strong>⚙ → Utilizadores</strong>, o dono cria a conta com uma palavra-passe
+          provisória e diz-lha; a pessoa tem de a trocar no primeiro acesso, e a partir daí só
+          ela a sabe. Se a esquecer, o dono <strong>repõe</strong> uma provisória nova.
+        </p>
+        <Nota>
+          Cinco tentativas erradas seguidas bloqueiam a conta 15 minutos (e muitas falhas da mesma
+          ligação, em qualquer conta, bloqueiam a ligação). Desativar uma conta ou mudar-lhe o
+          perfil tem efeito logo. Em <strong>⚙ → A minha conta</strong> troca-se a palavra-passe
+          e sai-se dos outros aparelhos.
+        </Nota>
+        <p>
+          <strong>Sessão:</strong> 12 horas, ou 30 dias se marcar{' '}
+          <em>&quot;Manter a sessão neste aparelho&quot;</em> ao entrar — só no seu telemóvel ou
+          computador, nunca num aparelho partilhado da cozinha.
+        </p>
+        <p>
+          <strong>⚙ → Registo de alterações</strong> (só o dono): quem entrou, quem mudou
+          configurações, preços, estoque, encomendas, contas, e o que se apagou — com data e hora.
+          Nada lá se altera nem se apaga.
+        </p>
+      </>
+    ),
+  },
+  {
     id: 'compras',
     titulo: 'Compras (a aba do comprador)',
     resumo: 'Listas para o supermercado, preço achado e entrada no estoque.',
@@ -423,23 +685,28 @@ const SECOES: Secao[] = [
   },
   {
     id: 'vendas',
-    titulo: 'Vendas e CMV real',
-    resumo: 'No fim do mês: o que vendeu, e se a ficha bate com a realidade.',
+    titulo: 'Resultados do mês',
+    resumo: 'No fim do mês: o que as encomendas deram, e se a ficha bate com a realidade.',
     href: '/vendas',
     conteudo: (
       <>
+        <p>
+          Aqui não se escreve nada: tudo sai das <strong>encomendas entregues</strong> no mês,
+          com o preço combinado.
+        </p>
         <Passos>
           <li>
-            Em <strong>Resultados → Vendas e CMV real</strong>, escolha o mês.
+            Em <strong>Resultados → Resultados do mês</strong>, escolha o mês.
           </li>
           <li>
-            Escreva quantas unidades de cada produto saíram. A receita é opcional: em branco,
-            usa o preço calculado.
+            No topo: quantas encomendas foram entregues, a <strong>faturação</strong>, o{' '}
+            <strong>lucro</strong> somado (depois de insumos, custos fixos e taxas) e os{' '}
+            <strong>descontos</strong> dados face à tabela.
           </li>
           <li>
-            Leia os quatro números do topo: <strong>receita líquida</strong>,{' '}
-            <strong>CMV teórico</strong> (o que as fichas dizem), <strong>CMV real</strong>{' '}
-            (o que saiu do armazém) e o <strong>desvio</strong> entre os dois.
+            Em <strong>CMV teórico e real</strong>: o que as fichas dizem que devia sair do
+            armazém, o que saiu de facto, e o <strong>desvio</strong> entre os dois. Precisa
+            das produções registadas em Produção.
           </li>
         </Passos>
         <Nota>
@@ -452,10 +719,6 @@ const SECOES: Secao[] = [
           dá margem: <em>Estrela</em> (proteger), <em>Cavalo</em> (baixar o custo),{' '}
           <em>Quebra-cabeça</em> (dar destaque) e <em>Abacaxi</em> (pensar em tirar).
         </p>
-        <Nota>
-          Deixar a quantidade em branco apaga o lançamento desse produto. Não é o mesmo que
-          escrever 0: &quot;não vendi&quot; e &quot;não lancei&quot; são coisas diferentes.
-        </Nota>
       </>
     ),
   },
@@ -471,7 +734,9 @@ const SECOES: Secao[] = [
           <strong>com que frequência</strong> se paga (por semana, mês, trimestre ou ano).
         </li>
         <li>
-          Escreva a <strong>faturação mensal esperada, com IVA</strong>.
+          A <strong>faturação mensal</strong> sai sozinha das encomendas entregues: a média
+          dos últimos três meses completos. Se quiser outro valor (para simular, ou antes de
+          haver entregas), escreva-o à mão.
         </li>
         <li>
           A app calcula a percentagem de custos fixos (sobre a receita sem IVA). Nada muda
@@ -508,7 +773,7 @@ const SECOES: Secao[] = [
           </li>
           <li>
             <strong>Listas para o Excel</strong> — insumos, fornecedores, preços por
-            fornecedor, fichas, preços sugeridos, movimentos de estoque, vendas e despesas.
+            fornecedor, fichas, preços sugeridos, movimentos de estoque, encomendas e despesas.
             Cada uma descarrega um ficheiro CSV que abre direto no Excel, com vírgula decimal
             e acentos.
           </li>
@@ -621,7 +886,7 @@ export default function AjudaPage() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Mais pormenor sobre Vendas, CMV real e engenharia de cardápio está no ficheiro{' '}
+        Mais pormenor sobre os Resultados do mês, CMV real e engenharia de cardápio está no ficheiro{' '}
         <code>GUIA.md</code> do projeto.
       </p>
     </div>

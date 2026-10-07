@@ -8,6 +8,7 @@ import { prisma } from '@/lib/db';
 import { buildCostContext } from '@/lib/mappers';
 import { parseQty } from '@/lib/money';
 import { buildPurchaseList } from '@/lib/pricing/purchase';
+import { exigirDono } from '@/lib/sessao';
 import { errorMessage, type ActionState } from './shared';
 
 export async function createOrder(
@@ -15,6 +16,7 @@ export async function createOrder(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    await exigirDono();
     const name = String(form.get('name') ?? '').trim();
     if (!name) throw new Error('De um nome a ordem de producao.');
 
@@ -48,6 +50,7 @@ export async function deleteOrder(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    await exigirDono();
     const id = String(form.get('id') ?? '');
     if (!id) throw new Error('Ordem nao informada.');
     await prisma.productionOrder.delete({ where: { id } });
@@ -63,6 +66,7 @@ export async function addOrderLine(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    await exigirDono();
     const orderId = String(form.get('orderId') ?? '');
     const recipeId = String(form.get('recipeId') ?? '');
     const qty = parseQty(String(form.get('qty') ?? ''));
@@ -106,6 +110,7 @@ export async function updateOrderLine(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    await exigirDono();
     const id = String(form.get('id') ?? '');
     const qty = parseQty(String(form.get('qty') ?? ''));
 
@@ -132,6 +137,7 @@ export async function deleteOrderLine(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    await exigirDono();
     const id = String(form.get('id') ?? '');
     const orderId = String(form.get('orderId') ?? '');
     if (!id) throw new Error('Linha nao informada.');
@@ -159,6 +165,7 @@ export async function freezePurchaseList(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    await exigirDono();
     const orderId = String(form.get('orderId') ?? '');
     if (!orderId) throw new Error('Ordem nao informada.');
 

@@ -58,6 +58,8 @@ export async function gravarFotos(
   recipeId: string,
   foto: { bytes: Uint8Array; tipo: keyof typeof EXTENSAO },
   mini: { bytes: Uint8Array; tipo: keyof typeof EXTENSAO },
+  /** `fotos` para as fichas, `livro/fotos` para as receitas do livro. */
+  pasta = 'fotos',
 ): Promise<{ photoPath: string; photoThumbPath: string }> {
   if (!blobConfigurado()) {
     throw new Error('As fotos nao estao configuradas: falta a variavel BLOB_READ_WRITE_TOKEN.');
@@ -68,8 +70,8 @@ export async function gravarFotos(
     contentType: tipo,
   });
   const [a, b] = await Promise.all([
-    put(`fotos/${recipeId}.${EXTENSAO[foto.tipo]}`, Buffer.from(foto.bytes), opcoes(foto.tipo)),
-    put(`fotos/${recipeId}-mini.${EXTENSAO[mini.tipo]}`, Buffer.from(mini.bytes), opcoes(mini.tipo)),
+    put(`${pasta}/${recipeId}.${EXTENSAO[foto.tipo]}`, Buffer.from(foto.bytes), opcoes(foto.tipo)),
+    put(`${pasta}/${recipeId}-mini.${EXTENSAO[mini.tipo]}`, Buffer.from(mini.bytes), opcoes(mini.tipo)),
   ]);
   return { photoPath: a.pathname, photoThumbPath: b.pathname };
 }

@@ -6,6 +6,8 @@ import { revalidatePath } from 'next/cache';
 
 import { prisma } from '@/lib/db';
 import { parseDecimal, parsePercent, SUPPORTED_CURRENCIES } from '@/lib/money';
+import { alvoDoFormulario, registar, resumoDoFormulario } from '@/lib/registo';
+import { exigirDono } from '@/lib/sessao';
 import {
   CHANNEL_KIND,
   errorMessage,
@@ -51,6 +53,7 @@ export async function saveSettings(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const currency = String(form.get('currency') ?? 'EUR');
     const known = SUPPORTED_CURRENCIES.find((c) => c.code === currency);
     if (!known) throw new Error('Moeda nao suportada.');
@@ -119,7 +122,46 @@ export async function saveSettings(
     revalidatePath('/configuracoes');
     revalidatePath('/precificacao');
     revalidatePath('/');
+    await registar({ quem: eu, acao: 'configuracoes.guardar', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return { ok: true, message: 'Configuracoes guardadas.' };
+  } catch (err) {
+    return { ok: false, message: errorMessage(err) };
+  }
+}
+
+/**
+ * Pos-venda: dias ate perguntar e o texto da mensagem.
+ *
+ * Action propria, e nao o `saveSettings`: aquela escreve sempre a moeda e o
+ * locale, e um formulario que so trouxesse a mensagem repunha-os por omissao.
+ * Mensagem vazia volta a de origem.
+ */
+export async function saveFollowUpSettings(
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const eu = await exigirDono();
+    const data: { followUpDays?: number; followUpMessage?: string | null } = {};
+    if (presente(form, 'followUpDays')) {
+      const dias = Number(String(form.get('followUpDays')).trim());
+      if (!Number.isInteger(dias) || dias < 0 || dias > 60) {
+        throw new Error('Dias ate ao pos-venda: um numero inteiro de 0 a 60.');
+      }
+      data.followUpDays = dias;
+    }
+    if (presente(form, 'followUpMessage')) {
+      data.followUpMessage = String(form.get('followUpMessage')).trim() || null;
+    }
+    await prisma.settings.upsert({
+      where: { id: 'default' },
+      create: { id: 'default', ...data },
+      update: data,
+    });
+    revalidatePath('/configuracoes');
+    revalidatePath('/pos-venda');
+    await registar({ quem: eu, acao: 'configuracoes.pos-venda', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
+    return { ok: true, message: 'Pós-venda guardado.' };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };
   }
@@ -130,6 +172,7 @@ export async function saveChannel(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const id = String(form.get('id') ?? '');
     const name = String(form.get('name') ?? '').trim();
     if (!name) throw new Error('O nome do canal e obrigatorio.');
@@ -160,6 +203,7 @@ export async function saveChannel(
     revalidatePath('/configuracoes');
     revalidatePath('/precificacao');
     revalidatePath('/');
+    await registar({ quem: eu, acao: 'canal.guardar', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return { ok: true, message: id ? 'Canal atualizado.' : 'Canal criado.' };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };
@@ -171,11 +215,13 @@ export async function deleteChannel(
   form: FormData,
 ): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const id = String(form.get('id') ?? '');
     if (!id) throw new Error('Canal nao informado.');
     await prisma.salesChannel.delete({ where: { id } });
     revalidatePath('/configuracoes');
     revalidatePath('/precificacao');
+    await registar({ quem: eu, acao: 'canal.apagar', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return { ok: true, message: 'Canal removido.' };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };

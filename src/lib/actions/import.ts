@@ -21,6 +21,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db';
 import { parseIngredientCsv } from '@/lib/providers';
 import { baseUnitOf } from '@/lib/units';
+import { exigirDono } from '@/lib/sessao';
 import { errorMessage, type ActionState } from './shared';
 
 export interface ImportState extends ActionState {
@@ -35,6 +36,7 @@ export async function importIngredientsCsv(
   form: FormData,
 ): Promise<ImportState> {
   try {
+    await exigirDono();
     const texto = String(form.get('csv') ?? '').trim();
     if (!texto) throw new Error('Cole o conteudo do ficheiro CSV.');
 

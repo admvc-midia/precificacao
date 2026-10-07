@@ -32,6 +32,8 @@ import { embalagensParaMinimo, entradasDaCompra, precoPorBase } from '@/lib/pric
 import { buildPurchaseList } from '@/lib/pricing/purchase';
 import { planMovements } from '@/lib/pricing/stock';
 import { baseUnitOf, type PurchaseUnit } from '@/lib/units';
+import { alvoDoFormulario, registar, resumoDoFormulario } from '@/lib/registo';
+import { exigirDono } from '@/lib/sessao';
 import { errorMessage, PURCHASE_UNIT, type ActionState } from './shared';
 
 const STATUS = ['PENDING', 'BOUGHT', 'MISSING'] as const;
@@ -107,6 +109,7 @@ function lerEmbalagens(valor: FormDataEntryValue | null): number {
 export async function createShoppingList(_prev: ActionState, form: FormData): Promise<ActionState> {
   let id: string;
   try {
+    await exigirDono();
     const name = String(form.get('name') ?? '').trim();
     if (!name) throw new Error('De um nome a lista (ex.: "Semana 40", "Makro sabado").');
     id = (await prisma.shoppingList.create({ data: { name } })).id;
@@ -119,6 +122,7 @@ export async function createShoppingList(_prev: ActionState, form: FormData): Pr
 
 export async function renameShoppingList(_prev: ActionState, form: FormData): Promise<ActionState> {
   try {
+    await exigirDono();
     const lista = await listaAberta(String(form.get('id') ?? ''));
     const name = String(form.get('name') ?? '').trim();
     if (!name) throw new Error('O nome nao pode ficar vazio.');
@@ -133,9 +137,11 @@ export async function renameShoppingList(_prev: ActionState, form: FormData): Pr
 /** So listas abertas: uma fechada ja deu entrada no estoque e e historico. */
 export async function deleteShoppingList(_prev: ActionState, form: FormData): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const lista = await listaAberta(String(form.get('id') ?? ''));
     await prisma.shoppingList.delete({ where: { id: lista.id } });
     revalidar();
+    await registar({ quem: eu, acao: 'compras.apagar', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
   } catch (err) {
     return { ok: false, message: errorMessage(err) };
   }
@@ -166,6 +172,7 @@ export async function deleteShoppingList(_prev: ActionState, form: FormData): Pr
  */
 export async function addShoppingItem(_prev: ActionState, form: FormData): Promise<ActionState> {
   try {
+    await exigirDono();
     const lista = await listaAberta(String(form.get('listId') ?? ''));
     const ingredientId = String(form.get('ingredientId') ?? '');
     if (!ingredientId) throw new Error('Escolha um insumo.');
@@ -266,6 +273,7 @@ export async function addShoppingItem(_prev: ActionState, form: FormData): Promi
 /** Junta tudo o que esta no minimo ou abaixo e ainda nao esta na lista. */
 export async function addBelowMinimum(_prev: ActionState, form: FormData): Promise<ActionState> {
   try {
+    await exigirDono();
     const lista = await listaAberta(String(form.get('listId') ?? ''));
     const [insumos, jaNaLista] = await Promise.all([
       prisma.ingredient.findMany({ where: { minStockBase: { gt: 0 } }, orderBy: { name: 'asc' } }),
@@ -331,6 +339,7 @@ export async function addBelowMinimum(_prev: ActionState, form: FormData): Promi
  */
 export async function addFromOrder(_prev: ActionState, form: FormData): Promise<ActionState> {
   try {
+    await exigirDono();
     const lista = await listaAberta(String(form.get('listId') ?? ''));
     const orderId = String(form.get('orderId') ?? '');
     if (!orderId) throw new Error('Escolha uma ordem de producao.');
@@ -435,6 +444,7 @@ export async function addFromOrder(_prev: ActionState, form: FormData): Promise<
  */
 export async function updateShoppingItem(_prev: ActionState, form: FormData): Promise<ActionState> {
   try {
+    await exigirDono();
     const id = String(form.get('id') ?? '');
     const item = await prisma.shoppingItem.findUnique({
       where: { id },
@@ -481,6 +491,7 @@ export async function updateShoppingItem(_prev: ActionState, form: FormData): Pr
 /** Riscar (BOUGHT), desriscar (PENDING) ou "nao havia" (MISSING). */
 export async function setShoppingItemStatus(_prev: ActionState, form: FormData): Promise<ActionState> {
   try {
+    await exigirDono();
     const id = String(form.get('id') ?? '');
     const status = String(form.get('status') ?? '') as Status;
     if (!STATUS.includes(status)) throw new Error('Estado invalido.');
@@ -497,6 +508,7 @@ export async function setShoppingItemStatus(_prev: ActionState, form: FormData):
 
 export async function removeShoppingItem(_prev: ActionState, form: FormData): Promise<ActionState> {
   try {
+    await exigirDono();
     const id = String(form.get('id') ?? '');
     const item = await prisma.shoppingItem.findUnique({ where: { id } });
     if (!item) throw new Error('Item nao encontrado.');
@@ -525,6 +537,7 @@ export async function removeShoppingItem(_prev: ActionState, form: FormData): Pr
  */
 export async function closeShoppingList(_prev: ActionState, form: FormData): Promise<ActionState> {
   try {
+    const eu = await exigirDono();
     const lista = await listaAberta(String(form.get('id') ?? ''));
     const comprados = await prisma.shoppingItem.findMany({
       where: { listId: lista.id, status: 'BOUGHT' },
@@ -605,6 +618,7 @@ export async function closeShoppingList(_prev: ActionState, form: FormData): Pro
 
     revalidar(lista.id, true);
     const extra = emUso > 0 ? ` ${emUso} passou(aram) a ser o preco em uso.` : '';
+    await registar({ quem: eu, acao: 'compras.fechar', alvo: alvoDoFormulario(form), detalhe: resumoDoFormulario(form) });
     return {
       ok: true,
       message: `Compra fechada: ${plano.length} item(ns) deram entrada no estoque e ${precos} preco(s) ficaram registados.${extra}`,

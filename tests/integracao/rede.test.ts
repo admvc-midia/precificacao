@@ -11,6 +11,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { exigirSchemaCerto, prisma, retrato } from './base';
+import { urlDeTestes } from './url-de-testes';
 
 afterAll(async () => {
   await prisma.$disconnect();
@@ -28,8 +29,18 @@ describe('a rede de seguranca', () => {
       process.env.DATABASE_URL = 'postgresql://u:p@host:5432/db?schema=public';
       expect(() => exigirSchemaCerto()).toThrow(/schema/i);
 
+      // O schema da casa tambem nao: os testes so correm no deles.
       process.env.DATABASE_URL = 'postgresql://u:p@host:5432/db?schema=precificaragao';
+      expect(() => exigirSchemaCerto()).toThrow(/schema/i);
+
+      process.env.DATABASE_URL = 'postgresql://u:p@host:5432/db?schema=precificaragao_teste';
       expect(() => exigirSchemaCerto()).not.toThrow();
+
+      // E a troca de schema nunca aponta a outro sitio que nao o dos testes.
+      expect(urlDeTestes('postgresql://u:p@h:5432/db?sslmode=require&schema=precificaragao&connection_limit=5')).toBe(
+        'postgresql://u:p@h:5432/db?sslmode=require&schema=precificaragao_teste&connection_limit=5',
+      );
+      expect(() => urlDeTestes('postgresql://u:p@h:5432/db?schema=public')).toThrow();
 
       delete process.env.DATABASE_URL;
       expect(() => exigirSchemaCerto()).toThrow(/DATABASE_URL/);

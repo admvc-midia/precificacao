@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * A foto de uma ficha: mostrar, pôr, trocar, tirar.
+ * A foto de uma ficha (ou de uma receita do livro): mostrar, pôr, trocar, tirar.
  *
  * A foto e reduzida **aqui**, no telemovel, antes de sair: uma foto de
  * telemovel tem 3 a 5 MB, e reduzida a 1600 px em JPEG fica com 200 a 400 KB.
@@ -16,7 +16,7 @@
 import { useRef, useState, useTransition } from 'react';
 import { Camera, ImageOff, Loader2, Trash2 } from 'lucide-react';
 
-import { ConfirmDelete } from '@/components/action-form';
+import { ConfirmDelete, type ActionFn } from '@/components/action-form';
 import { Button } from '@/components/ui/button';
 import { removeRecipePhoto, saveRecipePhoto } from '@/lib/actions/photos';
 import { cn } from '@/lib/utils';
@@ -50,11 +50,19 @@ export function FotoProduto({
   recipeId,
   nome,
   src,
+  guardar = saveRecipePhoto,
+  remover = removeRecipePhoto,
+  podeEditar = true,
 }: {
   recipeId: string;
   nome: string;
   /** `fotoSrc(...)` da foto grande, ou `null` sem foto. */
   src: string | null;
+  /** As actions — as das fichas por omissao; o livro passa as suas. */
+  guardar?: ActionFn;
+  remover?: ActionFn;
+  /** Sem permissao, so se mostra a foto. */
+  podeEditar?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -90,7 +98,7 @@ export function FotoProduto({
     f.set('foto', foto, 'foto.jpg');
     f.set('mini', mini, 'mini.jpg');
     startTransition(async () => {
-      const r = await saveRecipePhoto({ ok: true }, f);
+      const r = await guardar({ ok: true }, f);
       if (!r.ok) setErro(r.message ?? 'Nao foi possivel guardar a foto.');
     });
   }
@@ -99,7 +107,7 @@ export function FotoProduto({
     <div className="space-y-2">
       <div
         className={cn(
-          'relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border bg-muted/40',
+          'relative flex aspect-4/3 items-center justify-center overflow-hidden rounded-lg border bg-muted/40',
           ocupado && 'opacity-60',
         )}
       >
@@ -120,6 +128,7 @@ export function FotoProduto({
         ) : null}
       </div>
 
+      {podeEditar ? (
       <div className="flex flex-wrap items-center gap-2">
         {/* Sem `capture`: no telemovel o sistema oferece camara e galeria. */}
         <input
@@ -143,10 +152,10 @@ export function FotoProduto({
         </Button>
         {src ? (
           <ConfirmDelete
-            action={removeRecipePhoto}
+            action={remover}
             fields={{ id: recipeId }}
             title="Remover a foto?"
-            description="A ficha fica sem foto. Pode por outra quando quiser."
+            description="Fica sem foto. Pode por outra quando quiser."
             confirmLabel="Remover foto"
             trigger={
               <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" disabled={ocupado}>
@@ -157,6 +166,7 @@ export function FotoProduto({
           />
         ) : null}
       </div>
+      ) : null}
       {erro ? (
         <p role="alert" className="text-sm text-destructive">
           {erro}

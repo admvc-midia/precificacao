@@ -152,6 +152,12 @@ model Settings {
   /// base e a exportacao guardam a precisao toda.
   displayDecimals Int @default(4)
 
+  /// Quantos dias depois da entrega se pergunta ao cliente se gostou.
+  followUpDays    Int     @default(2)
+  /// A mensagem do WhatsApp do pos-venda, com {nome}, {produtos} e {dia}.
+  /// Nulo usa a mensagem que vem com a app (`MENSAGEM_POS_VENDA`).
+  followUpMessage String?
+
   updatedAt    DateTime @updatedAt
 }
 
@@ -393,7 +399,9 @@ model Recipe {
   /// Sobrescreve Settings.targetMargin para este produto.
   targetMargin Decimal? @db.Decimal(12, 4)
 
-  sales      SalesRecord[]
+  customerOrderLines CustomerOrderLine[]
+  /// Receitas do livro que descrevem esta ficha.
+  bookRecipes BookRecipe[]
   items      RecipeItem[]          @relation("RecipeOwner")
   /// Onde esta receita e usada como sub-receita.
   usedIn     RecipeItem[]          @relation("RecipeChild")
@@ -448,6 +456,8 @@ model SalesChannel {
   /// Cobra a embalagem extra de transporte.
   usesDeliveryPackaging Boolean @default(false)
 
+  customerOrders CustomerOrder[]
+
   active    Boolean  @default(true)
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
@@ -483,6 +493,8 @@ model ProductionOrder {
   lines     ProductionOrderLine[]
   listLines PurchaseListLine[]
   movements StockMovement[]
+  /// Encomendas de clientes que esta ordem produz.
+  customerOrders CustomerOrder[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -564,36 +576,6 @@ model StockMovement {
   @@index([ingredientId, occurredAt])
   @@index([kind, occurredAt])
   @@index([orderId])
-}
-
-// ---------------------------------------------------------------------------
-// Vendas — o que faltava para fechar o ciclo
-// ---------------------------------------------------------------------------
-
-/// Quanto cada produto vendeu num periodo.
-///
-/// Entrada manual por mes: e o minimo que permite a engenharia de cardapio
-/// (o eixo da popularidade) e a comparacao entre o CMV teorico e o real.
-model SalesRecord {
-  id       String @id @default(cuid())
-  recipeId String
-  recipe   Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
-
-  /// Mes no formato "2026-09". Texto e nao data porque a granularidade e o
-  /// mes, e uma data obrigaria a escolher um dia arbitrario.
-  period String
-
-  /// Unidades vendidas no periodo.
-  qty Decimal @db.Decimal(12, 4)
-
-  /// Receita bruta realizada, se souber. Vazio usa o preco calculado.
-  revenue Decimal? @db.Decimal(12, 4)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([recipeId, period])
-  @@index([period])
 }
 
 // ---------------------------------------------------------------------------
@@ -721,4 +703,409 @@ model ShoppingItem {
 
   @@index([listId])
   @@index([ingredientId])
+}
+
+// ---------------------------------------------------------------------------
+// Encomendas — a venda, tal como a casa trabalha: por pedido do cliente
+// ---------------------------------------------------------------------------
+
+/// Quem encomenda.
+///
+/// Guardar o nome e o telefone para entregar a encomenda e execucao do
+/// contrato e nao precisa de consentimento. Voltar a contactar depois —
+/// perguntar se gostou, avisar de novidades — precisa (RGPD), e por isso
+/// ha um campo proprio, com a data em que foi dado.
+model Customer {
+  id    String  @id @default(cuid())
+  name  String
+  phone String?
+  notes String?
+
+  /// Quando o cliente aceitou ser contactado depois da venda. Nulo: nao aceitou
+  /// (ou nao foi perguntado), e o pos-venda nao lhe pode escrever.
+  contactConsentAt DateTime?
+
+  /// Aniversario, sem o ano: chega para o lembrete, e ninguem tem de dizer a idade.
+  birthDay   Int?
+  birthMonth Int?
+
+  /// Por onde nos conheceu.
+  source       CustomerSource?
+  /// Quem o indicou, quando veio por indicacao.
+  referredById String?
+  referredBy   Customer?       @relation("Indicacoes", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals    Customer[]      @relation("Indicacoes")
+
+  /// Gostos, em texto livre: "chocolate amargo, frutos vermelhos".
+  ///
+  /// **Alergias e doencas nao vao aqui.** Sao dados de saude (art. 9 do
+  /// RGPD), com regras mais apertadas; ficam nas notas de cada encomenda,
+  /// que e onde a cozinha precisa delas.
+  likes    String?
+  dislikes String?
+
+  orders    CustomerOrder[]
+  reminders Reminder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+  @@index([phone])
+}
+
+enum CustomerSource {
+  INSTAGRAM
+  FACEBOOK
+  WHATSAPP
+  REFERRAL
+  WALK_IN
+  EVENT
+  OTHER
+}
+
+/// Como foi feito o contacto de pos-venda.
+enum ContactVia {
+  PHONE
+  WHATSAPP
+  IN_PERSON
+}
+
+enum CustomerOrderStatus {
+  /// Combinada com o cliente, ainda nao foi para producao.
+  REQUESTED
+  IN_PRODUCTION
+  READY
+  /// So aqui conta como venda.
+  DELIVERED
+  CANCELLED
+}
+
+enum Fulfillment {
+  PICKUP
+  DELIVERY
+}
+
+enum PaymentMethod {
+  CASH
+  MBWAY
+  CARD
+  TRANSFER
+}
+
+/// Uma encomenda. E a venda: conta para as Vendas quando e entregue.
+model CustomerOrder {
+  id String @id @default(cuid())
+  /// "Encomenda 12" — mais facil de dizer ao telefone do que um cuid.
+  number Int @unique @default(autoincrement())
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  /// Por onde chegou: balcao, entrega propria, plataforma. Decide a comissao
+  /// e o frete nas contas.
+  channelId String?
+  channel   SalesChannel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+
+  status CustomerOrderStatus @default(REQUESTED)
+
+  /// Dia e hora da entrega, **em hora de Portugal guardada como se fosse UTC**
+  /// (o que o <input type="datetime-local"> escreve). Mostra-se sempre com
+  /// timeZone UTC: assim "15:00" e 15:00 no servidor da Vercel e no telemovel.
+  dueAt       DateTime
+  fulfillment Fulfillment @default(PICKUP)
+  address     String?
+  notes       String?
+
+  paid          Boolean        @default(false)
+  paymentMethod PaymentMethod?
+
+  /// Quando foi entregue — e o dia que conta para o mes das Vendas.
+  deliveredAt DateTime?
+
+  /// A ordem de producao onde esta encomenda entrou.
+  productionOrderId String?
+  productionOrder   ProductionOrder? @relation(fields: [productionOrderId], references: [id], onDelete: SetNull)
+
+  // ---- Pos-venda --------------------------------------------------------
+  /// Quando perguntar se gostou. Marca-se ao entregar, so para quem deu
+  /// consentimento; "nao atendeu" passa-o para o dia seguinte; "nao
+  /// contactar" limpa-o. Nulo e sem `feedbackAt`: nao ha nada a fazer.
+  followUpDueAt    DateTime?
+  followUpAttempts Int         @default(0)
+  /// Preenchido quando o cliente respondeu: o pos-venda desta encomenda acabou.
+  feedbackAt       DateTime?
+  feedbackVia      ContactVia?
+  /// Nota geral, de 1 a 5.
+  rating           Int?
+  feedbackComment  String?
+
+  lines     CustomerOrderLine[]
+  reminders Reminder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, dueAt])
+  @@index([deliveredAt])
+  @@index([customerId])
+  @@index([followUpDueAt])
+}
+
+/// Um produto da encomenda, com o preco combinado.
+///
+/// O custo fica congelado no dia em que a linha entrou: se a farinha subir
+/// amanha, o lucro da encomenda de ontem nao muda.
+model CustomerOrderLine {
+  id      String        @id @default(cuid())
+  orderId String
+  order   CustomerOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  recipeId String
+  recipe   Recipe @relation(fields: [recipeId], references: [id], onDelete: Restrict)
+
+  qty Decimal @db.Decimal(12, 4)
+
+  /// Preco por unidade combinado com o cliente, na convencao de IVA das
+  /// configuracoes (o mesmo que o preco de tabela).
+  unitPrice Decimal @db.Decimal(12, 4)
+  /// O preco de tabela quando a linha entrou, para mostrar o desconto.
+  listPrice Decimal? @db.Decimal(12, 4)
+
+  /// Custos por unidade no dia em que a linha entrou.
+  unitFoodCost              Decimal @db.Decimal(12, 4)
+  unitPackagingCost         Decimal @db.Decimal(12, 4)
+  unitDeliveryPackagingCost Decimal @db.Decimal(12, 4)
+
+  notes String?
+
+  /// Nota do cliente a este produto, de 1 a 5. Opcional: a geral fica na encomenda.
+  rating Int?
+
+  @@index([orderId])
+  @@index([recipeId])
+}
+
+/// Uma coisa a fazer num dia: "ligar ao Rui sobre o bolo de casamento".
+///
+/// So os lembretes escritos a mao vivem aqui. Os automaticos — pos-venda
+/// por fazer, aniversarios — calculam-se na hora a partir das encomendas e
+/// dos clientes, para nunca ficarem desencontrados deles.
+model Reminder {
+  id    String  @id @default(cuid())
+  title String
+  notes String?
+  /// O dia (e a hora, se houver), em hora de Lisboa guardada como UTC.
+  dueAt DateTime
+
+  customerId String?
+  customer   Customer?      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  orderId    String?
+  order      CustomerOrder? @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  doneAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([doneAt, dueAt])
+  @@index([customerId])
+}
+
+// ---------------------------------------------------------------------------
+// Utilizadores
+// ---------------------------------------------------------------------------
+
+/// O que cada pessoa pode fazer.
+enum UserRole {
+  /// Tudo: custos, encomendas, configuracoes, utilizadores, apagar de vez.
+  OWNER
+  /// O livro de receitas: ver, criar e alterar (cada alteracao e uma versao).
+  /// Nao ve custos nem margens.
+  KITCHEN
+  /// O livro de receitas, so para ler e imprimir.
+  READER
+}
+
+/// Uma pessoa com conta.
+///
+/// A palavra-passe guarda-se so como hash scrypt (ver `lib/auth.ts`). As
+/// tentativas falhadas contam-se por conta, e a quinta seguida bloqueia-a
+/// por 15 minutos.
+model User {
+  id           String   @id @default(cuid())
+  /// Nome com que se entra, em minusculas.
+  username     String   @unique
+  name         String
+  role         UserRole @default(READER)
+  passwordHash String
+  active       Boolean  @default(true)
+
+  /// Vai no cookie. Subir este numero termina todas as sessoes desta pessoa
+  /// (trocar a palavra-passe, "sair de todos os aparelhos", desativar).
+  sessionVersion Int @default(0)
+
+  failedLogins Int       @default(0)
+  lockedUntil  DateTime?
+  lastLoginAt  DateTime?
+
+  /// Obriga a trocar a palavra-passe no proximo acesso (contas criadas ou
+  /// repostas pelo dono, com uma palavra-passe que ele conhece).
+  mustChangePassword Boolean @default(false)
+
+  bookVersions BookRecipeVersion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Livro de receitas
+// ---------------------------------------------------------------------------
+
+/// De onde veio a receita.
+enum RecipeSourceKind {
+  FAMILY
+  COURSE
+  BOOK
+  INTERNET
+  OWN
+  OTHER
+}
+
+/// Um livro: "Receitas da familia", "Curso de confeitaria".
+model Cookbook {
+  id          String  @id @default(cuid())
+  title       String
+  subtitle    String?
+  description String?
+
+  entries CookbookEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Uma receita num livro, na seccao e ordem desse livro. A mesma receita pode
+/// estar em varios livros.
+model CookbookEntry {
+  id         String     @id @default(cuid())
+  cookbookId String
+  cookbook   Cookbook   @relation(fields: [cookbookId], references: [id], onDelete: Cascade)
+  recipeId   String
+  recipe     BookRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  /// "Bolos", "Recheios" — texto livre; agrupa no indice e na impressao.
+  section   String?
+  sortOrder Int     @default(0)
+
+  @@unique([cookbookId, recipeId])
+  @@index([recipeId])
+}
+
+/// Uma receita do livro. O conteudo vive nas versoes; aqui fica o que nao
+/// muda de versao para versao: o titulo, a origem, as etiquetas.
+model BookRecipe {
+  id    String @id @default(cuid())
+  title String
+
+  sourceKind RecipeSourceKind?
+  /// "Avo Maria", "Curso X, modulo 3", "Livro Y, p. 42".
+  sourceName String?
+  sourceUrl  String?
+  /// O ficheiro de onde foi importada (PDF), no Blob privado.
+  sourceFilePath String?
+  sourceFileName String?
+
+  tags String[] @default([])
+
+  /// Foto do prato, no Blob privado (o caminho, nao o URL), e a miniatura das
+  /// listas. Como as das fichas: servidas por `/api/receitas/<id>/foto`.
+  photoPath      String?
+  photoThumbPath String?
+
+  /// A ficha tecnica que esta receita descreve, para os custos.
+  fichaId String?
+  ficha   Recipe? @relation(fields: [fichaId], references: [id], onDelete: SetNull)
+
+  /// O numero da versao em uso. A 1 e sempre a original.
+  currentVersion Int @default(1)
+
+  /// Arquivada: sai da busca e dos livros, mas nao se perde. So o dono apaga de vez.
+  archivedAt DateTime?
+
+  versions BookRecipeVersion[]
+  entries  CookbookEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([archivedAt])
+}
+
+/// Uma versao de uma receita. Nunca se altera: mudar a receita e criar a
+/// versao seguinte. A 1 e a original, tal como veio da fonte.
+model BookRecipeVersion {
+  id       String     @id @default(cuid())
+  recipeId String
+  recipe   BookRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  number   Int
+
+  /// Uma linha por ingrediente.
+  ingredients String
+  /// Um passo por paragrafo.
+  steps       String
+  yield       String?
+  prepTime    String?
+  notes       String?
+
+  /// Porque mudou: "menos acucar, ficava doce demais".
+  changeNote String?
+
+  authorId   String?
+  author     User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  /// O nome no momento: se a conta for apagada, a autoria fica.
+  authorName String
+
+  createdAt DateTime @default(now())
+
+  @@unique([recipeId, number])
+}
+
+// ---------------------------------------------------------------------------
+// Seguranca: tentativas de entrada e registo de alteracoes
+// ---------------------------------------------------------------------------
+
+/// Tentativas falhadas de entrar, por origem (endereco IP).
+///
+/// O bloqueio por conta (`User.failedLogins`) nao apanha quem tenta uma
+/// palavra-passe comum em todas as contas, uma vez cada. Isto apanha: muitas
+/// falhas da mesma origem, em qualquer conta, bloqueiam a origem.
+model LoginThrottle {
+  /// O endereco, ja resumido (ver `lib/auth.ts`).
+  key         String    @id
+  failures    Int       @default(0)
+  windowStart DateTime  @default(now())
+  lockedUntil DateTime?
+  updatedAt   DateTime  @updatedAt
+}
+
+/// Quem mudou o que, e quando.
+///
+/// So acrescenta: nada na app altera ou apaga uma linha daqui. Guarda o nome
+/// da pessoa no momento, para o registo sobreviver a conta ser apagada.
+model AuditLog {
+  id       String   @id @default(cuid())
+  at       DateTime @default(now())
+  userId   String?
+  userName String
+  /// "entrar", "configuracoes.guardar", "receita.apagar"…
+  action   String
+  /// O que foi mexido, legivel: "Bolo de cenoura", "Encomenda 12".
+  target   String?
+  /// Pormenor curto: valores antes e depois, motivo.
+  detail   String?
+
+  @@index([at])
+  @@index([action])
 }

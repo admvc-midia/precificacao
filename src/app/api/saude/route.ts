@@ -19,8 +19,9 @@
  * ---------------------------------------------------------------------------
  * Nunca a palavra-passe, nunca as credenciais do banco. Da ligacao sai o
  * anfitriao, a porta e os parametros — que e o que importa diagnosticar — com
- * o utilizador e a senha substituidos. E so se ve com sessao iniciada: o
- * `proxy.ts` cobre esta rota como cobre as paginas.
+ * o utilizador e a senha substituidos. So o dono a ve: o `proxy.ts` cobre
+ * esta rota pelo cookie assinado. De proposito, nao se confirma a conta na
+ * base como nas outras rotas — esta existe para quando a base falha.
  */
 
 import { NextResponse } from 'next/server';

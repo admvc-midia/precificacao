@@ -51,6 +51,7 @@ import {
 } from '@/lib/pricing/purchase';
 import { bestOfferForNeed } from '@/lib/pricing/offers';
 import { getPricingData, getProductionOrder, getSuppliers } from '@/lib/queries';
+import { exigirSessao } from '@/lib/sessao';
 import { formatBaseQty, UNIT_LABEL } from '@/lib/units';
 
 export const dynamic = 'force-dynamic';
@@ -61,6 +62,14 @@ export default async function OrdemPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const eu = await exigirSessao();
+  // A cozinha ve o que produzir e marca `Produzi`; a lista de compras e os
+  // custos ficam com o dono. Outra pagina, para nenhum valor escapar.
+  if (eu.perfil !== 'OWNER') {
+    const so = await getProductionOrder(id);
+    if (!so) notFound();
+    return <OrdemCozinha order={so} />;
+  }
   const [order, data, suppliers] = await Promise.all([
     getProductionOrder(id),
     getPricingData(),
@@ -590,6 +599,86 @@ O que voce ja tem no estoque chega para esta producao, entao estes
             </Card>
           ) : null}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A ordem vista pela cozinha: o que produzir, quanto, para quando, e o botao
+ * "Produzi" (que tira do estoque o que as fichas consomem). Sem lista de
+ * compras nem custos.
+ */
+function OrdemCozinha({ order }: { order: NonNullable<Awaited<ReturnType<typeof getProductionOrder>>> }) {
+  const dia = new Intl.DateTimeFormat('pt-PT', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  return (
+    <div className="space-y-6">
+      <header className="space-y-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href="/producao" className="text-sm text-muted-foreground hover:underline">
+            Producao
+          </Link>
+          <span className="text-muted-foreground">/</span>
+          <h1 className="text-2xl font-semibold tracking-tight">{order.name}</h1>
+          {order.dueAt ? <Badge variant="secondary">{dia.format(order.dueAt)}</Badge> : null}
+          {order.promotional ? <Badge variant="warning">para oferecer</Badge> : null}
+        </div>
+        {order.notes ? <p className="text-sm text-muted-foreground">{order.notes}</p> : null}
+      </header>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <Card>
+          <CardHeader>
+            <CardTitle>O que produzir</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {order.lines.length === 0 ? (
+              <p className="px-6 pb-6 text-sm text-muted-foreground">Ordem vazia.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Produto</TableHead>
+                    <TableHead className="text-right">Porcoes</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {order.lines.map((l) => (
+                    <TableRow key={l.id}>
+                      <TableCell className="font-medium">{l.recipe.name}</TableCell>
+                      <TableNum className="text-base font-semibold">{num(l.qty)}</TableNum>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="h-fit">
+          <CardHeader>
+            <CardTitle>Feito?</CardTitle>
+            <CardDescription>
+              Ao carregar, sai do estoque o que as fichas dizem que esta producao consome.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <ActionForm action={recordProduction}>
+              <input type="hidden" name="orderId" value={order.id} />
+              <SubmitButton
+                variant={order.producedAt ? 'outline' : 'default'}
+                disabled={Boolean(order.producedAt) || order.lines.length === 0}
+                className="w-full"
+              >
+                <ChefHat className="h-4 w-4" />
+                {order.producedAt ? 'Producao ja registada' : order.promotional ? 'Ofereci' : 'Produzi'}
+              </SubmitButton>
+            </ActionForm>
+            {order.producedAt ? (
+              <p className="text-xs text-muted-foreground">Registada em {dia.format(order.producedAt)}.</p>
+            ) : null}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

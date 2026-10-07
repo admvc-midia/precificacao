@@ -2,6 +2,8 @@ import Link from 'next/link';
 import {
   AlertTriangle,
   ArrowRight,
+  ClipboardCheck,
+  HeartHandshake,
   PackageOpen,
   TrendingDown,
   TrendingUp,
@@ -30,18 +32,36 @@ import {
 import { prisma } from '@/lib/db';
 import { num } from '@/lib/mappers';
 import { formatMoney, formatPercent } from '@/lib/money';
-import { channelContext } from '@/lib/pricing/channels';
-import {
-  analyzeManualPrice,
-  priceFromTargetCmv,
-  priceFromTargetMargin,
-} from '@/lib/pricing/price';
+import { priceForRecipe, referenceChannel } from '@/lib/pricing/sugerido';
 import type { PriceResult } from '@/lib/pricing/types';
-import { getCostedRecipes } from '@/lib/queries';
+import {
+  getBirthdayCustomers,
+  getCostedRecipes,
+  getOpenCustomerOrders,
+  getOpenReminders,
+  getPendingFollowUps,
+} from '@/lib/queries';
+import { DIAS_ANTES_ANIVERSARIO, daysUntilBirthday } from '@/lib/pricing/clientes';
+import {
+  daysBetween,
+  nowInLisbon,
+  relativeDay,
+  STATUS_LABEL,
+  STATUS_VARIANT,
+} from '@/lib/pricing/encomendas';
 import { lowStock } from '@/lib/pricing/stock';
 import { formatBaseQty, toBase } from '@/lib/units';
 
 export const dynamic = 'force-dynamic';
+
+const entregaFmt = new Intl.DateTimeFormat('pt-PT', {
+  weekday: 'short',
+  day: '2-digit',
+  month: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  timeZone: 'UTC',
+});
 
 export default async function DashboardPage() {
   const { recipes, settings, currency, channels } = await getCostedRecipes();
@@ -67,37 +87,14 @@ export default async function DashboardPage() {
       minBase: i.minStockBase === null ? null : num(i.minStockBase),
     })),
   );
-  const reference = channels.find((c) => c.kind === 'COUNTER') ?? channels[0];
+  const reference = referenceChannel(channels);
   const products = recipes.filter((r) => r.kind === 'PRODUCT');
 
+  // A mesma conta da exportacao, das encomendas e dos resultados (sugerido.ts).
   const priced = products
-    .map((r) => {
-      if (!r.cost || !reference) return null;
-      const { params, costs } = channelContext(r.cost, reference, settings);
-      const opts = { rounding: settings.rounding };
-
-      let result: PriceResult;
-      if (r.pricingMode === 'MANUAL') {
-        result = analyzeManualPrice(r.manualPrice ?? 0, costs, params);
-      } else if (r.pricingMode === 'TARGET_MARGIN') {
-        result = priceFromTargetMargin(
-          costs,
-          params,
-          r.targetMargin ?? settings.targetMargin,
-          opts,
-        );
-      } else {
-        result = priceFromTargetCmv(
-          costs,
-          params,
-          r.targetCmv ?? settings.targetCmv,
-          opts,
-        );
-      }
-      return { recipe: r, result };
-    })
+    .map((r) => ({ recipe: r, result: priceForRecipe(r, reference, settings) }))
     .filter((x): x is { recipe: (typeof products)[number]; result: PriceResult } =>
-      Boolean(x?.result.feasible),
+      Boolean(x.result?.feasible),
     );
 
   const avgContribution =
@@ -115,6 +112,25 @@ export default async function DashboardPage() {
     priced.length > 0 ? priced.reduce((a, p) => a + p.result.cmv, 0) / priced.length : 0;
 
   const alerts = await priceAlerts();
+  const entregas = await getOpenCustomerOrders(6);
+  const agora = nowInLisbon();
+
+  // Para hoje: pos-vendas vencidos, lembretes ate hoje, aniversarios da semana.
+  const [pendentes, lembretes, aniversariantes] = await Promise.all([
+    getPendingFollowUps(),
+    getOpenReminders(),
+    getBirthdayCustomers(),
+  ]);
+  const posVendas = pendentes.filter((e) => e.followUpDueAt! <= new Date()).length;
+  const lembretesHoje = lembretes.filter((r) => daysBetween(agora, r.dueAt) <= 0).length;
+  const anos = aniversariantes.filter(
+    (c) => daysUntilBirthday(c.birthDay!, c.birthMonth!, agora) <= DIAS_ANTES_ANIVERSARIO,
+  ).length;
+  const paraHoje = [
+    posVendas > 0 ? `${posVendas} cliente(s) a quem perguntar se gostou` : null,
+    lembretesHoje > 0 ? `${lembretesHoje} lembrete(s)` : null,
+    anos > 0 ? `${anos} aniversário(s) esta semana` : null,
+  ].filter((x): x is string => x !== null);
 
   const setupDone =
     channels.length > 0 && recipes.length > 0 && priced.length > 0;
@@ -152,6 +168,65 @@ export default async function DashboardPage() {
           hint="Prejuizo ou CMV acima de 40%"
         />
       </div>
+
+      {paraHoje.length > 0 ? (
+        <Link
+          href="/pos-venda"
+          className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm transition-colors hover:bg-primary/10"
+        >
+          <HeartHandshake className="h-5 w-5 shrink-0 text-primary" aria-hidden />
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium">Para hoje</span>
+            <span className="block text-muted-foreground">{paraHoje.join(' · ')}</span>
+          </span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        </Link>
+      ) : null}
+
+      {entregas.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ClipboardCheck className="h-4 w-4 text-primary" />
+              Próximas entregas
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {entregas.map((e) => {
+              const dia = relativeDay(e.dueAt, agora);
+              return (
+                <Link
+                  key={e.id}
+                  href={`/encomendas/${e.id}`}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm transition-colors hover:bg-accent/50"
+                >
+                  <span className="min-w-0 truncate font-medium">
+                    #{e.number} · {e.customer?.name ?? 'Sem cliente'}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span className="capitalize text-muted-foreground">
+                      {entregaFmt.format(e.dueAt)}
+                    </span>
+                    {e.dueAt < agora ? (
+                      <Badge variant="destructive">atrasada</Badge>
+                    ) : dia ? (
+                      <Badge variant="warning">{dia}</Badge>
+                    ) : null}
+                    <Badge variant={STATUS_VARIANT[e.status]}>{STATUS_LABEL[e.status]}</Badge>
+                  </span>
+                </Link>
+              );
+            })}
+            <Link
+              href="/encomendas"
+              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+            >
+              Ver as encomendas
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {aAcabar.length > 0 ? (
         <Card>

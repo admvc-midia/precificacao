@@ -12,19 +12,19 @@
  * partilhada pelo caminho a deve guardar.
  */
 
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
-import { COOKIE, sessaoValida } from '@/lib/auth';
+import { utilizadorAtual } from '@/lib/sessao';
 import { prisma } from '@/lib/db';
 import { lerFoto } from '@/lib/fotos';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const jar = await cookies();
-  if (!sessaoValida(jar.get(COOKIE)?.value)) {
-    return new NextResponse('Sessao em falta.', { status: 401 });
+  // O proxy ja so deixa passar o dono; aqui confirma-se na base que a conta continua igual.
+  const eu = await utilizadorAtual();
+  if (eu?.perfil !== 'OWNER') {
+    return new NextResponse('Sem permissao.', { status: 403 });
   }
 
   const { id } = await params;

@@ -41,19 +41,19 @@ export function nome(base: string): string {
 }
 
 /**
- * Recusa-se a correr contra uma base que nao seja a desta aplicacao.
+ * Recusa-se a correr fora do schema dos testes.
  *
- * Sem `schema=precificaragao` o Prisma trabalha no `public`, que aqui e de
- * outro projeto. Um teste que apague linhas la seria um estrago em dados que
- * nem sequer sao deste produto.
+ * Os testes escrevem e apagam. No `public` mexeriam no outro projeto; no
+ * `precificaragao`, nos dados da casa. So o `precificaragao_teste` serve —
+ * e o `base-de-testes.ts` que para la aponta a ligacao, antes de tudo.
  */
 export function exigirSchemaCerto(): void {
   const url = process.env.DATABASE_URL ?? '';
   if (!url) throw new Error('DATABASE_URL nao esta definida.');
-  if (!/[?&]schema=precificaragao(\b|&|$)/.test(url)) {
+  if (!/[?&]schema=precificaragao_teste(&|$)/.test(url)) {
     throw new Error(
-      'DATABASE_URL nao aponta ao schema `precificaragao`. Estes testes escrevem ' +
-        'na base; correr no schema errado mexeria noutro projeto.',
+      'DATABASE_URL nao aponta ao schema `precificaragao_teste`. Estes testes escrevem ' +
+        'na base; correr noutro schema mexeria nos dados da casa ou noutro projeto.',
     );
   }
 }
@@ -66,11 +66,18 @@ export interface Retrato {
   linhasDeFicha: number;
   despesas: number;
   movimentos: number;
-  vendas: number;
   ofertas: number;
   canais: number;
   listasDeCompras: number;
   itensDeCompras: number;
+  clientes: number;
+  encomendas: number;
+  ordensDeProducao: number;
+  lembretes: number;
+  utilizadores: number;
+  receitasDoLivro: number;
+  versoesDoLivro: number;
+  livros: number;
   settings: Record<string, unknown>;
 }
 
@@ -91,7 +98,6 @@ export async function retrato(): Promise<Retrato> {
     movimentos: await prisma.stockMovement.count({
       where: { ingredient: semMarca },
     }),
-    vendas: await prisma.salesRecord.count({ where: { recipe: semMarca } }),
     ofertas: await prisma.supplierOffer.count({
       where: { ingredient: semMarca },
     }),
@@ -100,8 +106,37 @@ export async function retrato(): Promise<Retrato> {
       where: { NOT: { name: { startsWith: MARCA } } },
     }),
     itensDeCompras: await prisma.shoppingItem.count({ where: { ingredient: semMarca } }),
+    clientes: await prisma.customer.count({ where: semMarca }),
+    // Encomenda sem cliente conta como do utilizador: os testes poem sempre um marcado.
+    encomendas: await prisma.customerOrder.count({
+      where: { NOT: { customer: { name: { startsWith: MARCA } } } },
+    }),
+    // As ordens criadas a partir de encomendas tem nome de data, nao a marca.
+    ordensDeProducao: await prisma.productionOrder.count({
+      where: {
+        NOT: [
+          { name: { startsWith: MARCA } },
+          { customerOrders: { some: { customer: { name: { startsWith: MARCA } } } } },
+        ],
+      },
+    }),
+    // Lembretes sem cliente contam como do utilizador: os testes ligam-nos sempre a um marcado.
+    lembretes: await prisma.reminder.count({
+      where: { NOT: { customer: { name: { startsWith: MARCA } } } },
+    }),
+    // Contas de teste comecam por "zztemp-" (os nomes de utilizador sao minusculas).
+    utilizadores: await prisma.user.count({
+      where: { NOT: { username: { startsWith: MARCA.toLowerCase() } } },
+    }),
+    receitasDoLivro: await prisma.bookRecipe.count({ where: { NOT: { title: { startsWith: MARCA } } } }),
+    versoesDoLivro: await prisma.bookRecipeVersion.count({
+      where: { NOT: { recipe: { title: { startsWith: MARCA } } } },
+    }),
+    livros: await prisma.cookbook.count({ where: { NOT: { title: { startsWith: MARCA } } } }),
     settings: {
       businessName: s.businessName,
+      followUpDays: s.followUpDays,
+      followUpMessage: s.followUpMessage,
       currency: s.currency,
       locale: s.locale,
       vatRate: String(s.vatRate),
@@ -131,6 +166,8 @@ export async function reporSettings(r: Retrato): Promise<void> {
     where: { id: 'default' },
     data: {
       businessName: s.businessName as string | null,
+      followUpDays: s.followUpDays as number,
+      followUpMessage: s.followUpMessage as string | null,
       currency: s.currency as string,
       locale: s.locale as string,
       vatRate: s.vatRate as string,
@@ -166,7 +203,28 @@ export async function limpar(): Promise<void> {
   // um teste tenha posto numa lista do utilizador.
   await prisma.shoppingList.deleteMany({ where: { name: { startsWith: MARCA } } });
   await prisma.shoppingItem.deleteMany({ where: { ingredientId: { in: insumos } } });
-  await prisma.salesRecord.deleteMany({ where: { recipeId: { in: fichas } } });
+  // Livro de receitas: livros e receitas marcados (versoes e entradas vao em
+  // cascata), e as contas de teste.
+  await prisma.cookbook.deleteMany({ where: { title: { startsWith: MARCA } } });
+  await prisma.bookRecipe.deleteMany({ where: { title: { startsWith: MARCA } } });
+  await prisma.user.deleteMany({ where: { username: { startsWith: MARCA.toLowerCase() } } });
+  // Encomendas: as de clientes marcados, e as que levam fichas marcadas (estas
+  // seguram a ficha). As ordens de producao que nasceram delas vao primeiro.
+  const encomendasMarcadas = {
+    OR: [
+      { customer: { name: { startsWith: MARCA } } },
+      { lines: { some: { recipeId: { in: fichas } } } },
+    ],
+  };
+  await prisma.productionOrder.deleteMany({
+    where: { customerOrders: { some: encomendasMarcadas } },
+  });
+  await prisma.customerOrder.deleteMany({ where: encomendasMarcadas });
+  await prisma.customer.deleteMany({ where: { name: { startsWith: MARCA } } });
+  // Os testes gastam numeros de encomenda; sem isto a casa passava da #1 para a #9.
+  await prisma.$executeRawUnsafe(
+    `SELECT setval('"CustomerOrder_number_seq"', COALESCE((SELECT MAX("number") FROM "CustomerOrder"), 0) + 1, false)`,
+  );
   await prisma.recipeItem.deleteMany({
     where: {
       OR: [{ recipeId: { in: fichas } }, { ingredientId: { in: insumos } }],
