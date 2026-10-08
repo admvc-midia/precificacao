@@ -7,18 +7,25 @@
 // Convencao de quantidade: toda quantidade persistida em campos *Base esta na
 // unidade base do insumo (G, ML ou UN). Conversoes em src/lib/units.ts.
 
+// Prisma 7: o cliente e gerado para dentro de `src/` (importa-se de
+// `@/generated/prisma/client`) e fala com o Postgres pelo adaptador `pg`,
+// configurado em `src/lib/db.ts`. A pasta gerada nao vai para o git.
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
-// Uma unica variavel de ambiente de proposito: o Prisma exige que toda a env
-// declarada aqui exista, e um `directUrl` obrigatorio faria a aplicacao inteira
-// rebentar em quem so define DATABASE_URL — o caso normal no Neon. Se quiser
-// usar `prisma migrate` contra uma ligacao em pool, acrescente
-// `directUrl = env("DIRECT_URL")` e defina a variavel; ver o README.
+// As tabelas e os campos, para a copia completa e o restauro (o cliente do
+// Prisma 7 ja nao os traz). Ver tools/gerador-modelo.mjs.
+generator modelo {
+  provider = "node tools/gerador-modelo.mjs"
+  output   = "../src/generated/modelo.ts"
+}
+
+// O endereco da base esta em `prisma.config.ts` (linha de comandos) e em
+// `src/lib/db.ts` (aplicacao), ambos a partir do DATABASE_URL.
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // ---------------------------------------------------------------------------
@@ -406,6 +413,8 @@ model Recipe {
   /// Onde esta receita e usada como sub-receita.
   usedIn     RecipeItem[]          @relation("RecipeChild")
   orderLines ProductionOrderLine[]
+  /// O que o calendario diz deste produto em cada data ("nao produzir a 12/10").
+  calendarPlans CalendarPlanItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -720,6 +729,13 @@ model Customer {
   name  String
   phone String?
   notes String?
+
+  /// Redes sociais: so o nome de utilizador ("ana.doces"), sem @ nem link —
+  /// o link faz-se na hora (`linkRede`). Um perfil do Facebook sem nome de
+  /// utilizador fica "profile.php?id=123".
+  instagram String?
+  facebook  String?
+  tiktok    String?
 
   /// Quando o cliente aceitou ser contactado depois da venda. Nulo: nao aceitou
   /// (ou nao foi perguntado), e o pos-venda nao lhe pode escrever.
@@ -1108,4 +1124,82 @@ model AuditLog {
 
   @@index([at])
   @@index([action])
+}
+
+// ---------------------------------------------------------------------------
+// Calendario de producao
+// ---------------------------------------------------------------------------
+
+/// Que tipo de evento o dono marcou.
+enum CalendarEventKind {
+  /// Festa, feira, encomenda grande.
+  EVENT
+  /// Algo que esta na moda e vale a pena aproveitar.
+  TREND
+  /// Da equipa: folga, ferias, formacao.
+  TEAM
+}
+
+/// O que fazer com um produto numa data.
+enum CalendarPlanAction {
+  MORE
+  LESS
+  NONE
+}
+
+/// Um evento do calendario.
+///
+/// Os feriados e as datas comemorativas nao vivem aqui: calculam-se em
+/// `lib/calendario/datas.ts`. So ganham uma linha quando o dono lhes junta
+/// alguma coisa (plano de producao, notas) — e entao `knownKey` diz qual e, e
+/// o dia continua a vir do calculo, porque a Pascoa muda todos os anos.
+model CalendarEvent {
+  id       String  @id @default(cuid())
+  /// A data conhecida que esta linha completa ("criancas-br"). Nulo nos eventos do dono.
+  knownKey String? @unique
+  title    String
+  /// O dia, nos eventos do dono. Nulo nas datas conhecidas.
+  day      DateTime? @db.Date
+  /// Repete todos os anos no mesmo dia e mes. As datas conhecidas repetem sempre.
+  yearly   Boolean           @default(false)
+  kind     CalendarEventKind @default(EVENT)
+  /// Para a equipa: o que preparar, quem esta de folga.
+  notes    String?
+
+  plans   CalendarPlanItem[]
+  reviews CalendarReview[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([day])
+}
+
+/// Um produto no plano de uma data: produzir mais, menos, ou nao produzir.
+model CalendarPlanItem {
+  id       String             @id @default(cuid())
+  eventId  String
+  event    CalendarEvent      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  recipeId String
+  recipe   Recipe             @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  action   CalendarPlanAction
+  /// Quantas, quando se sabe ("mais 30").
+  qty      Int?
+  note     String?
+
+  @@unique([eventId, recipeId])
+}
+
+/// Como correu um evento num ano: para o ano seguinte se lembrar.
+model CalendarReview {
+  id      String        @id @default(cuid())
+  eventId String
+  event   CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  year    Int
+  text    String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([eventId, year])
 }

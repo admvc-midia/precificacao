@@ -92,7 +92,10 @@ const SECOES: Secao[] = [
         </Passos>
         <p>
           Os menus da barra de cima seguem esta mesma ordem: <em>Cadastros</em> (passos 2 a
-          5), <em>Produção</em> (passo 6) e <em>Resultados</em> (passo 7).
+          5), <em>Produção</em> (passo 6) e <em>Resultados</em> (passo 7). As{' '}
+          <em>Encomendas</em> estão em <em>Clientes</em>, as <em>Compras</em> em{' '}
+          <em>Cadastros</em>, e o <em>Painel</em> abre-se carregando no logótipo. No telemóvel,
+          Encomendas, Compras, Fichas, Produção e Calendário estão na barra de baixo.
         </p>
       </>
     ),
@@ -388,7 +391,7 @@ const SECOES: Secao[] = [
   {
     id: 'clientes',
     titulo: 'Clientes',
-    resumo: 'Quem encomenda, do que gosta, quem trouxe quem.',
+    resumo: 'Quem encomenda, do que gosta, quem trouxe quem, e onde está nas redes.',
     href: '/clientes',
     conteudo: (
       <>
@@ -402,6 +405,12 @@ const SECOES: Secao[] = [
             Abra um cliente. Em <strong>Contacto</strong> (lápis): telefone,{' '}
             <strong>aniversário</strong> (dia/mês, sem o ano), <strong>como nos
             conheceu</strong> e <strong>quem indicou</strong>.
+          </li>
+          <li>
+            Também em <strong>Contacto</strong>: <strong>Instagram, Facebook e TikTok</strong>.
+            Escreva o @ ou cole o link do perfil, como vier — a app guarda só o nome. Na ficha
+            do cliente e na encomenda aparecem como botões que abrem o perfil; a pesquisa da
+            lista encontra pelo @. A cozinha não os vê.
           </li>
           <li>
             Em <strong>Gostos</strong>: do que gosta, do que não gosta, e notas (&quot;encomenda
@@ -746,13 +755,53 @@ const SECOES: Secao[] = [
     ),
   },
   {
+    id: 'calendario',
+    titulo: 'Calendário de produção',
+    resumo: 'Feriados, datas que vendem e os seus eventos, com o que produzir em cada um.',
+    href: '/calendario',
+    conteudo: (
+      <>
+        <Passos>
+          <li>
+            Em <strong>Resultados → Calendário de produção</strong>. O calendário já traz os
+            feriados de Portugal e as datas que vendem doces em Portugal (<strong>PT</strong>) e
+            no Brasil (<strong>BR</strong>) — que nem sempre calham no mesmo dia: o Dia da
+            Criança é a 1 de junho em Portugal e a 12 de outubro no Brasil; o Dia da Mãe é no
+            1.º domingo de maio em Portugal e no 2.º no Brasil. A Páscoa e o que dela depende
+            (Carnaval, Sexta-feira Santa, Corpo de Deus) calculam-se para cada ano.
+          </li>
+          <li>
+            <strong>Novo evento</strong> — uma festa, uma feira, uma encomenda grande, uma
+            tendência que quer aproveitar, ou a folga de alguém da equipa. Marque{' '}
+            <em>Repete todos os anos</em> para o aniversário da loja e afins.
+          </li>
+          <li>
+            <strong>Plano de produção</strong> — em cada data, escolha produtos e diga{' '}
+            <em>produzir mais</em> (e quantos), <em>produzir menos</em> ou{' '}
+            <em>não produzir</em>. Numa data que se repete, o plano vale para todos os anos.
+          </li>
+          <li>
+            <strong>Como correu</strong> — depois do dia, escreva o que vendeu bem e o que
+            sobrou. No ano seguinte aparece na mesma data, ao lado do que se vendeu nesse dia no
+            ano anterior (tirado das encomendas).
+          </li>
+        </Passos>
+        <Nota>
+          Em <strong>Encomendas</strong> e em <strong>Produção</strong>, uma faixa mostra o que
+          vem nos próximos 10 dias, com o plano de cada data. A cozinha vê o calendário e os
+          planos, mas só o dono os cria e altera.
+        </Nota>
+      </>
+    ),
+  },
+  {
     id: 'painel',
     titulo: 'Painel',
     resumo: 'O resumo: onde está o lucro e onde está o risco.',
     href: '/',
     conteudo: (
       <p>
-        A primeira página. Mostra quantos produtos têm preço, o CMV médio, os produtos com
+        A primeira página — abre-se carregando no logótipo. Mostra quantos produtos têm preço, o CMV médio, os produtos com
         mais margem e os que estão em risco (prejuízo ou CMV acima de 40%), e avisa de
         insumos a acabar e preços de fornecedor que mudaram. Carregue num produto para ir
         direto à precificação dele.
@@ -761,15 +810,25 @@ const SECOES: Secao[] = [
   },
   {
     id: 'exportar',
-    titulo: 'Exportar e cópia de segurança',
-    resumo: 'Listas para o Excel e uma cópia de tudo.',
+    titulo: 'Cópia de segurança e exportar',
+    resumo: 'Fazer e restaurar uma cópia de tudo; listas para o Excel.',
     href: '/exportar',
     conteudo: (
       <>
         <Passos>
           <li>
             No menu ⚙ (no telemóvel, em <em>Mais</em>), abra{' '}
-            <strong>Exportar dados</strong>.
+            <strong>Cópia de segurança</strong>.
+          </li>
+          <li>
+            <strong>Fazer cópia agora</strong> — todas as tabelas num só ficheiro. Guarde-o
+            fora do computador (OneDrive, pen).
+          </li>
+          <li>
+            <strong>Restaurar uma cópia</strong> — escolha o ficheiro. A app mostra primeiro o
+            que ia mudar (quantas encomendas, fichas, clientes… ficam) e avisa do que se perde,
+            sem mexer em nada. Só depois de escrever <strong>RESTAURAR</strong> a base volta a
+            ficar exatamente como no dia da cópia.
           </li>
           <li>
             <strong>Listas para o Excel</strong> — insumos, fornecedores, preços por
@@ -777,11 +836,15 @@ const SECOES: Secao[] = [
             Cada uma descarrega um ficheiro CSV que abre direto no Excel, com vírgula decimal
             e acentos.
           </li>
-          <li>
-            <strong>Cópia completa</strong> — todas as tabelas num só ficheiro. É a cópia
-            de segurança: guarde-a fora do computador (OneDrive, pen).
-          </li>
         </Passos>
+        <Nota>
+          Restaurar <strong>substitui</strong> tudo — o que foi feito depois da cópia perde-se.
+          Por isso, antes de restaurar, a app guarda sozinha uma cópia do que havia; aparece em{' '}
+          <em>Cópias guardadas pela app</em> e, se o restauro foi engano, restaura-se essa. As
+          contas, as palavras-passe e o registo de alterações nunca mudam com um restauro. As
+          fotos e os PDFs não vão no ficheiro (só o sítio onde estão); a cópia automática do
+          computador guarda-os à parte.
+        </Nota>
         <Nota>
           Além do botão, o computador onde a cópia automática foi configurada grava uma cópia
           completa sozinho, uma vez por semana. Se estiver desligado no dia, grava assim que

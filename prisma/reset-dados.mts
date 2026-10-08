@@ -25,9 +25,11 @@
  *   npx tsx prisma/reset-dados.mts --apply   apaga mesmo
  */
 
-import { PrismaClient } from '@prisma/client';
+// O Prisma 7 ja nao le o .env sozinho; tem de vir antes do cliente da app.
+import 'dotenv/config';
 
-const prisma = new PrismaClient();
+import { prisma } from '../src/lib/db';
+
 const aplicar = process.argv.includes('--apply');
 
 /**

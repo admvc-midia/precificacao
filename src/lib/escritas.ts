@@ -7,7 +7,7 @@
  * gravam sem validar nada — quem as chama e que valida.
  */
 
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 
 import { prisma } from '@/lib/db';
 import { num } from '@/lib/mappers';

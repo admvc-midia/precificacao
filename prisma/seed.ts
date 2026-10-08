@@ -23,9 +23,11 @@
  * acrescenta `--forcar` e sabe o que esta a fazer.
  */
 
-import { PrismaClient, type PurchaseUnit } from '@prisma/client';
+// O Prisma 7 ja nao le o .env sozinho; tem de vir antes do cliente da app.
+import 'dotenv/config';
 
-const prisma = new PrismaClient();
+import type { PurchaseUnit } from '../src/generated/prisma/client';
+import { prisma } from '../src/lib/db';
 
 function baseUnitOf(unit: PurchaseUnit) {
   if (unit === 'KG' || unit === 'G') return 'G' as const;

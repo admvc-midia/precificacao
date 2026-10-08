@@ -7,7 +7,7 @@
 
 import { Field, Select } from '@/components/ui/form-controls';
 import { Input, Textarea } from '@/components/ui/input';
-import { SOURCE_LABEL, type CustomerSource } from '@/lib/pricing/clientes';
+import { REDE_LABEL, SOURCE_LABEL, type CustomerSource } from '@/lib/pricing/clientes';
 
 interface ClienteForm {
   id?: string;
@@ -21,6 +21,9 @@ interface ClienteForm {
   likes?: string | null;
   dislikes?: string | null;
   notes?: string | null;
+  instagram?: string | null;
+  facebook?: string | null;
+  tiktok?: string | null;
 }
 
 export function CamposContacto({
@@ -64,6 +67,25 @@ export function CamposContacto({
           />
         </Field>
       </div>
+      <fieldset className="space-y-1.5">
+        <legend className="text-sm font-medium">Redes sociais</legend>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {(['instagram', 'facebook', 'tiktok'] as const).map((rede) => (
+            <Input
+              key={rede}
+              id={`${prefixo}-${rede}`}
+              name={rede}
+              aria-label={REDE_LABEL[rede]}
+              placeholder={rede === 'facebook' ? 'Facebook: nome' : `${REDE_LABEL[rede]}: @nome`}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              defaultValue={cliente[rede] ?? ''}
+            />
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">O @ ou o link do perfil, como vier: a app guarda só o nome.</p>
+      </fieldset>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Como nos conheceu" htmlFor={`${prefixo}-origem`}>
           <Select id={`${prefixo}-origem`} name="source" defaultValue={cliente.source ?? ''}>

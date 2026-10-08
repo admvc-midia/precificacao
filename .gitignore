@@ -8,3 +8,6 @@ build
 *.tsbuildinfo
 next-env.d.ts
 coverage
+
+# Gerado pelo prisma generate (cliente do Prisma 7 e o modelo para a copia)
+/src/generated

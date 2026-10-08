@@ -335,7 +335,7 @@ const ROTAS_DO_LIVRO = ['/receitas', '/livros', '/api/receitas', '/conta', '/aju
  * — mas as paginas mostram-lhe so isso, sem precos nem custos. Criar uma
  * encomenda nao: o formulario e todo precos.
  */
-const ROTAS_DA_COZINHA = ['/encomendas', '/producao'];
+const ROTAS_DA_COZINHA = ['/encomendas', '/producao', '/calendario'];
 const FECHADAS_A_COZINHA = ['/encomendas/nova'];
 
 function casa(lista: string[], pathname: string): boolean {

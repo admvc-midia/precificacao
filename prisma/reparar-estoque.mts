@@ -40,9 +40,11 @@
  *   npx tsx prisma/reparar-estoque.mts --apply   repara
  */
 
-import { PrismaClient } from '@prisma/client';
+// O Prisma 7 ja nao le o .env sozinho; tem de vir antes do cliente da app.
+import 'dotenv/config';
 
-const prisma = new PrismaClient();
+import { prisma } from '../src/lib/db';
+
 const aplicar = process.argv.includes('--apply');
 
 /** A partir de quantas vezes se assume o defeito do decimal, e nao o preco. */

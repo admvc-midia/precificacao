@@ -3,6 +3,7 @@ import { ArrowRight, CalendarDays, Plus } from 'lucide-react';
 
 import { AjudaLink } from '@/components/ajuda-link';
 import { ConfirmDelete, FormDialog } from '@/components/action-form';
+import { ProximosEventos } from '@/components/calendario/proximos-eventos';
 import { DataList, type ListColumn, type ListRow } from '@/components/data-list';
 import { Alert, Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -134,6 +135,8 @@ export default async function ProducaoPage() {
           responde o que falta comprar, em que loja e por quanto.
         </p>
       </header>
+
+      <ProximosEventos />
 
       {products.length === 0 ? (
         <Alert tone="info">

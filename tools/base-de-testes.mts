@@ -16,7 +16,8 @@ process.loadEnvFile('.env');
 const url = urlDeTestes(process.env.DATABASE_URL ?? '');
 console.log('A preparar o schema dos testes:', new URL(url).searchParams.get('schema'));
 
-const r = spawnSync('npx', ['prisma', 'db', 'push', '--skip-generate'], {
+// No Prisma 7 o `db push` ja nao gera o cliente (nem aceita --skip-generate).
+const r = spawnSync('npx', ['prisma', 'db', 'push'], {
   stdio: 'inherit',
   shell: true,
   env: { ...process.env, DATABASE_URL: url },

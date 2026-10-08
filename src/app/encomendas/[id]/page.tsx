@@ -21,6 +21,7 @@ import {
 } from '@/components/action-form';
 import { AjudaLink } from '@/components/ajuda-link';
 import { CartaoInfo } from '@/components/cartao-info';
+import { RedesCliente } from '@/components/clientes/redes-cliente';
 import { StatTile } from '@/components/dre-breakdown';
 import { Alert, Badge, Separator } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -271,6 +272,7 @@ export default async function EncomendaPage({
               ) : (
                 <p className="text-muted-foreground">Sem telefone</p>
               )}
+              <RedesCliente cliente={e.customer} className="gap-1.5" />
               <p className="text-xs text-muted-foreground">
                 {e.customer.contactConsentAt
                   ? `Aceita contacto depois (desde ${diaFmt.format(e.customer.contactConsentAt)})`

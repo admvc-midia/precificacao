@@ -12,7 +12,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import { prisma } from '@/lib/db';
-import { validBirthday, type CustomerSource } from '@/lib/pricing/clientes';
+import { lerRede, validBirthday, type CustomerSource } from '@/lib/pricing/clientes';
 import { alvoDoFormulario, registar, resumoDoFormulario } from '@/lib/registo';
 import { exigirDono } from '@/lib/sessao';
 import { errorMessage, type ActionState } from './shared';
@@ -51,6 +51,9 @@ interface DadosCliente {
   likes?: string | null;
   dislikes?: string | null;
   notes?: string | null;
+  instagram?: string | null;
+  facebook?: string | null;
+  tiktok?: string | null;
 }
 
 /** Os campos do formulario que vieram, ja validados. */
@@ -82,6 +85,11 @@ function lerCampos(form: FormData, id: string | null): DadosCliente {
   for (const k of ['likes', 'dislikes', 'notes'] as const) {
     const v = campo(form, k);
     if (v !== undefined) data[k] = v || null;
+  }
+  // "@Ana.Doces" ou o link do perfil: guarda-se so o nome de utilizador.
+  for (const rede of ['instagram', 'facebook', 'tiktok'] as const) {
+    const v = campo(form, rede);
+    if (v !== undefined) data[rede] = lerRede(rede, v);
   }
   return data;
 }

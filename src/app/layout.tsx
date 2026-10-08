@@ -21,9 +21,9 @@ const titulo = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: 'Amo Brigs · Precificação',
+  title: 'Amo Brigs · Ateliê',
   description:
-    'Precificacao, engenharia de cardapio e lista de compras para lanchonete e restaurante.',
+    'Custos e precos, encomendas e clientes, producao, receitas e calendario da Amo Brigs.',
 };
 
 // A barra do browser continua a barra de cima da app: vinho, mais fundo no

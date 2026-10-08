@@ -32,15 +32,17 @@ Um banco Postgres qualquer serve — [Neon](https://neon.tech), Supabase ou Verc
 
 #> **Nesta máquina:** uma política de Controlo de Aplicações do Windows bloqueia o binário nativo do SWC, e o Turbopack não corre sem ele. Por isso o script `dev` usa `--webpack`. Onde o binário carregue normalmente, `npm run dev:turbo` é mais rápido.
 
+### Prisma 7 (desde 2026-10-08)
+
+- **O cliente é gerado para `src/generated/prisma`** (fora do git) e importa-se de `@/generated/prisma/client`, nunca de `@prisma/client`. Um segundo gerador, `tools/gerador-modelo.mjs`, escreve `src/generated/modelo.ts` com as tabelas e campos — o que a cópia completa e o restauro usavam de `Prisma.dmmf`, que o cliente do Prisma 7 já não traz. Os dois correm em cada `prisma generate` (build e `postinstall`).
+- **A aplicação liga-se pelo adaptador `pg`** (`src/lib/db.ts`, `ligacaoDoEndereco`). O `DATABASE_URL` continua igual, mas o adaptador não percebe os parâmetros do Prisma 5, por isso são traduzidos: `schema` → opção do adaptador; `connection_limit` → tamanho da pool (5 sem ele); `sslmode` → TLS sem verificar o certificado, como antes (`sslmode=disable` desliga); `pgbouncer` sai. **Sem `?schema=` a app recusa-se a arrancar**, em vez de cair no `public`, que nesta base é de outro projeto. A pool tem limites de tempo: o `pg` sozinho esperava para sempre por uma ligação que o pooler cortou.
+- **SQL escrito à mão leva sempre `tabela('Nome')`** (de `lib/db.ts`): o adaptador põe o schema nas consultas que gera, mas a ligação continua com `search_path` no `public`.
+- **A linha de comandos lê `prisma.config.ts`** (endereço e seed), com `dotenv`: o Prisma 7 já não lê o `.env` sozinho. Os scripts em `prisma/` começam por `import 'dotenv/config'` antes de importar `lib/db`.
+- Ficou na **7.10.0**, a última estável: a 8 ainda é *release candidate* (a etiqueta `latest` do npm aponta para ela).
+
 ### Migrations
 
-O caminho recomendado é `npm run db:push`, que funciona através do pooler. Se preferir migrations versionadas (`npm run db:migrate`), o Prisma precisa de uma ligação direta, porque migrations usam advisory locks que o pooler não suporta. Nesse caso, acrescente ao `datasource db` do schema:
-
-```prisma
-directUrl = env("DIRECT_URL")
-```
-
-e defina `DIRECT_URL` com a connection string sem pooler. O schema não declara isso por omissão de propósito: o Prisma exige que toda variável declarada exista, e um `DIRECT_URL` obrigatório faria a aplicação inteira falhar em quem só define `DATABASE_URL`.
+O caminho recomendado é `npm run db:push`, que funciona através do pooler — sempre depois de `npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script` confirmar que a alteração só acrescenta. Migrations versionadas (`npm run db:migrate`) precisam de uma ligação direta (usam advisory locks que o pooler não suporta): em `prisma.config.ts`, aponte `datasource.url` a uma variável com a connection string sem pooler.
 
 ### Deploy na Vercel
 
@@ -53,7 +55,7 @@ e defina `DIRECT_URL` com a connection string sem pooler. O schema não declara 
    postgresql://user:pass@HOST.pooler.supabase.com:6543/postgres?sslmode=require&schema=precificaragao&pgbouncer=true&connection_limit=1
    ```
 
-   `pgbouncer=true` desliga os prepared statements, que o modo transação não suporta; `connection_limit=1` evita que cada instância abra mais do que precisa. O `schema=` não é opcional aqui — esta base é partilhada com outro projeto.
+   `connection_limit=1` evita que cada instância abra mais do que precisa (vira o tamanho da pool do `pg`). O `pgbouncer=true` era para o Prisma 5; com o adaptador `pg` não faz falta, mas pode ficar. O `schema=` não é opcional aqui — esta base é partilhada com outro projeto.
 3. O `build` já corre `prisma generate`; o `postinstall` também, para o caso do cache de dependências da Vercel.
 4. Na primeira vez, corra `npm run db:push` apontando para o banco de produção. Depois, abra a app: sem contas, a página de entrada pede a `APP_PASSWORD` e cria a conta de dono; as restantes criam-se em ⚙ → Utilizadores.
 
@@ -229,16 +231,23 @@ Em Configurações, **Casas decimais**: automático (até 4) ou 2. Só muda a le
 
 ### Exportar e cópia de segurança
 
-Em **⚙ → Exportar dados** (`/exportar`) há duas coisas:
+Em **⚙ → Cópia de segurança** (`/exportar`) há três coisas:
 
+- **Restaurar uma cópia** (só o dono) — a base volta a ficar **exatamente** como no dia da cópia: substitui, não junta. Dois passos: escolher o ficheiro (`analisarCopiaAction` lê e mostra, por tabela, quanto há agora e quanto fica, e quanto foi criado depois da cópia — sem escrever nada) e escrever `RESTAURAR` (`restaurarCopiaAction`). Antes de mexer, grava uma cópia do estado atual no Blob privado (`copias/antes-de-restaurar-*.json`, listadas na página, descarregáveis por `/api/copias`); sem Blob, recusa-se. O restauro corre numa só transação, pela ordem das chaves estrangeiras lida do schema (`lib/exportar/restaurar.ts`); a coluna que aponta para a própria tabela (quem indicou o cliente) preenche-se no fim, e a numeração das encomendas continua a partir da maior da cópia. **Nunca mexe** em `User`, `AuditLog` nem `LoginThrottle`: a cópia não tem as palavras-passe e o registo não se apaga. Uma cópia com dados numa tabela que já não existe, ou sem uma coluna hoje obrigatória, é recusada antes de tocar na base. Fotos e PDFs não vão no JSON (só o caminho no Blob).
 - **Listas em CSV** para o Excel — insumos, fornecedores, preços por fornecedor, fichas, preços sugeridos, movimentos, encomendas e despesas. Ponto e vírgula entre colunas, vírgula decimal, BOM UTF-8: é o que o Excel em português abre sem assistente. Quantidades em kg/L/un, nunca gramas; texto que começa por `=`, `+`, `-` ou `@` leva apóstrofo, para não virar fórmula.
-- **Cópia completa** em JSON — todas as tabelas tal como estão. As tabelas são lidas do próprio schema (`Prisma.dmmf`), não de uma lista escrita à mão: um script antigo com a lista à mão esquecia as despesas, e ninguém deu por isso. **Sem segredos**: os hashes das palavras-passe e qualquer campo com nome de segredo (`password`, `hash`, `token`, `secret`) ficam de fora (`camposFora` em `lib/exportar/gerar.ts`).
+- **Cópia completa** em JSON — todas as tabelas tal como estão. As tabelas são lidas do próprio schema (`MODELOS`, gerado a cada `prisma generate`), não de uma lista escrita à mão: um script antigo com a lista à mão esquecia as despesas, e ninguém deu por isso. **Sem segredos**: os hashes das palavras-passe e qualquer campo com nome de segredo (`password`, `hash`, `token`, `secret`) ficam de fora (`camposFora` em `lib/exportar/gerar.ts`).
 
 A mesma cópia corre sozinha: `prisma/copia-seguranca.mts <pasta> [quantas]` grava e apaga as mais antigas (12 por omissão), copia as fotos e os PDFs originais do livro de receitas, e apaga do Blob os PDFs de importações abandonadas há mais de 24 h. `tools/agendar-copia.ps1` cria a tarefa do Windows — segundas às 10h, ou assim que o computador for ligado, para `OneDrive\Copias\precificacao`. O registo da última fica em `ultima-copia.log`, ao lado.
 
 ### Encomendas, clientes e pós-venda
 
 A casa trabalha por encomenda, e a venda **é** a encomenda (`CustomerOrder`): conta nos resultados quando é marcada como entregue, no mês de Lisboa em que o foi (`lib/datas.ts`). Cada linha guarda o preço combinado e o **custo do dia** — o lucro de setembro não muda porque a farinha subiu em outubro. "Produzir as marcadas" soma várias encomendas numa ordem de produção. Clientes com origem, quem indicou, gostos e aniversário; o pós-venda agenda-se ao entregar, só para quem deu consentimento (RGPD), com a mensagem do WhatsApp já escrita. `/vendas` (Resultados do mês) e `/relatorio` só leem. As contas puras vivem em `lib/pricing/encomendas.ts`, `clientes.ts` e `relatorio.ts`.
+
+### Calendário de produção
+
+`/calendario` (Resultados → Calendário de produção). Os **feriados de Portugal** e as **datas que vendem doces em Portugal e no Brasil** não estão na base: calculam-se em `lib/calendario/datas.ts`, incluindo a Páscoa (Meeus/Jones/Butcher) e o que dela depende, e os domingos móveis — que diferem entre os dois países (Dia da Mãe 1.º domingo de maio em PT, 2.º no BR; Dia da Criança 1/6 em PT, 12/10 no BR). Cada data tem uma `chave` sem ano.
+
+Na base (`CalendarEvent`) ficam os eventos do dono (`day`, `yearly`, `kind`: evento, tendência, equipa) e as datas conhecidas que o dono completou (`knownKey`; o dia continua a vir do cálculo). Cada um tem um **plano de produção** (`CalendarPlanItem`: produzir mais / menos / não produzir, por ficha de produto) e **como correu** em cada ano (`CalendarReview`). `lib/calendario/eventos.ts` junta tudo num intervalo (puro, testado); `consultas.ts` lê a base e as vendas reais por dia (encomendas não canceladas, pelo dia do `dueAt`), para mostrar o que se vendeu nessa data no ano anterior. Uma faixa com os próximos 10 dias aparece em Encomendas e Produção. A cozinha vê; só o dono escreve.
 
 ### Contas, permissões e registo
 

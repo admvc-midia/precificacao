@@ -101,7 +101,11 @@ export default async function ClientesPage() {
 
     return {
       id: c.id,
-      search: `${c.name} ${c.phone ?? ''} ${c.likes ?? ''} ${origem}`,
+      // As redes com e sem @: procura-se "ana.doces" ou "@ana.doces".
+      search: `${c.name} ${c.phone ?? ''} ${c.likes ?? ''} ${origem} ${[c.instagram, c.facebook, c.tiktok]
+        .filter(Boolean)
+        .map((r) => `${r} @${r}`)
+        .join(' ')}`,
       cells: [
         <div key="n" className="space-y-0.5">
           <div className="flex flex-wrap items-center gap-2">
@@ -109,7 +113,7 @@ export default async function ClientesPage() {
             {selos}
           </div>
           <div className="text-xs text-muted-foreground">
-            {[c.phone, origem].filter(Boolean).join(' · ') || '—'}
+            {[c.phone, c.instagram ? `@${c.instagram}` : null, origem].filter(Boolean).join(' · ') || '—'}
           </div>
         </div>,
         <span key="e" className="tabular-nums">

@@ -3,6 +3,7 @@ import { ArrowRight, ChefHat, Plus } from 'lucide-react';
 
 import { ActionForm, SubmitButton } from '@/components/action-form';
 import { AjudaLink } from '@/components/ajuda-link';
+import { ProximosEventos } from '@/components/calendario/proximos-eventos';
 import { Paginacao } from '@/components/paginacao';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
@@ -66,6 +67,8 @@ export default async function EncomendasPage({
           </Link>
         ) : null}
       </header>
+
+      <ProximosEventos />
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Por entregar</h2>

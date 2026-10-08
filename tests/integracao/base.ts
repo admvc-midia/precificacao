@@ -28,9 +28,9 @@
 
 import { expect } from 'vitest';
 
-import type { RoundingStrategy, VatMode } from '@prisma/client';
+import type { RoundingStrategy, VatMode } from '@/generated/prisma/client';
 
-import { prisma } from '@/lib/db';
+import { prisma, tabela } from '@/lib/db';
 
 /** Prefixo de tudo o que estes testes criam. */
 export const MARCA = 'ZZTEMP-';
@@ -206,6 +206,9 @@ export async function limpar(): Promise<void> {
   // Livro de receitas: livros e receitas marcados (versoes e entradas vao em
   // cascata), e as contas de teste.
   await prisma.cookbook.deleteMany({ where: { title: { startsWith: MARCA } } });
+  // Calendario: eventos marcados (plano e notas vao em cascata). Os planos
+  // de fichas marcadas em datas conhecidas vao com a ficha, mais abaixo.
+  await prisma.calendarEvent.deleteMany({ where: { title: { startsWith: MARCA } } });
   await prisma.bookRecipe.deleteMany({ where: { title: { startsWith: MARCA } } });
   await prisma.user.deleteMany({ where: { username: { startsWith: MARCA.toLowerCase() } } });
   // Encomendas: as de clientes marcados, e as que levam fichas marcadas (estas
@@ -222,8 +225,10 @@ export async function limpar(): Promise<void> {
   await prisma.customerOrder.deleteMany({ where: encomendasMarcadas });
   await prisma.customer.deleteMany({ where: { name: { startsWith: MARCA } } });
   // Os testes gastam numeros de encomenda; sem isto a casa passava da #1 para a #9.
+  // Schema explicito: o adaptador do Prisma 7 nao muda o search_path (ver `tabela`).
+  const t = tabela('CustomerOrder');
   await prisma.$executeRawUnsafe(
-    `SELECT setval('"CustomerOrder_number_seq"', COALESCE((SELECT MAX("number") FROM "CustomerOrder"), 0) + 1, false)`,
+    `SELECT setval(pg_get_serial_sequence('${t}', 'number'), COALESCE((SELECT MAX("number") FROM ${t}), 0) + 1, false)`,
   );
   await prisma.recipeItem.deleteMany({
     where: {

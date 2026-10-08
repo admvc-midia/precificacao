@@ -14,7 +14,7 @@ import type {
   SalesChannel as PrismaChannel,
   Settings as PrismaSettings,
   Supplier as PrismaSupplier,
-} from '@prisma/client';
+} from '@/generated/prisma/client';
 
 import type { GlobalSettings } from '@/lib/pricing/channels';
 import type {

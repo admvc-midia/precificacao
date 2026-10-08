@@ -15,6 +15,11 @@
  * foto nova tem um caminho novo, por isso so se descarregam as que faltam.
  * Fotos antigas (trocadas ou removidas) ficam na pasta: sao poucas e pequenas.
  */
+// Primeiro de tudo: o cliente do Prisma 7 le o DATABASE_URL quando e criado
+// (ao importar `lib/db`), e a tarefa agendada corre isto fora do Next. Nao
+// substitui o que ja estiver definido no ambiente.
+import 'dotenv/config';
+
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 
@@ -23,16 +28,6 @@ import { copiaCompleta, copiaEmJson } from '../src/lib/exportar/gerar';
 import { nomeDoFicheiro } from '../src/lib/exportar/listas';
 import { blobConfigurado, lerFoto } from '../src/lib/fotos';
 import { apagarOriginal, lerOriginal, listarOriginais, orfaos } from '../src/lib/livro/ficheiros';
-
-// A tarefa agendada corre isto fora do Next, que e quem costuma ler o .env.
-// O Prisma le o DATABASE_URL sozinho; o token do Blob nao. Nao substitui o que
-// ja estiver definido no ambiente. Vem depois dos imports (que correm sempre
-// primeiro) e chega a tempo: o token so e lido quando se pede uma foto.
-try {
-  process.loadEnvFile('.env');
-} catch {
-  // Sem .env (na Vercel, por exemplo): fica o que o ambiente tiver.
-}
 
 const pasta = process.argv[2];
 const guardar = Number(process.argv[3] ?? 12);

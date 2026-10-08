@@ -24,6 +24,7 @@ import {
   BarChart3,
   BookOpen,
   Boxes,
+  CalendarDays,
   ChefHat,
   ChevronDown,
   ClipboardCheck,
@@ -33,7 +34,6 @@ import {
   FolderOpen,
   HeartHandshake,
   History,
-  LayoutDashboard,
   Library,
   LifeBuoy,
   LineChart,
@@ -79,10 +79,9 @@ interface Grupo {
   destinos: Destino[];
 }
 
-const PAINEL: Destino = { href: '/', label: 'Painel', icon: LayoutDashboard };
-/** A aba do comprador: solta na barra, porque e a que se abre no supermercado. */
+/** A aba do comprador: na barra do telemovel, porque e a que se abre no supermercado. */
 const COMPRAS: Destino = { href: '/compras', label: 'Compras', icon: ShoppingCart };
-/** Solta tambem: e por onde comeca o dia de uma casa que trabalha por encomenda. */
+/** Tambem na barra do telemovel: e por onde comeca o dia de uma casa que trabalha por encomenda. */
 const ENCOMENDAS: Destino = { href: '/encomendas', label: 'Encomendas', icon: ClipboardCheck };
 
 const FORNECEDORES: Destino = { href: '/fornecedores', label: 'Fornecedores', icon: Store };
@@ -109,6 +108,7 @@ const ESTOQUE: Destino = { href: '/estoque', label: 'Estoque', icon: Warehouse }
 const VENDAS: Destino = { href: '/vendas', label: 'Resultados do mês', short: 'Resultados', icon: TrendingUp };
 const DESPESAS: Destino = { href: '/despesas', label: 'Despesas fixas', icon: Wallet };
 const RELATORIO: Destino = { href: '/relatorio', label: 'Relatório de vendas', icon: LineChart };
+const CALENDARIO: Destino = { href: '/calendario', label: 'Calendário de produção', short: 'Calendário', icon: CalendarDays };
 const CLIENTES: Destino = { href: '/clientes', label: 'Clientes', icon: Users };
 const POS_VENDA: Destino = { href: '/pos-venda', label: 'Pós-venda e lembretes', short: 'Pós-venda', icon: HeartHandshake };
 const RECEITAS: Destino = { href: '/receitas', label: 'Receitas', icon: BookOpen };
@@ -122,9 +122,11 @@ const UTILIZADORES: Destino = { href: '/utilizadores', label: 'Utilizadores', ic
 const REGISTO: Destino = { href: '/registo', label: 'Registo de alterações', icon: History };
 const CONTA: Destino = { href: '/conta', label: 'A minha conta', short: 'Conta', icon: UserRound };
 const AJUDA: Destino = { href: '/ajuda', label: 'Ajuda', icon: LifeBuoy };
-const EXPORTAR: Destino = { href: '/exportar', label: 'Exportar dados', icon: Download };
+const EXPORTAR: Destino = { href: '/exportar', label: 'Cópia de segurança', icon: Download };
 
 interface MenuDoPerfil {
+  /** Para onde leva o logotipo. */
+  inicio: string;
   /** Soltos na barra de cima. */
   soltos: Destino[];
   grupos: Grupo[];
@@ -136,18 +138,25 @@ interface MenuDoPerfil {
   noMais: Destino[];
 }
 
+/**
+ * Dono: sem soltos — tudo em grupos, e o Painel e o logotipo (pedido dele,
+ * 2026-10-08). Encomendas mora em Clientes; Compras em Cadastros. No
+ * telemovel as duas continuam na barra de baixo: sao as do balcao e do
+ * supermercado.
+ */
 const MENU_DONO: MenuDoPerfil = {
-  soltos: [PAINEL, ENCOMENDAS, COMPRAS],
+  inicio: '/',
+  soltos: [],
   grupos: [
     // Pela ordem em que se fazem: sem insumos nao ha ficha, sem ficha nao ha preco.
-    { label: 'Cadastros', icon: FolderOpen, destinos: [FORNECEDORES, INSUMOS, FICHAS, PRECIFICACAO] },
+    { label: 'Cadastros', icon: FolderOpen, destinos: [FORNECEDORES, INSUMOS, FICHAS, PRECIFICACAO, COMPRAS] },
     { label: 'Receitas', icon: BookOpen, destinos: [RECEITAS, LIVROS] },
     { label: 'Produção', icon: Factory, destinos: [PRODUCAO, ESTOQUE] },
-    { label: 'Clientes', icon: Users, destinos: [CLIENTES, POS_VENDA] },
-    { label: 'Resultados', icon: BarChart3, destinos: [VENDAS, RELATORIO, DESPESAS] },
+    { label: 'Clientes', icon: Users, destinos: [ENCOMENDAS, CLIENTES, POS_VENDA] },
+    { label: 'Resultados', icon: BarChart3, destinos: [VENDAS, RELATORIO, DESPESAS, CALENDARIO] },
   ],
   engrenagem: [CONFIGURACOES, UTILIZADORES, REGISTO, CONTA, EXPORTAR, AJUDA],
-  primarios: [PAINEL, ENCOMENDAS, COMPRAS, FICHAS, PRODUCAO],
+  primarios: [ENCOMENDAS, COMPRAS, FICHAS, PRODUCAO, CALENDARIO],
   noMais: [
     CLIENTES,
     POS_VENDA,
@@ -163,17 +172,19 @@ const MENU_DONO: MenuDoPerfil = {
   ],
 };
 
-/** Cozinha: o livro, e o que ha para fazer (encomendas e producao, sem valores). */
+/** Cozinha: o livro, e o que ha para fazer (encomendas, producao e o calendario, sem valores). */
 const MENU_COZINHA: MenuDoPerfil = {
-  soltos: [ENCOMENDAS, PRODUCAO, RECEITAS, LIVROS],
+  inicio: '/encomendas',
+  soltos: [ENCOMENDAS, PRODUCAO, CALENDARIO, RECEITAS, LIVROS],
   grupos: [],
   engrenagem: [CONTA, AJUDA],
-  primarios: [ENCOMENDAS, PRODUCAO, RECEITAS, LIVROS, CONTA],
+  primarios: [ENCOMENDAS, PRODUCAO, CALENDARIO, RECEITAS, LIVROS],
   noMais: [],
 };
 
 /** Leitura: so o livro. */
 const MENU_LIVRO: MenuDoPerfil = {
+  inicio: '/receitas',
   soltos: [RECEITAS, LIVROS],
   grupos: [],
   engrenagem: [CONTA, AJUDA],
@@ -309,8 +320,8 @@ export function TopNav({
 
       <div className="container flex h-14 items-center gap-2 md:gap-4">
         <Link
-          href={menu.soltos[0].href}
-          aria-label="Amo Brigs · Precificação — inicio"
+          href={menu.inicio}
+          aria-label="Amo Brigs · Ateliê — inicio"
           className="flex shrink-0 items-center gap-2.5"
         >
           {/* 1200x342: o logotipo recortado rente ao desenho. */}
@@ -323,7 +334,7 @@ export function TopNav({
             className="h-8 w-auto"
           />
           <span className="hidden border-l border-brand-foreground/30 pl-2.5 font-titulo text-lg leading-none lg:inline">
-            Precificação
+            Ateliê
           </span>
         </Link>
 

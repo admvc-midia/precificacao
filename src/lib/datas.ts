@@ -34,6 +34,12 @@ export function mesEmLisboa(instante: Date): string {
   return `${p.year}-${p.month}`;
 }
 
+/** O dia (AAAA-MM-DD) em Lisboa: depois das 23h de 31/12 em UTC ja pode ser 1/1 la. */
+export function diaEmLisboa(instante: Date): string {
+  const p = Object.fromEntries(partes.formatToParts(instante).map((x) => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
 /** O instante em que um dia comeca em Lisboa. */
 function meiaNoiteEmLisboa(ano: number, mes: number, dia: number): Date {
   const palpite = new Date(Date.UTC(ano, mes - 1, dia));

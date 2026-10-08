@@ -14,6 +14,7 @@ import { ConfirmDelete, FormDialog } from '@/components/action-form';
 import { AjudaLink } from '@/components/ajuda-link';
 import { CartaoInfo } from '@/components/cartao-info';
 import { CamposContacto, CamposGostos } from '@/components/clientes/campos-cliente';
+import { RedesCliente } from '@/components/clientes/redes-cliente';
 import { StatTile } from '@/components/dre-breakdown';
 import { Lembrete, NovoLembrete } from '@/components/posvenda/lembretes';
 import { Badge } from '@/components/ui/badge';
@@ -171,6 +172,7 @@ export default async function ClientePage({ params }: { params: Promise<{ id: st
           ) : (
             <p className="text-muted-foreground">Sem telefone</p>
           )}
+          <RedesCliente cliente={c} className="gap-1.5" />
           <Dado rotulo="Aniversário">
             {c.birthDay && c.birthMonth ? `${c.birthDay} de ${MESES[c.birthMonth - 1]}` : '—'}
           </Dado>

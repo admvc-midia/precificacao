@@ -6,8 +6,7 @@
  * contrario — todas as tabelas tal como estao na base, para nada se perder.
  */
 
-import { Prisma } from '@prisma/client';
-
+import { MODELOS } from '@/generated/modelo';
 import { prisma } from '@/lib/db';
 import { num, numOrNull } from '@/lib/mappers';
 import { ALLERGEN_LABEL, type Allergen } from '@/lib/pricing/allergens';
@@ -381,10 +380,11 @@ export function gerarLista(id: ListaId): Promise<string> {
  *
  * Uma lista escrita a mao ja falhou uma vez: o `dump-dados.mts` antigo nao
  * tinha as despesas, e ninguem deu por isso. Assim, uma tabela nova entra na
- * copia no dia em que entra no schema.
+ * copia no dia em que entra no schema. (`MODELOS` e escrito em cada
+ * `prisma generate` por `tools/gerador-modelo.mjs`.)
  */
 export function tabelasDoSchema(): string[] {
-  return Prisma.dmmf.datamodel.models.map((m) => m.name);
+  return MODELOS.map((m) => m.name);
 }
 
 function acessor(modelo: string): string {
@@ -414,7 +414,7 @@ const CAMPOS_FORA: Record<string, string[]> = { User: ['passwordHash'] };
 const PARECE_SEGREDO = /password|hash|token|secret/i;
 
 export function camposFora(modelo: string): string[] {
-  const doModelo = Prisma.dmmf.datamodel.models.find((m) => m.name === modelo);
+  const doModelo = MODELOS.find((m) => m.name === modelo);
   const porNome = (doModelo?.fields ?? []).map((f) => f.name).filter((n) => PARECE_SEGREDO.test(n));
   return [...new Set([...(CAMPOS_FORA[modelo] ?? []), ...porNome])];
 }

@@ -55,7 +55,7 @@ export default async function EntrarPage({
             priority
             className="mx-auto hidden h-14 w-auto dark:block"
           />
-          <p className="mt-3 font-titulo text-lg text-muted-foreground">Precificação</p>
+          <p className="mt-3 font-titulo text-lg text-muted-foreground">Ateliê</p>
         </div>
 
         {!configurada ? (

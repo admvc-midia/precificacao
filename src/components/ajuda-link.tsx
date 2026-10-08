@@ -24,6 +24,7 @@ export type SecaoAjuda =
   | 'pos-venda'
   | 'relatorio'
   | 'receitas'
+  | 'calendario'
   | 'utilizadores';
 
 export function AjudaLink({ secao }: { secao: SecaoAjuda }) {

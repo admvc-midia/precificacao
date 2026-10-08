@@ -88,6 +88,105 @@ export function linkWhatsApp(telefone: string, texto?: string): string {
   return `https://wa.me/${numero}${texto ? `?text=${encodeURIComponent(texto)}` : ''}`;
 }
 
+// ---------------------------------------------------------------------------
+// Redes sociais
+// ---------------------------------------------------------------------------
+
+export type Rede = 'instagram' | 'facebook' | 'tiktok';
+
+export const REDE_LABEL: Record<Rede, string> = {
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  tiktok: 'TikTok',
+};
+
+const DOMINIOS: Record<Rede, string[]> = {
+  instagram: ['instagram.com', 'instagr.am'],
+  facebook: ['facebook.com', 'fb.com'],
+  tiktok: ['tiktok.com'],
+};
+
+/** Caminhos do Instagram que nao sao um perfil. */
+const INSTA_NAO_PERFIL = ['p', 'reel', 'reels', 'tv', 'explore', 'accounts', 'direct'];
+/** Caminhos do Facebook que nao sao um perfil nem uma pagina. */
+const FB_NAO_PERFIL = ['groups', 'events', 'share', 'sharer', 'sharer.php', 'story.php', 'watch', 'photo', 'photo.php', 'permalink.php', 'marketplace'];
+
+/**
+ * O que se escreveu no campo da rede, arrumado para guardar: "@Ana.Doces",
+ * "ana.doces" e "https://www.instagram.com/ana.doces/?hl=pt" dao todos
+ * "ana.doces". Um perfil do Facebook sem nome de utilizador fica
+ * "profile.php?id=123". Vazio da `null`; o que nao se percebe rebenta, com
+ * a razao — melhor do que guardar um link que nao abre.
+ */
+export function lerRede(rede: Rede, texto: string): string | null {
+  const t = texto.trim();
+  if (!t) return null;
+  const nome = REDE_LABEL[rede];
+
+  let valor: string;
+  const pareceLink = /^https?:\/\//i.test(t) || /^(www\.|m\.)?[a-z0-9-]+\.[a-z]{2,}\//i.test(t);
+  if (pareceLink) {
+    let url: URL;
+    try {
+      url = new URL(/^https?:\/\//i.test(t) ? t : `https://${t}`);
+    } catch {
+      throw new Error(`Nao percebi o link do ${nome}.`);
+    }
+    const host = url.hostname.toLowerCase().replace(/^(www|m|web|mobile)\./, '');
+    if (!DOMINIOS[rede].includes(host)) throw new Error(`Esse link nao e do ${nome}.`);
+    const partes = url.pathname.split('/').filter(Boolean).map((p) => decodeURIComponent(p));
+
+    if (rede === 'instagram') {
+      if (partes[0] === 'stories' && partes[1]) valor = partes[1];
+      else if (!partes[0] || INSTA_NAO_PERFIL.includes(partes[0].toLowerCase())) {
+        throw new Error('Esse link e de uma publicacao. Cole o link do perfil (instagram.com/nome).');
+      } else valor = partes[0];
+    } else if (rede === 'tiktok') {
+      if (!partes[0]?.startsWith('@')) {
+        throw new Error('Esse link nao e de um perfil. Cole o link do perfil (tiktok.com/@nome).');
+      }
+      valor = partes[0];
+    } else {
+      const id = url.searchParams.get('id');
+      if (partes[0] === 'profile.php' && id && /^\d+$/.test(id)) return `profile.php?id=${id}`;
+      // facebook.com/people/Nome-Apelido/1000123
+      if (partes[0] === 'people' && partes[2] && /^\d+$/.test(partes[2])) return `profile.php?id=${partes[2]}`;
+      if (!partes[0] || FB_NAO_PERFIL.includes(partes[0].toLowerCase())) {
+        throw new Error('Esse link nao e de um perfil nem de uma pagina. Cole o link do perfil (facebook.com/nome).');
+      }
+      valor = partes[0];
+    }
+  } else {
+    valor = t;
+  }
+
+  // Os nomes de utilizador destas redes nao distinguem maiusculas.
+  const h = valor.replace(/^@+/, '').toLowerCase();
+  const valido =
+    rede === 'instagram'
+      ? /^[a-z0-9._]{1,30}$/.test(h)
+      : rede === 'tiktok'
+        ? /^[a-z0-9._]{2,24}$/.test(h)
+        : /^[a-z0-9.]{5,50}$/.test(h);
+  if (!valido) {
+    throw new Error(`"${t.slice(0, 40)}" nao parece um nome do ${nome}. Escreva o nome de utilizador (@nome) ou cole o link do perfil.`);
+  }
+  return h;
+}
+
+/** O link do perfil, a partir do que esta guardado. */
+export function linkRede(rede: Rede, valor: string): string {
+  if (rede === 'instagram') return `https://www.instagram.com/${valor}/`;
+  if (rede === 'tiktok') return `https://www.tiktok.com/@${valor}`;
+  return `https://www.facebook.com/${valor}`;
+}
+
+/** Como se mostra: "@ana.doces"; um perfil do Facebook sem nome, "perfil". */
+export function mostrarRede(rede: Rede, valor: string): string {
+  if (rede === 'facebook') return valor.startsWith('profile.php') ? 'perfil' : valor;
+  return `@${valor}`;
+}
+
 /** Primeiro nome, para a mensagem nao comecar por "Ola Maria da Conceicao Silva". */
 export function firstName(name: string): string {
   return name.trim().split(/\s+/)[0] ?? name;

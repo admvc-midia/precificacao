@@ -280,8 +280,8 @@ describe('onde cada perfil pode ir', () => {
     }
   });
 
-  it('a cozinha ve encomendas e producao; a leitura nao; criar encomenda so o dono', () => {
-    for (const r of ['/encomendas', '/encomendas/abc', '/producao', '/producao/xyz']) {
+  it('a cozinha ve encomendas, producao e calendario; a leitura nao; criar encomenda so o dono', () => {
+    for (const r of ['/encomendas', '/encomendas/abc', '/producao', '/producao/xyz', '/calendario']) {
       expect(rotaPermitida('KITCHEN', r), r).toBe(true);
       expect(rotaPermitida('READER', r), r).toBe(false);
     }
