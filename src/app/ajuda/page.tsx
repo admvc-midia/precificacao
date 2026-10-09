@@ -973,6 +973,13 @@ const SECOES: Secao[] = [
             usado, falta o mínimo…). O desconto fica nos preços das linhas, e a encomenda guarda
             o código.
           </li>
+          <li>
+            Cada cupão mostra o <strong>CMV</strong>: o <em>real</em>, das encomendas que o
+            usaram (e quanto seria sem o desconto), e uma <em>simulação</em> do pior caso — num
+            cupão em percentagem, o produto que fica com o CMV mais alto; num valor fixo, na
+            encomenda mínima. Avisa quando passa do alvo das Configurações, ou quando se
+            venderia abaixo do custo.
+          </li>
         </Passos>
         <Nota>
           No link público o cliente só escreve o código, que vai na mensagem do WhatsApp — quem

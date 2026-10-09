@@ -6,6 +6,8 @@ import { lerTexto, trechos } from '@/lib/cardapio/texto';
 import { MODELO_DO_PDF } from '@/lib/cardapio/modelo';
 import {
   aplicarCupao,
+  cmvReal,
+  simularCmvDoCupao,
   avisoDePreco,
   centimos,
   descreverPromocao,
@@ -336,5 +338,33 @@ describe('fotos do cardapio', () => {
     );
     expect(fotoDaSecaoSrc('s1', null)).toBeNull();
     expect(fotoDaSecaoSrc('s1', 'cardapio/s1.jpg')).toBe('/api/cardapio/foto/secao/s1?v=cardapio%2Fs1.jpg');
+  });
+});
+
+describe('CMV depois do cupao', () => {
+  // IVA incluido a 13%: o liquido e o preco / 1,13.
+  const liquido = (v: number) => v / 1.13;
+  const produtos = [
+    { nome: 'Bolo', preco: 50, custo: 13.27 }, // CMV 30%
+    { nome: 'Caixa', preco: 10, custo: 3.54 }, // CMV 40%
+  ];
+  it('percentagem: o pior produto', () => {
+    const r = simularCmvDoCupao({ kind: 'PERCENT', value: 0.2, minOrder: null }, produtos, liquido);
+    expect(r).toMatchObject({ nome: 'Caixa', comoSimulado: 'em cada produto' });
+    if (!r || 'motivo' in r) throw new Error('esperava simulacao');
+    expect(r.antes).toBeCloseTo(0.4, 2);
+    expect(r.depois).toBeCloseTo(0.5, 2);
+  });
+  it('valor fixo: na encomenda minima; sem minimo, depende', () => {
+    const r = simularCmvDoCupao({ kind: 'AMOUNT', value: 5, minOrder: 50 }, produtos, liquido);
+    expect(r).toMatchObject({ nome: 'Caixa', comoSimulado: 'na encomenda mínima' });
+    expect(simularCmvDoCupao({ kind: 'AMOUNT', value: 5, minOrder: null }, produtos, liquido)).toHaveProperty('motivo');
+    expect(simularCmvDoCupao({ kind: 'PERCENT', value: 0.1, minOrder: null }, [], liquido)).toBeNull();
+  });
+  it('real: com e sem o desconto', () => {
+    const r = cmvReal([{ qty: 2, unitPrice: 45, custo: 13.27 }], 10, liquido)!;
+    expect(r.com).toBeCloseTo((26.54 * 1.13) / 90, 4);
+    expect(r.sem).toBeCloseTo((26.54 * 1.13) / 100, 4);
+    expect(cmvReal([], 0, liquido)).toBeNull();
   });
 });

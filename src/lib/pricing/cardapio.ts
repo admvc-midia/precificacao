@@ -464,3 +464,68 @@ function dataCurta(dia: string): string {
   const [a, m, d] = dia.split('-');
   return `${d}/${m}/${a}`;
 }
+
+// ---------------------------------------------------------------------------
+// CMV depois do cupao
+// ---------------------------------------------------------------------------
+//
+// A mesma conta das Promocoes: custo primo (ingredientes + embalagem) a
+// dividir pela receita sem IVA. `liquido` tira o IVA a um preco na convencao
+// das configuracoes.
+
+export interface ProdutoParaCmv {
+  nome: string;
+  /** Preco de venda por unidade (cardapio, ou tabela), na convencao do IVA. */
+  preco: number;
+  /** Custo primo por unidade. */
+  custo: number;
+}
+
+export type SimulacaoDoCupao =
+  | { nome: string; antes: number; depois: number; comoSimulado: string }
+  | { motivo: string };
+
+/**
+ * O pior CMV que o cupao deixa num produto a que se aplica (o que mais se
+ * aproxima do prejuizo). Percentagem: em cada produto. Valor fixo: na
+ * encomenda minima, se houver — sem ela, depende do tamanho da encomenda.
+ */
+export function simularCmvDoCupao(
+  c: Pick<CupaoInput, 'kind' | 'value' | 'minOrder'>,
+  produtos: ProdutoParaCmv[],
+  liquido: (v: number) => number,
+): SimulacaoDoCupao | null {
+  const validos = produtos.filter((p) => p.preco > 0 && p.custo > 0);
+  if (validos.length === 0) return null;
+  let fracao: number;
+  let comoSimulado: string;
+  if (c.kind === 'PERCENT') {
+    fracao = Math.min(Math.max(c.value, 0), 1);
+    comoSimulado = 'em cada produto';
+  } else {
+    if (!c.minOrder || c.minOrder <= 0) {
+      return { motivo: 'Valor fixo sem encomenda mínima: o CMV depende do tamanho da encomenda.' };
+    }
+    fracao = Math.min(c.value / c.minOrder, 1);
+    comoSimulado = 'na encomenda mínima';
+  }
+  let pior: { nome: string; antes: number; depois: number } | null = null;
+  for (const p of validos) {
+    const depoisPreco = p.preco * (1 - fracao);
+    const depois = depoisPreco > 0 ? p.custo / liquido(depoisPreco) : Infinity;
+    if (!pior || depois > pior.depois) pior = { nome: p.nome, antes: p.custo / liquido(p.preco), depois };
+  }
+  return { ...pior!, comoSimulado };
+}
+
+/** O CMV real das encomendas que usaram o cupao, e o que seria sem o desconto. */
+export function cmvReal(
+  linhas: Array<{ qty: number; unitPrice: number; custo: number }>,
+  descontado: number,
+  liquido: (v: number) => number,
+): { com: number; sem: number } | null {
+  const custo = linhas.reduce((a, l) => a + l.qty * l.custo, 0);
+  const receita = linhas.reduce((a, l) => a + l.qty * l.unitPrice, 0);
+  if (!(receita > 0) || !(custo > 0)) return null;
+  return { com: custo / liquido(receita), sem: custo / liquido(receita + descontado) };
+}

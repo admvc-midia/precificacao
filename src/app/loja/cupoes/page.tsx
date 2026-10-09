@@ -13,9 +13,10 @@ import { diaDaColuna } from '@/lib/cardapio/consultas';
 import { diaEmLisboa } from '@/lib/datas';
 import { prisma } from '@/lib/db';
 import { num } from '@/lib/mappers';
-import { currencyOf, formatMoney } from '@/lib/money';
-import { descreverCupao, estadoNoDia, type EstadoDaData } from '@/lib/pricing/cardapio';
-import { getSettings } from '@/lib/queries';
+import { currencyOf, formatMoney, formatPercent } from '@/lib/money';
+import { cmvReal, descreverCupao, estadoNoDia, simularCmvDoCupao, type EstadoDaData } from '@/lib/pricing/cardapio';
+import { priceForRecipe, referenceChannel } from '@/lib/pricing/sugerido';
+import { getCostedRecipes, getSettings } from '@/lib/queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +31,7 @@ const dataCurta = (d: string) => d.split('-').reverse().join('/');
 const diaFmt = new Intl.DateTimeFormat('pt-PT', { dateStyle: 'short', timeZone: 'UTC' });
 
 export default async function CupoesPage() {
-  const [cupoes, fichas, s] = await Promise.all([
+  const [cupoes, fichas, s, custeadas, itensDoCardapio] = await Promise.all([
     prisma.coupon.findMany({
       orderBy: [{ active: 'desc' }, { createdAt: 'desc' }],
       include: {
@@ -44,14 +45,35 @@ export default async function CupoesPage() {
             dueAt: true,
             couponDiscount: true,
             customer: { select: { name: true } },
+            lines: { select: { qty: true, unitPrice: true, unitFoodCost: true, unitPackagingCost: true } },
           },
         },
       },
     }),
     prisma.recipe.findMany({ where: { kind: 'PRODUCT' }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
     getSettings(),
+    getCostedRecipes(),
+    prisma.menuItem.findMany({ where: { recipeId: { not: null } }, select: { recipeId: true, price: true } }),
   ]);
   const currency = currencyOf(s);
+
+  // Para o CMV: o preco de cada produto (o do cardapio, senao o de tabela) e
+  // o custo primo, como nas Promocoes.
+  const { settings, channels } = custeadas;
+  const ref = referenceChannel(channels);
+  const doCardapio = new Map(itensDoCardapio.map((i) => [i.recipeId!, num(i.price)]));
+  const produtos = new Map(
+    custeadas.recipes
+      .filter((r) => r.kind === 'PRODUCT' && r.cost)
+      .map((r) => {
+        const tabela = priceForRecipe(r, ref, settings);
+        const preco = doCardapio.get(r.id) ?? (tabela?.feasible ? tabela.price : 0);
+        return [r.id, { nome: r.name, preco, custo: r.cost!.foodCostPerUnit + r.cost!.packagingCost }];
+      }),
+  );
+  const liquido = (v: number) => (settings.vatMode === 'INCLUDED' ? v / (1 + settings.vatRate) : v);
+  const alvo = settings.targetCmv;
+  const pct = (v: number) => (Number.isFinite(v) ? formatPercent(v, currency.locale, 0) : '—');
   const hoje = diaEmLisboa(new Date());
 
   const campos = (c?: (typeof cupoes)[number]) => (
@@ -186,6 +208,26 @@ export default async function CupoesPage() {
           );
           const validas = c.orders.filter((o) => o.status !== 'CANCELLED');
           const descontado = validas.reduce((a, o) => a + (o.couponDiscount == null ? 0 : num(o.couponDiscount)), 0);
+          // O CMV: o real (encomendas que o usaram) e o simulado (antes de haver).
+          const real = cmvReal(
+            validas.flatMap((o) =>
+              o.lines.map((l) => ({
+                qty: num(l.qty),
+                unitPrice: num(l.unitPrice),
+                custo: num(l.unitFoodCost) + num(l.unitPackagingCost),
+              })),
+            ),
+            descontado,
+            liquido,
+          );
+          const elegiveis = c.allItems
+            ? [...produtos.values()]
+            : c.recipes.map((r) => produtos.get(r.recipeId)).filter((p): p is NonNullable<typeof p> => Boolean(p));
+          const simulado = simularCmvDoCupao(
+            { kind: c.kind, value: num(c.value), minOrder: c.minOrder == null ? null : num(c.minOrder) },
+            elegiveis,
+            liquido,
+          );
           return (
             <Card key={c.id} className={estado === 'terminada' || estado === 'desligada' ? 'opacity-70' : undefined}>
               <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
@@ -233,6 +275,21 @@ export default async function CupoesPage() {
                   {c.maxUsesPerCustomer != null ? ` · até ${c.maxUsesPerCustomer} por cliente` : ''}
                   {descontado > 0 ? ` · ${formatMoney(descontado, currency)} descontados` : ''}
                 </p>
+                {real ? (
+                  <p className={real.com > alvo ? 'font-medium text-amber-700 dark:text-amber-400' : undefined}>
+                    CMV das encomendas com o cupão: {pct(real.com)} (sem o desconto seria {pct(real.sem)}
+                    {real.com > alvo ? `; alvo ${pct(alvo)}` : ''}).
+                  </p>
+                ) : null}
+                {simulado && 'motivo' in simulado ? (
+                  <p className="text-xs text-muted-foreground">{simulado.motivo}</p>
+                ) : simulado ? (
+                  <p className={simulado.depois > alvo ? 'text-xs font-medium text-amber-700 dark:text-amber-400' : 'text-xs text-muted-foreground'}>
+                    Pior caso {simulado.comoSimulado}: {simulado.nome} passa de CMV {pct(simulado.antes)} para{' '}
+                    {pct(simulado.depois)}
+                    {simulado.depois >= 1 ? ' — abaixo do custo' : simulado.depois > alvo ? ` — acima do alvo (${pct(alvo)})` : ''}.
+                  </p>
+                ) : null}
                 {c.orders.length ? (
                   <details>
                     <summary className="cursor-pointer text-muted-foreground">Encomendas</summary>
