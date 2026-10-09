@@ -6,6 +6,7 @@ import { ActionForm, ConfirmDelete, FormDialog, SubmitButton } from '@/component
 import { AjudaLink } from '@/components/ajuda-link';
 import { ComponentesCombo, type FichaDoCombo } from '@/components/cardapio/componentes-combo';
 import { CopiarLink } from '@/components/cardapio/copiar-link';
+import { EstatisticasCardapio } from '@/components/cardapio/estatisticas-cardapio';
 import { FotoDialogo } from '@/components/cardapio/foto-dialogo';
 import { Miniatura } from '@/components/miniatura';
 import { Alert, Badge } from '@/components/ui/badge';
@@ -32,6 +33,7 @@ import {
   usarPrecoDeTabela,
 } from '@/lib/actions/cardapio';
 import { caminhoDaFoto, fotoDaSecaoSrc, fotoPublicaSrc, getCardapioDoDono } from '@/lib/cardapio/consultas';
+import { urlDoCardapio } from '@/lib/cardapio/url';
 import { num } from '@/lib/mappers';
 import { formatMoney, type CurrencyConfig } from '@/lib/money';
 import { avisoDePreco } from '@/lib/pricing/cardapio';
@@ -68,9 +70,7 @@ export default async function CardapioDonoPage() {
     headers(),
   ]);
 
-  const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost:3000';
-  const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
-  const url = `${proto}://${host}/cardapio`;
+  const url = urlDoCardapio(h);
 
   const ref = referenceChannel(channels);
   const produtos = recipes.filter((r) => r.kind === 'PRODUCT' && !r.error);
@@ -151,6 +151,8 @@ export default async function CardapioDonoPage() {
           </ActionForm>
         </CardContent>
       </Card>
+
+      <EstatisticasCardapio urlDoCardapio={url} />
 
       {secoes.length === 0 && itens.length === 0 ? (
         <Card>

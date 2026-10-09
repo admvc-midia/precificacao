@@ -356,8 +356,8 @@ export default async function ConfiguracoesPage() {
                   hint={
                     <>
                       Pode usar {CHAVES_MENSAGEM.join(', ')} — trocam-se pelo primeiro nome do
-                      cliente, o nome da casa, os produtos e o dia da entrega. Apague tudo
-                      para voltar à mensagem de origem.
+                      cliente, o nome da casa, os produtos, o dia da entrega e o link de
+                      avaliação. Apague tudo para voltar à mensagem de origem.
                     </>
                   }
                 >
@@ -366,6 +366,27 @@ export default async function ConfiguracoesPage() {
                     name="followUpMessage"
                     rows={6}
                     defaultValue={s.followUpMessage ?? MENSAGEM_POS_VENDA}
+                  />
+                </Field>
+                <Field
+                  label="Link de avaliação no Google"
+                  htmlFor="googleReviewUrl"
+                  hint={
+                    <>
+                      No perfil da empresa no Google, &quot;Pedir avaliações&quot; → copiar o link
+                      (algo como https://g.page/r/…/review). Com ele, a mensagem pede a avaliação
+                      em {'{avaliacao}'} — ou numa linha no fim, se a mensagem não a tiver. Pede-se a
+                      todos: o Google não deixa escolher só quem gostou.
+                    </>
+                  }
+                >
+                  <Input
+                    id="googleReviewUrl"
+                    name="googleReviewUrl"
+                    type="url"
+                    inputMode="url"
+                    defaultValue={s.googleReviewUrl ?? ''}
+                    placeholder="https://g.page/r/…/review"
                   />
                 </Field>
                 <SubmitButton>Guardar pós-venda</SubmitButton>

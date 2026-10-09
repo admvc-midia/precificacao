@@ -491,8 +491,34 @@ const SECOES: Secao[] = [
         <Nota>
           A mensagem do WhatsApp muda-se em <strong>Configurações → Pós-venda</strong>.{' '}
           {'{nome}'}, {'{loja}'}, {'{produtos}'} e {'{dia}'} trocam-se sozinhos pelos dados
-          da encomenda.
+          da encomenda. Com o <strong>link de avaliação no Google</strong> preenchido (mesmo
+          ecrã), a mensagem pede uma avaliação — em {'{avaliacao}'}, ou numa linha no fim. É a
+          forma mais barata de aparecer a quem procura bolos na Figueira. Pede-se a todos, e não
+          só a quem gostou: o Google não deixa escolher.
         </Nota>
+        <p className="font-medium">Pôr o link de avaliação no Google (uma vez)</p>
+        <Passos>
+          <li>
+            Entre na conta Google da AmoBrigs e pesquise <strong>AmoBrigs</strong> no Google (ou
+            abra o Perfil da Empresa). Se a casa ainda não tem perfil, crie-o primeiro em{' '}
+            <strong>business.google.com</strong> — o Google pede para confirmar a morada ou o
+            telefone, o que pode levar alguns dias.
+          </li>
+          <li>
+            No perfil, carregue em <strong>Pedir avaliações</strong> (ou &quot;Obter mais
+            avaliações&quot;) e <strong>copie o link</strong> — algo como
+            https://g.page/r/…/review.
+          </li>
+          <li>
+            Na app, <strong>⚙ → Configurações → Pós-venda</strong>, cole-o em{' '}
+            <strong>Link de avaliação no Google</strong> e guarde. A partir daí, todas as
+            mensagens do pós-venda pedem a avaliação.
+          </li>
+          <li>
+            Para confirmar: abra o Pós-venda, carregue em WhatsApp num cliente e veja a última
+            linha da mensagem antes de enviar.
+          </li>
+        </Passos>
       </>
     ),
   },
@@ -873,6 +899,14 @@ const SECOES: Secao[] = [
             O link tem a identidade do site (logótipo, cores e estampa). Segue o claro ou o
             escuro do telemóvel do cliente, e o botão da lua/sol no canto troca e fica
             lembrado.
+          </li>
+          <li>
+            <strong>Como está a correr:</strong> o cartão no topo do Cardápio (e nas Campanhas)
+            mostra as visitas ao link, os cliques em <em>Encomendar</em> e os pedidos de
+            orçamento dos últimos 30 dias, por origem e por semana. Use o <strong>link de cada
+            canal</strong> (o da bio do Instagram termina em <code>?o=ig</code>, o dos impressos
+            em <code>?o=qr</code>) para a origem contar certo. São só contadores: sem cookies
+            nem dados de quem visita, e os robôs das pré-visualizações não contam.
           </li>
         </Passos>
         <Nota>

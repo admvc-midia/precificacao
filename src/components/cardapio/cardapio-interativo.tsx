@@ -92,7 +92,19 @@ function preco(v: number, cfg: CurrencyConfig): string {
   return Number.isInteger(Math.round(v * 100) / 100) ? s.replace(/[,.]00(?=\D|$)/, '') : s;
 }
 
-export function CardapioInterativo({ dados, hoje }: { dados: CardapioPublico; hoje: string }) {
+/** Conta um clique (sem dados da pessoa). `sendBeacon` sobrevive a ida para o WhatsApp. */
+function contarClique(e: 'ORDER' | 'QUOTE', origem: string) {
+  try {
+    navigator.sendBeacon?.('/api/cardapio/evento', JSON.stringify({ e, o: origem }));
+  } catch {
+    // Uma estatistica nunca impede de encomendar.
+  }
+}
+
+/** A origem da visita, para os cliques contarem no mesmo canal. */
+const Origem = createContext('direto');
+
+export function CardapioInterativo({ dados, hoje, origem = 'direto' }: { dados: CardapioPublico; hoje: string; origem?: string }) {
   const [qtd, setQtd] = useState<Record<string, number>>({});
   const [cupao, setCupao] = useState('');
   const [ampliada, setAmpliada] = useState<{ src: string; alt: string } | null>(null);
@@ -114,6 +126,7 @@ export function CardapioInterativo({ dados, hoje }: { dados: CardapioPublico; ho
     setQtd((q) => ({ ...q, [id]: Math.max(0, Math.min(999, (q[id] ?? 0) + d)) }));
 
   return (
+    <Origem value={origem}>
     <AbrirFoto value={setAmpliada}>
       <FotoAmpliada foto={ampliada} fechar={() => setAmpliada(null)} />
       <nav aria-label="Secoes do cardapio" className="sticky top-0 z-20 -mx-4 mb-8 overflow-x-auto bg-[var(--ab-fundo)] px-4 py-3 backdrop-blur">
@@ -164,6 +177,7 @@ export function CardapioInterativo({ dados, hoje }: { dados: CardapioPublico; ho
                 href={linkWhatsApp(dados.whatsapp!, mensagemDoCardapio(escolhidos, cupao, cfg))}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => contarClique('ORDER', origem)}
                 tabIndex={unidades === 0 ? -1 : undefined}
                 className="ab-botao inline-flex items-center gap-2 px-5 py-3 text-sm"
               >
@@ -188,6 +202,7 @@ export function CardapioInterativo({ dados, hoje }: { dados: CardapioPublico; ho
         </div>
       ) : null}
     </AbrirFoto>
+    </Origem>
   );
 }
 
@@ -367,6 +382,7 @@ function Etiquetas({ promos, cfg }: { promos: PromocaoInput[]; cfg: CurrencyConf
 }
 
 function Quantidade({ i, qtd, mudar, whatsapp }: Pick<PropsItem, 'i' | 'qtd' | 'mudar' | 'whatsapp'>) {
+  const origem = use(Origem);
   if (i.esgotado) {
     return <span className="text-xs font-semibold uppercase text-[var(--ab-texto-suave)]">Esgotado</span>;
   }
@@ -376,6 +392,7 @@ function Quantidade({ i, qtd, mudar, whatsapp }: Pick<PropsItem, 'i' | 'qtd' | '
         href={linkWhatsApp(whatsapp, `Olá! Gostava de pedir um orçamento para: ${i.nome}.`)}
         target="_blank"
         rel="noopener noreferrer"
+        onClick={() => contarClique('QUOTE', origem)}
         className="text-xs font-semibold text-[var(--ab-titulo)] underline underline-offset-2"
       >
         Pedir orçamento

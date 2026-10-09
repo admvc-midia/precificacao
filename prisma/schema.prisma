@@ -164,6 +164,10 @@ model Settings {
   /// A mensagem do WhatsApp do pos-venda, com {nome}, {produtos} e {dia}.
   /// Nulo usa a mensagem que vem com a app (`MENSAGEM_POS_VENDA`).
   followUpMessage String?
+  /// O link para deixar uma avaliacao no Google (perfil da empresa → "Pedir
+  /// avaliacoes"). Entra na mensagem do pos-venda (`{avaliacao}`); vazio, a
+  /// linha nao aparece.
+  googleReviewUrl String?
 
   // ---- Cardapio publico (/cardapio) -------------------------------------
   /// Numero de WhatsApp da casa, so digitos com indicativo ("351912345678").
@@ -1544,4 +1548,31 @@ model MarketingGuideSection {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Estatisticas do cardapio publico
+// ---------------------------------------------------------------------------
+
+enum MenuEvent {
+  /// Alguem abriu o link do cardapio.
+  VIEW
+  /// Carregou em "Encomendar" (abre o WhatsApp com a lista).
+  ORDER
+  /// Carregou em "Pedir orcamento" de um item sob consulta.
+  QUOTE
+}
+
+/// Contadores por dia, evento e origem. Nada da pessoa: sem IP, sem cookie,
+/// sem identificador — so "quantos". Por isso nao precisa de consentimento.
+/// Ver `lib/cardapio/estatisticas.ts`.
+model MenuStat {
+  /// O dia em Lisboa.
+  day    DateTime  @db.Date
+  event  MenuEvent
+  /// instagram, facebook, whatsapp, google, qr, direto, outro.
+  source String
+  count  Int       @default(0)
+
+  @@id([day, event, source])
 }

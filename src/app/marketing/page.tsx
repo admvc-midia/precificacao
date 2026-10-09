@@ -1,14 +1,17 @@
+import { headers } from 'next/headers';
 import Link from 'next/link';
 import { AlertTriangle, BookOpen, CheckCircle2, Plus, Sparkles } from 'lucide-react';
 
 import { ActionForm, FormDialog, SubmitButton } from '@/components/action-form';
 import { AjudaLink } from '@/components/ajuda-link';
+import { EstatisticasCardapio } from '@/components/cardapio/estatisticas-cardapio';
 import { CamposCampanha } from '@/components/marketing/campos';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { comecarComRecomendacoes, guardarCampanha } from '@/lib/actions/marketing';
+import { urlDoCardapio } from '@/lib/cardapio/url';
 import { diaEmLisboa } from '@/lib/datas';
 import {
   atrasada,
@@ -32,7 +35,7 @@ const diaDe = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
 export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ quem?: string }> }) {
   await exigirMarketing();
   const { quem = '' } = await searchParams;
-  const [campanhas, guia] = await Promise.all([getCampanhas(), getGuia()]);
+  const [campanhas, guia, h] = await Promise.all([getCampanhas(), getGuia(), headers()]);
   const hoje = diaEmLisboa(new Date());
 
   const comContas = campanhas.map((c) => {
@@ -106,6 +109,8 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
           </CardContent>
         </Card>
       ) : null}
+
+      <EstatisticasCardapio urlDoCardapio={urlDoCardapio(h)} />
 
       <form method="get" className="flex flex-wrap items-center gap-2">
         <label htmlFor="quem" className="text-sm text-muted-foreground">

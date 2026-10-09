@@ -172,6 +172,7 @@ export async function retrato(): Promise<Retrato> {
       facebookHandle: s.facebookHandle,
       menuIntro: s.menuIntro,
       menuPublished: s.menuPublished,
+      googleReviewUrl: s.googleReviewUrl,
     },
   };
 }
@@ -207,6 +208,7 @@ export async function reporSettings(r: Retrato): Promise<void> {
       facebookHandle: s.facebookHandle as string | null,
       menuIntro: s.menuIntro as string | null,
       menuPublished: s.menuPublished as boolean,
+      googleReviewUrl: s.googleReviewUrl as string | null,
     },
   });
 }

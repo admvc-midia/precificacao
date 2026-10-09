@@ -55,7 +55,59 @@ export const MENSAGEM_POS_VENDA =
   'Obrigada pela preferência!';
 
 /** As chavetas que a mensagem aceita, para a ajuda das Configuracoes. */
-export const CHAVES_MENSAGEM = ['{nome}', '{loja}', '{produtos}', '{dia}'] as const;
+export const CHAVES_MENSAGEM = ['{nome}', '{loja}', '{produtos}', '{dia}', '{avaliacao}'] as const;
+
+/** A linha que se junta quando ha link de avaliacao e a mensagem nao o usa. */
+export const LINHA_AVALIACAO = 'Se gostou, deixe-nos uma avaliação no Google — ajuda muito quem nos procura: {avaliacao}';
+
+/**
+ * A mensagem do pos-venda, ja preenchida.
+ *
+ * Com link de avaliacao: entra onde estiver `{avaliacao}`, ou numa linha no
+ * fim, se a mensagem (a de origem, ou uma escrita antes de haver o link) nao
+ * a tiver. Sem link: as linhas com `{avaliacao}` saem inteiras, para nao ir
+ * uma frase a apontar para nada.
+ *
+ * Pede-se a todos, e nao so a quem gostou: o Google proibe escolher a quem se
+ * pede a avaliacao ("review gating").
+ */
+export function mensagemPosVenda(
+  modelo: string,
+  vars: { nome: string; loja: string; produtos: string; dia: string },
+  linkAvaliacao: string | null | undefined,
+): string {
+  const link = linkAvaliacao?.trim();
+  let texto = modelo;
+  if (link) {
+    if (!texto.includes('{avaliacao}')) texto = `${texto.trimEnd()}\n${LINHA_AVALIACAO}`;
+  } else {
+    texto = texto
+      .split('\n')
+      .filter((l) => !l.includes('{avaliacao}'))
+      .join('\n');
+  }
+  return fillMessage(texto, { ...vars, avaliacao: link ?? '' });
+}
+
+/**
+ * O link de avaliacao, se for um endereco do Google; senao lanca com a razao.
+ * Vazio da `null` (tira o link).
+ */
+export function lerLinkAvaliacao(texto: string): string | null {
+  const t = texto.trim();
+  if (!t) return null;
+  let url: URL;
+  try {
+    url = new URL(/^https?:\/\//i.test(t) ? t : `https://${t}`);
+  } catch {
+    throw new Error('Nao percebi o link de avaliacao.');
+  }
+  const host = url.hostname.toLowerCase().replace(/^www\./, '');
+  const doGoogle = host === 'g.page' || host === 'maps.app.goo.gl' || host === 'goo.gl' || host === 'search.google.com' || /^google\.[a-z.]+$/.test(host);
+  if (!doGoogle) throw new Error('O link de avaliacao tem de ser do Google (por exemplo https://g.page/r/.../review).');
+  url.protocol = 'https:';
+  return url.toString();
+}
 
 /**
  * Troca as chavetas pelos valores. Uma chave desconhecida fica como esta —

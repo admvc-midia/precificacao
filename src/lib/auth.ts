@@ -325,10 +325,11 @@ export function origemDepoisDeFalhar(
 // ---------------------------------------------------------------------------
 
 /**
- * Abertas sem sessao: a porta, a saida (que apaga um cookie que ja nao vale)
- * e o cardapio publico, que e o link da bio do Instagram.
+ * Abertas sem sessao: a porta, a saida (que apaga um cookie que ja nao vale),
+ * o cardapio publico (o link da bio do Instagram) e a rota que conta os
+ * cliques dele (so contadores, ver `lib/cardapio/estatisticas.ts`).
  */
-const SEM_SESSAO = new Set(['/entrar', '/sair', '/cardapio']);
+const SEM_SESSAO = new Set(['/entrar', '/sair', '/cardapio', '/api/cardapio/evento']);
 
 /**
  * As fotos do cardapio publico (itens e capas das secoes). As rotas so

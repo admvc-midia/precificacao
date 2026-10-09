@@ -11,13 +11,16 @@
  */
 
 import type { Metadata, Viewport } from 'next';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
+import { after } from 'next/server';
 import { Facebook, Instagram, Phone } from 'lucide-react';
 
 import { CardapioInterativo } from '@/components/cardapio/cardapio-interativo';
 import { TemaCardapio } from '@/components/cardapio/tema-cardapio';
 import { TextoCardapio } from '@/components/cardapio/texto-cardapio';
 import { getCardapioPublico } from '@/lib/cardapio/consultas';
+import { eRobo, origemDoPedido } from '@/lib/cardapio/estatisticas';
+import { contar } from '@/lib/cardapio/estatisticas-base';
 import { diaEmLisboa } from '@/lib/datas';
 import { linkRede, mostrarRede } from '@/lib/pricing/clientes';
 import { COOKIE_TEMA, lerTema } from '@/lib/tema';
@@ -63,10 +66,16 @@ function telefoneLegivel(n: string): string {
   return local.startsWith('+') ? local : local.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3');
 }
 
-export default async function CardapioPage() {
+export default async function CardapioPage({ searchParams }: { searchParams: Promise<{ o?: string }> }) {
   const dados = await getCardapioPublico();
   const hoje = diaEmLisboa(new Date());
   const tema = lerTema((await cookies()).get(COOKIE_TEMA)?.value);
+
+  // A visita conta-se depois de a pagina sair, e so de pessoas: os robos que
+  // fazem a pre-visualizacao do link no WhatsApp/Instagram nao contam.
+  const h = await headers();
+  const origem = origemDoPedido((await searchParams).o, h.get('referer'));
+  if (dados.aberto && !eRobo(h.get('user-agent'))) after(() => contar('VIEW', origem));
 
   return (
     <div className="cardapio">
@@ -88,7 +97,7 @@ export default async function CardapioPage() {
         </header>
 
         {dados.aberto && dados.secoes.length ? (
-          <CardapioInterativo dados={dados} hoje={hoje} />
+          <CardapioInterativo dados={dados} hoje={hoje} origem={origem} />
         ) : (
           <p className="ab-serif py-16 text-center text-2xl text-[var(--ab-titulo)]">
             O cardápio volta em breve.

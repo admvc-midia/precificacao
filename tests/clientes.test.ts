@@ -13,6 +13,8 @@ import {
   parseRating,
   productRatings,
   validBirthday,
+  lerLinkAvaliacao,
+  mensagemPosVenda,
 } from '@/lib/pricing/clientes';
 import { monthsBetween, salesReport, type ReportOrder } from '@/lib/pricing/relatorio';
 
@@ -182,5 +184,28 @@ describe('relatorio', () => {
     expect(r.bySource.find((s) => s.source === 'REFERRAL')).toMatchObject({ customers: 1 });
     expect(r.byReferrer).toEqual([expect.objectContaining({ id: 'ana', customers: 1 })]);
     expect(r.byReferrer[0].gross).toBeCloseTo(22.6);
+  });
+});
+
+describe('avaliacao no Google no pos-venda', () => {
+  const vars = { nome: 'Ana', loja: 'AmoBrigs', produtos: 'o Bolo', dia: 'sábado' };
+  const link = 'https://g.page/r/abc/review';
+
+  it('sem {avaliacao} na mensagem, junta a linha no fim', () => {
+    const m = mensagemPosVenda('Olá {nome}!', vars, link);
+    expect(m).toBe(`Olá Ana!\nSe gostou, deixe-nos uma avaliação no Google — ajuda muito quem nos procura: ${link}`);
+  });
+  it('com {avaliacao}, usa-a no sitio escrito', () => {
+    expect(mensagemPosVenda('Olá {nome}! Avalie: {avaliacao}', vars, link)).toBe(`Olá Ana! Avalie: ${link}`);
+  });
+  it('sem link, as linhas com {avaliacao} saem inteiras', () => {
+    expect(mensagemPosVenda('Olá {nome}!\nAvalie: {avaliacao}\nObrigada', vars, null)).toBe('Olá Ana!\nObrigada');
+    expect(mensagemPosVenda('Olá {nome}!', vars, '  ')).toBe('Olá Ana!');
+  });
+  it('o link tem de ser do Google', () => {
+    expect(lerLinkAvaliacao('g.page/r/abc/review')).toBe('https://g.page/r/abc/review');
+    expect(lerLinkAvaliacao('http://search.google.com/local/writereview?placeid=X')).toBe('https://search.google.com/local/writereview?placeid=X');
+    expect(lerLinkAvaliacao('')).toBeNull();
+    expect(() => lerLinkAvaliacao('https://exemplo.pt/review')).toThrow(/Google/);
   });
 });

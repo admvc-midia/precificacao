@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db';
 import { parseDecimal, parsePercent, SUPPORTED_CURRENCIES } from '@/lib/money';
 import { alvoDoFormulario, registar, resumoDoFormulario } from '@/lib/registo';
+import { lerLinkAvaliacao } from '@/lib/pricing/clientes';
 import { exigirDono } from '@/lib/sessao';
 import {
   CHANNEL_KIND,
@@ -142,7 +143,7 @@ export async function saveFollowUpSettings(
 ): Promise<ActionState> {
   try {
     const eu = await exigirDono();
-    const data: { followUpDays?: number; followUpMessage?: string | null } = {};
+    const data: { followUpDays?: number; followUpMessage?: string | null; googleReviewUrl?: string | null } = {};
     if (presente(form, 'followUpDays')) {
       const dias = Number(String(form.get('followUpDays')).trim());
       if (!Number.isInteger(dias) || dias < 0 || dias > 60) {
@@ -152,6 +153,9 @@ export async function saveFollowUpSettings(
     }
     if (presente(form, 'followUpMessage')) {
       data.followUpMessage = String(form.get('followUpMessage')).trim() || null;
+    }
+    if (presente(form, 'googleReviewUrl')) {
+      data.googleReviewUrl = lerLinkAvaliacao(String(form.get('googleReviewUrl')));
     }
     await prisma.settings.upsert({
       where: { id: 'default' },

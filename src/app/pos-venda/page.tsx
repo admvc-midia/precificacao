@@ -13,7 +13,7 @@ import { num } from '@/lib/mappers';
 import {
   DIAS_ANTES_ANIVERSARIO,
   daysUntilBirthday,
-  fillMessage,
+  mensagemPosVenda,
   firstName,
   linkWhatsApp,
   listProducts,
@@ -99,12 +99,16 @@ export default async function PosVendaPage() {
             {paraHoje.map((e) => {
               const cliente = e.customer!;
               const produtos = e.lines.map((l) => ({ name: l.recipe.name, qty: num(l.qty) }));
-              const mensagem = fillMessage(modelo, {
-                nome: firstName(cliente.name),
-                loja,
-                produtos: listProducts(produtos),
-                dia: diaEntregaFmt.format(e.dueAt),
-              });
+              const mensagem = mensagemPosVenda(
+                modelo,
+                {
+                  nome: firstName(cliente.name),
+                  loja,
+                  produtos: listProducts(produtos),
+                  dia: diaEntregaFmt.format(e.dueAt),
+                },
+                settings.googleReviewUrl,
+              );
               return (
                 <li key={e.id}>
                   <Card>
