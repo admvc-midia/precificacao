@@ -59,4 +59,30 @@ describe('contadores do cardapio', () => {
     // O clique da rota conta no dia de hoje: tira-se para nao ficar nos numeros da casa de testes.
     await prisma.menuStat.updateMany({ where: { event: 'QUOTE', source: 'qr', count: { gt: 0 } }, data: { count: { decrement: 1 } } });
   });
+
+  it('eventos de produto: so de itens que existem', async () => {
+    const nomeItem = `ZZTEMP-Item-${Date.now()}`;
+    const item = await prisma.menuItem.create({ data: { kind: 'PRODUCT', name: nomeItem, price: 1 } });
+    try {
+      const pedido = (corpo: object) =>
+        new Request('http://x/api/cardapio/evento', {
+          method: 'POST',
+          body: JSON.stringify(corpo),
+          headers: { 'user-agent': 'Mozilla/5.0 (Android) Chrome/120 Mobile' },
+        });
+      await POST(pedido({ e: 'OPEN', o: 'instagram', i: item.id }));
+      await POST(pedido({ e: 'OPEN', o: 'instagram', i: item.id }));
+      await POST(pedido({ e: 'ADD', o: 'instagram', i: item.id }));
+      await POST(pedido({ e: 'OPEN', i: 'naoexiste123' }));
+      await POST(pedido({ e: 'OPEN' }));
+      const linhas = await prisma.menuItemStat.findMany({ where: { menuItemId: { in: [item.id, 'naoexiste123'] } } });
+      expect(linhas.map((l) => [l.menuItemId, l.event, l.count]).sort()).toEqual([
+        [item.id, 'ADD', 1],
+        [item.id, 'OPEN', 2],
+      ]);
+    } finally {
+      await prisma.menuItemStat.deleteMany({ where: { menuItemId: item.id } });
+      await prisma.menuItem.delete({ where: { id: item.id } });
+    }
+  });
 });

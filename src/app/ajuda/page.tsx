@@ -901,6 +901,22 @@ const SECOES: Secao[] = [
             lembrado.
           </li>
           <li>
+            <strong>No telemóvel:</strong> a lista mostra só foto, nome, uma linha e preço; tocar
+            num produto abre a <strong>folha</strong> com tudo (foto grande com zoom, descrição,
+            alergénios, &quot;Combina com…&quot; e partilhar). Os textos depois dos itens (massas,
+            recheios, decoração) e as secções só de texto ficam <strong>fechados</strong>, com o
+            resumo no título; uma lista com <code>|</code> (os recheios) aparece em etiquetas. No
+            topo: a capa (a primeira foto de capa de uma secção), as <strong>garantias</strong>{' '}
+            (cartão &quot;Link público&quot;, uma por linha) e as categorias em círculos.
+          </li>
+          <li>
+            <strong>Vender mais:</strong> no lápis de cada item, o <strong>Destaque</strong> (Mais
+            pedido / Novidade) põe-no na faixa &quot;Os preferidos&quot; do topo, e o{' '}
+            <strong>Combina com</strong> (até 3) sugere outros na folha do produto. Quem já
+            encomendou vê &quot;Repetir a última escolha&quot; — guardado só no telemóvel dele, sem
+            conta.
+          </li>
+          <li>
             <strong>Como está a correr:</strong> o cartão no topo do Cardápio (e nas Campanhas)
             mostra as visitas ao link, os cliques em <em>Encomendar</em> e os pedidos de
             orçamento dos últimos 30 dias, por origem e por semana. Use o <strong>link de cada

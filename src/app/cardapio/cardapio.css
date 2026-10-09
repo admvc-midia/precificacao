@@ -137,6 +137,10 @@
   border-radius: 999px;
   font-weight: 700;
 }
+/* Nome comprido ("Bolo de Brigadeiro Branco Aro 16"): uma pilula ficava oval. */
+.cardapio .ab-cartao-tamanho.ab-cartao-tamanho-longo {
+  border-radius: 1rem;
+}
 
 .cardapio .ab-justificado {
   text-align: justify;
@@ -213,5 +217,208 @@
 @media (prefers-reduced-motion: no-preference) {
   .cardapio .ab-barra {
     transition: transform 200ms ease;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Telemovel primeiro: vidro, capa, folha do produto, secoes que se abrem e
+ * movimento. Tudo o que mexe para com "reduzir movimento" (fim do ficheiro).
+ * ------------------------------------------------------------------------- */
+
+/* Vidro translucido: a estampa e as fotos espreitam por tras. */
+.cardapio .ab-vidro {
+  background: color-mix(in srgb, var(--ab-fundo) 78%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+}
+
+/* A capa: a foto fica por baixo de um veu da cor do fundo, para o logotipo
+   ler-se sempre; sem foto, so a estampa. */
+.cardapio .ab-capa::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--ab-fundo) 25%, transparent) 0%,
+    color-mix(in srgb, var(--ab-fundo) 55%, transparent) 60%,
+    var(--ab-fundo) 100%
+  );
+  pointer-events: none;
+}
+.cardapio .ab-capa > div {
+  z-index: 1;
+}
+.cardapio .ab-capa-foto {
+  filter: saturate(1.05);
+}
+
+.cardapio .ab-etiqueta-garantia {
+  border: 1px solid var(--ab-linha);
+  border-radius: 999px;
+  padding: 0.3rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ab-titulo);
+}
+
+/* Opcoes (recheios) em etiquetas, em vez de uma lista separada por barras. */
+.cardapio .ab-etiqueta-opcao {
+  border: 1px solid var(--ab-rosa);
+  background: var(--ab-campo);
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.85rem;
+  color: var(--ab-titulo);
+}
+
+/* Selos "Mais pedido" / "Novidade". */
+.cardapio .ab-selo {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: var(--ab-botao);
+  color: var(--ab-botao-texto);
+}
+.cardapio .ab-selo-novo {
+  background: var(--ab-rosa);
+  color: #2a0f18;
+}
+
+/* Categorias em circulo, com anel como os destaques do Instagram. */
+.cardapio .ab-circulo {
+  display: block;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 999px;
+  padding: 3px;
+  background: conic-gradient(from 200deg, var(--ab-rosa), var(--ab-vinho), var(--ab-rosa));
+}
+.dark .cardapio .ab-circulo {
+  background: conic-gradient(from 200deg, var(--ab-rosa), #8a2f4b, var(--ab-rosa));
+}
+.cardapio .ab-circulo > * {
+  border: 2px solid var(--ab-fundo);
+}
+
+/* Fotos: fundo da marca enquanto carregam (nunca um buraco branco). */
+.cardapio .ab-foto {
+  background: color-mix(in srgb, var(--ab-rosa) 35%, var(--ab-cartao));
+}
+
+/* Toque: o produto afunda um pouco ao ser tocado. */
+.cardapio .ab-toque {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms ease, background-color 150ms ease;
+}
+.cardapio .ab-toque:active {
+  transform: scale(0.98);
+  background: color-mix(in srgb, var(--ab-rosa) 18%, transparent);
+}
+.cardapio .ab-toque:focus-visible {
+  outline: 2px solid var(--ab-rosa);
+  outline-offset: 2px;
+}
+
+/* Secoes que se abrem. */
+.cardapio .ab-acordeao {
+  border-bottom: 1px solid var(--ab-linha);
+}
+.cardapio .ab-acordeao > summary {
+  padding: 0.75rem 0;
+  list-style: none;
+  cursor: pointer;
+}
+.cardapio .ab-acordeao-secao {
+  border-bottom: 0;
+}
+.cardapio .ab-acordeao-seta {
+  transition: transform 200ms ease;
+}
+.cardapio .ab-acordeao[open] > summary .ab-acordeao-seta {
+  transform: rotate(180deg);
+}
+.cardapio .ab-acordeao[open] > summary + * {
+  animation: ab-abrir 220ms ease-out;
+}
+
+/* A folha do produto: sobe de baixo, larga como o ecra no telemovel. */
+.cardapio .ab-folha {
+  margin: auto auto 0;
+  width: 100%;
+  max-width: 40rem;
+  max-height: 92vh;
+  padding: 0;
+  border: 0;
+  border-radius: 1.75rem 1.75rem 0 0;
+  background: var(--ab-fundo);
+  color: var(--ab-texto);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.25);
+  transition: transform 200ms ease;
+}
+.cardapio .ab-folha[open] {
+  animation: ab-subir 280ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.cardapio .ab-folha::backdrop {
+  background: rgba(20, 6, 11, 0.45);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+/* Aparecer ao descer: so depois de o JS ligar (`data-anima`), para nada
+   ficar escondido se ele nao correr. */
+.cardapio [data-anima='on'] .ab-revelar {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 420ms ease, transform 420ms ease;
+}
+.cardapio [data-anima='on'] .ab-revelar.ab-visto {
+  opacity: 1;
+  transform: none;
+}
+
+/* O numero do pedido salta quando muda. */
+.cardapio .ab-salto {
+  animation: ab-salto 380ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+@keyframes ab-subir {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes ab-abrir {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@keyframes ab-salto {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Quem pediu menos movimento no telemovel: nada mexe. */
+@media (prefers-reduced-motion: reduce) {
+  .cardapio *,
+  .cardapio *::before,
+  .cardapio *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .cardapio [data-anima='on'] .ab-revelar {
+    opacity: 1;
+    transform: none;
   }
 }

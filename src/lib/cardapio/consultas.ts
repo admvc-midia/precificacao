@@ -17,6 +17,7 @@
 import { unstable_cache } from 'next/cache';
 
 import { diaEmLisboa } from '@/lib/datas';
+import { garantiasDe } from './capa';
 import { caminhoDaFoto, fotoDaSecaoSrc, fotoPublicaSrc } from './fotos';
 import { prisma } from '@/lib/db';
 import { buildCostContext, num, toGlobalSettings } from '@/lib/mappers';
@@ -31,6 +32,7 @@ import { getCostedRecipes, getPricingData } from '@/lib/queries';
 export const TAG_CARDAPIO = 'cardapio';
 
 export { caminhoDaFoto, fotoDaSecaoSrc, fotoPublicaSrc } from './fotos';
+export { garantiasDe, GARANTIAS_DE_ORIGEM } from './capa';
 
 /** "AAAA-MM-DD" de uma coluna `@db.Date` (meia-noite UTC). */
 export function diaDaColuna(d: Date): string {
@@ -54,6 +56,10 @@ export interface ItemPublico {
   /** Combo: "6 × Brigadeiro". */
   leva: string[];
   alergenios: { presentes: string[]; completo: boolean };
+  /** "Mais pedido" / "Novidade", escolhido pelo dono. */
+  destaque: 'BESTSELLER' | 'NEW' | null;
+  /** "Combina com": ids de itens visiveis (os outros saem ao montar). */
+  combinaCom: string[];
 }
 
 export interface SecaoPublica {
@@ -78,6 +84,8 @@ export interface CardapioPublico {
   whatsapp: string | null;
   instagram: string | null;
   facebook: string | null;
+  /** As garantias da capa ("100% artesanal"), no maximo 3. */
+  garantias: string[];
   currency: CurrencyConfig;
   secoes: SecaoPublica[];
   /** Com os valores ja com IVA. As terminadas e as desligadas nao vem. */
@@ -90,6 +98,7 @@ async function montarCardapioPublico(): Promise<CardapioPublico> {
   const base = {
     nome: settingsRow?.businessName || 'Amo Brigs',
     intro: settingsRow?.menuIntro ?? null,
+    garantias: garantiasDe(settingsRow?.menuHighlights),
     whatsapp: settingsRow?.whatsappNumber ?? null,
     instagram: settingsRow?.instagramHandle ?? null,
     facebook: settingsRow?.facebookHandle ?? null,
@@ -161,6 +170,8 @@ async function montarCardapioPublico(): Promise<CardapioPublico> {
       foto: fotoPublicaSrc(i.id, foto?.photoPath),
       fotoMini: fotoPublicaSrc(i.id, foto?.photoThumbPath ?? foto?.photoPath, 'mini'),
       leva: i.components.map((c) => `${formatQty(num(c.qty))} × ${c.recipe.name}`),
+      destaque: i.highlight,
+      combinaCom: i.pairsWith,
       alergenios: {
         presentes: rel.present.map((a) => ALLERGEN_LABEL[a]),
         completo: rel.complete && recipeIds.length > 0,
@@ -198,6 +209,10 @@ async function montarCardapioPublico(): Promise<CardapioPublico> {
   }
 
   const visiveis = new Set(secoesPublicas.flatMap((s) => s.itens.map((i) => i.id)));
+  // "Combina com" so com itens que o cliente consegue ver e juntar.
+  for (const s of secoesPublicas) {
+    for (const it of s.itens) it.combinaCom = it.combinaCom.filter((id) => id !== it.id && visiveis.has(id)).slice(0, 3);
+  }
   const hoje = diaEmLisboa(new Date());
   const promocoes = promos
     .filter((p) => !p.endsAt || diaDaColuna(p.endsAt) >= hoje)

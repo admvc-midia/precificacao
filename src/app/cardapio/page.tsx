@@ -66,7 +66,7 @@ function telefoneLegivel(n: string): string {
   return local.startsWith('+') ? local : local.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3');
 }
 
-export default async function CardapioPage({ searchParams }: { searchParams: Promise<{ o?: string }> }) {
+export default async function CardapioPage({ searchParams }: { searchParams: Promise<{ o?: string; p?: string }> }) {
   const dados = await getCardapioPublico();
   const hoje = diaEmLisboa(new Date());
   const tema = lerTema((await cookies()).get(COOKIE_TEMA)?.value);
@@ -74,30 +74,52 @@ export default async function CardapioPage({ searchParams }: { searchParams: Pro
   // A visita conta-se depois de a pagina sair, e so de pessoas: os robos que
   // fazem a pre-visualizacao do link no WhatsApp/Instagram nao contam.
   const h = await headers();
-  const origem = origemDoPedido((await searchParams).o, h.get('referer'));
+  const params = await searchParams;
+  const origem = origemDoPedido(params.o, h.get('referer'));
+  // A capa: a primeira secao com foto de capa, senao a primeira foto de um item.
+  const capa = dados.secoes.find((s) => s.foto)?.foto ?? dados.secoes.flatMap((s) => s.itens).find((i) => i.foto)?.foto ?? null;
   if (dados.aberto && !eRobo(h.get('user-agent'))) after(() => contar('VIEW', origem));
 
   return (
     <div className="cardapio">
-      <main className="relative mx-auto max-w-2xl px-4 pb-40 pt-6">
-        <div className="flex justify-end">
-          <TemaCardapio inicial={tema} />
+      {/* A capa: foto de fundo (se houver) com um veu da cor da marca, e o
+          logotipo num vidro translucido por cima. */}
+      <header className="ab-capa relative overflow-hidden">
+        {capa ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={capa} alt="" className="ab-capa-foto absolute inset-0 h-full w-full object-cover" />
+        ) : null}
+        <div className="relative mx-auto flex max-w-2xl flex-col items-center gap-5 px-4 pb-8 pt-4 text-center">
+          <div className="flex w-full justify-end">
+            <TemaCardapio inicial={tema} />
+          </div>
+          <div className="ab-vidro flex w-full max-w-sm flex-col items-center gap-3 rounded-3xl px-6 py-5">
+            {/* O logotipo do site: vinho no claro, creme no escuro (o CSS mostra um). */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-vinho.png" alt={NOME} className="ab-logo-claro w-full max-w-60" width={1200} height={342} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-creme.png" alt={NOME} className="ab-logo-escuro w-full max-w-60" width={1200} height={342} />
+            <p className="ab-serif border-y border-[var(--ab-rosa)] px-4 py-0.5 text-lg uppercase tracking-[0.3em] text-[var(--ab-titulo)]">
+              Menu
+            </p>
+            <TextoCardapio texto={dados.intro} className="text-sm [&_p]:text-center" />
+          </div>
+          {dados.garantias.length ? (
+            <ul className="flex flex-wrap justify-center gap-2">
+              {dados.garantias.map((g) => (
+                <li key={g} className="ab-vidro ab-etiqueta-garantia">
+                  {g}
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
-        <header className="mb-10 flex flex-col items-center gap-6 text-center">
-          {/* O logotipo do site: vinho no claro, creme no escuro (o CSS mostra um). */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-vinho.png" alt={NOME} className="ab-logo-claro w-full max-w-xs" width={1200} height={342} />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-creme.png" alt={NOME} className="ab-logo-escuro w-full max-w-xs" width={1200} height={342} />
-          <p className="ab-serif border-y border-[var(--ab-rosa)] px-4 py-0.5 text-2xl uppercase tracking-[0.3em] text-[var(--ab-titulo)]">
-            Menu
-          </p>
-          <div className="h-2" aria-hidden />
-          <TextoCardapio texto={dados.intro} className="max-w-md text-center [&_p]:text-center" />
-        </header>
+      </header>
+
+      <main className="relative mx-auto max-w-2xl px-4 pb-40 pt-6">
 
         {dados.aberto && dados.secoes.length ? (
-          <CardapioInterativo dados={dados} hoje={hoje} origem={origem} />
+          <CardapioInterativo dados={dados} hoje={hoje} origem={origem} produtoInicial={params.p ?? null} />
         ) : (
           <p className="ab-serif py-16 text-center text-2xl text-[var(--ab-titulo)]">
             O cardápio volta em breve.

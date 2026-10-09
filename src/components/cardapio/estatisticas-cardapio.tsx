@@ -12,13 +12,13 @@ import { BarChart3 } from 'lucide-react';
 import { CopiarLink } from '@/components/cardapio/copiar-link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ORIGEM_LABEL, PARAMETRO_DA_ORIGEM, type Origem } from '@/lib/cardapio/estatisticas';
-import { resumoDoCardapio } from '@/lib/cardapio/estatisticas-base';
+import { produtosMaisVistos, resumoDoCardapio } from '@/lib/cardapio/estatisticas-base';
 import { formatPercent } from '@/lib/money';
 
 const semanaFmt = (d: string) => d.slice(8, 10) + '/' + d.slice(5, 7);
 
 export async function EstatisticasCardapio({ urlDoCardapio }: { urlDoCardapio: string }) {
-  const r = await resumoDoCardapio();
+  const [r, vistos] = await Promise.all([resumoDoCardapio(), produtosMaisVistos()]);
   const maior = Math.max(1, ...r.porSemana.map((s) => s.visitas));
 
   return (
@@ -91,6 +91,27 @@ export async function EstatisticasCardapio({ urlDoCardapio }: { urlDoCardapio: s
               ))}
             </ul>
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold">Produtos mais vistos (aberto · juntado ao pedido)</h3>
+          {vistos.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Ainda sem produtos abertos.</p>
+          ) : (
+            <ol className="space-y-1 text-sm">
+              {vistos.map((p) => (
+                <li key={p.id} className="flex justify-between gap-2 border-t py-1 first:border-t-0">
+                  <span className="truncate">{p.nome}</span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    {p.abertos} · {p.juntados}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Muito aberto e pouco juntado: o preço, a foto ou a descrição podem estar a afastar.
+          </p>
         </div>
 
         <div className="space-y-2">

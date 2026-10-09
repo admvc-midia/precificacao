@@ -32,7 +32,7 @@ import {
   tirarFotoSecao,
   usarPrecoDeTabela,
 } from '@/lib/actions/cardapio';
-import { caminhoDaFoto, fotoDaSecaoSrc, fotoPublicaSrc, getCardapioDoDono } from '@/lib/cardapio/consultas';
+import { caminhoDaFoto, fotoDaSecaoSrc, fotoPublicaSrc, garantiasDe, getCardapioDoDono } from '@/lib/cardapio/consultas';
 import { urlDoCardapio } from '@/lib/cardapio/url';
 import { num } from '@/lib/mappers';
 import { formatMoney, type CurrencyConfig } from '@/lib/money';
@@ -92,7 +92,8 @@ export default async function CardapioDonoPage() {
   const ivaAParte = settings.vatMode === 'ADDED';
   const publicados = itens.filter((i) => i.published).length;
 
-  const ctx = { secoes, tabela, currency, bruto, livres, produtos, fichasDoCombo, total: itens.length };
+  const todos = itens.map((i) => ({ id: i.id, nome: i.name || i.recipe?.name || 'Sem nome' }));
+  const ctx = { secoes, tabela, currency, bruto, livres, produtos, fichasDoCombo, todos, total: itens.length };
 
   return (
     <div className="space-y-6">
@@ -144,6 +145,19 @@ export default async function CardapioDonoPage() {
             </Field>
             <Field label="Texto do topo" htmlFor="c-intro" className="sm:col-span-2" hint={AJUDA_TEXTO}>
               <Textarea id="c-intro" name="menuIntro" rows={2} defaultValue={s.menuIntro ?? ''} placeholder="Bolos e brigadeiros por encomenda, feitos com muito carinho." />
+            </Field>
+            <Field
+              label="Garantias da capa"
+              htmlFor="c-garantias"
+              className="sm:col-span-2"
+              hint="Uma por linha, até 3, curtas. Aparecem em etiquetas por baixo do logótipo. Apague tudo para não mostrar nenhuma."
+            >
+              <Textarea
+                id="c-garantias"
+                name="menuHighlights"
+                rows={3}
+                defaultValue={garantiasDe(s.menuHighlights).join(String.fromCharCode(10))}
+              />
             </Field>
             <div className="sm:col-span-2">
               <SubmitButton>Guardar</SubmitButton>
@@ -276,6 +290,8 @@ interface Ctx {
   livres: Array<{ id: string; name: string }>;
   produtos: Array<{ id: string; name: string }>;
   fichasDoCombo: FichaDoCombo[];
+  /** Todos os itens, para o "Combina com". */
+  todos: Array<{ id: string; nome: string }>;
 }
 
 function SelectSecao({ secoes, atual }: { secoes: Secao[]; atual?: string | null }) {
@@ -447,6 +463,7 @@ function LinhaItem({ i, primeiro, ultimo, ctx }: { i: Item; primeiro: boolean; u
           {i.priceOnRequest ? <Badge variant="outline">Sob consulta</Badge> : null}
           {i.kind === 'PRODUCT' && !i.recipeId ? <Badge variant="warning">Sem ficha</Badge> : null}
           {i.promotions.length ? <Badge variant="success">Em promoção</Badge> : null}
+          {i.highlight ? <Badge variant="default">{i.highlight === 'NEW' ? 'Novidade' : 'Mais pedido'}</Badge> : null}
           {!foto ? <Badge variant="outline">Sem foto</Badge> : null}
         </p>
         <p className="text-xs text-muted-foreground">
@@ -539,6 +556,28 @@ function LinhaItem({ i, primeiro, ultimo, ctx }: { i: Item; primeiro: boolean; u
             </Field>
           )}
           <SelectSecao secoes={ctx.secoes} atual={i.sectionId} />
+          <Field label="Destaque no topo do cardápio" htmlFor={`h-${i.id}`}>
+            <Select id={`h-${i.id}`} name="highlight" defaultValue={i.highlight ?? ''}>
+              <option value="">Sem destaque</option>
+              <option value="BESTSELLER">Mais pedido</option>
+              <option value="NEW">Novidade</option>
+            </Select>
+          </Field>
+          <fieldset className="space-y-1.5">
+            <legend className="text-sm font-medium">Combina com (até 3)</legend>
+            <input type="hidden" name="pairsWithSubmitted" value="1" />
+            <div className="grid max-h-40 gap-1 overflow-y-auto rounded-md border p-2 text-sm sm:grid-cols-2">
+              {ctx.todos
+                .filter((o) => o.id !== i.id)
+                .map((o) => (
+                  <label key={o.id} className="flex items-center gap-2">
+                    <input type="checkbox" name="pairsWith" value={o.id} defaultChecked={i.pairsWith.includes(o.id)} className="h-4 w-4" />
+                    {o.nome}
+                  </label>
+                ))}
+            </div>
+            <p className="text-xs text-muted-foreground">Aparecem na folha do produto, com um &quot;+&quot; para juntar logo.</p>
+          </fieldset>
           <input type="hidden" name="publishedSubmitted" value="1" />
           <input type="hidden" name="soldOutSubmitted" value="1" />
           <div className="flex flex-wrap gap-4 text-sm">

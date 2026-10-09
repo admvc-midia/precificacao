@@ -179,6 +179,9 @@ model Settings {
   facebookHandle  String?
   /// O texto do topo do cardapio publico ("Bolos e brigadeiros por encomenda").
   menuIntro       String?
+  /// As garantias da capa do cardapio, uma por linha (no maximo 3): "100%
+  /// artesanal", "Encomende com 2 dias". Nulo usa as que vem com a app.
+  menuHighlights  String?
   /// Desligado, o link publico diz "voltamos em breve" e nao mostra nada.
   menuPublished   Boolean @default(false)
 
@@ -1300,6 +1303,11 @@ model MenuSection {
   updatedAt DateTime @updatedAt
 }
 
+enum MenuHighlight {
+  BESTSELLER
+  NEW
+}
+
 enum MenuItemKind {
   /// Uma ficha tecnica a venda.
   PRODUCT
@@ -1344,6 +1352,13 @@ model MenuItem {
   /// primeira ficha com foto). Ver `caminhoDaFoto`.
   photoPath      String?
   photoThumbPath String?
+
+  /// Destaque no topo do cardapio ("Mais pedido", "Novidade"). Escolhido pelo
+  /// dono: ainda nao ha encomendas para a app o decidir sozinha.
+  highlight MenuHighlight?
+  /// "Combina com": ids de outros itens do cardapio, ate 3, sugeridos na folha
+  /// do produto. Ids que ja nao existam ignoram-se ao ler.
+  pairsWith String[]
 
   /// "Sob consulta": aparece sem preco e nao entra no total da mensagem.
   priceOnRequest Boolean @default(false)
@@ -1575,4 +1590,23 @@ model MenuStat {
   count  Int       @default(0)
 
   @@id([day, event, source])
+}
+
+enum MenuItemEvent {
+  /// Abriu a folha do produto.
+  OPEN
+  /// Juntou-o ao pedido.
+  ADD
+}
+
+/// Contadores por produto e dia, sem nada da pessoa (como `MenuStat`). O id do
+/// item e texto e nao uma ligacao: apagar um item nao apaga a historia, e um id
+/// inventado so cria uma linha que ninguem le.
+model MenuItemStat {
+  day        DateTime      @db.Date
+  menuItemId String
+  event      MenuItemEvent
+  count      Int           @default(0)
+
+  @@id([day, menuItemId, event])
 }

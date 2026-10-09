@@ -54,6 +54,21 @@ function preco(raw: FormDataEntryValue | null, obrigatorio: boolean): number | n
   return v;
 }
 
+/** Destaque e "combina com", quando o formulario os trouxe. */
+function destaqueEPares(form: FormData, itemId: string): { highlight?: 'BESTSELLER' | 'NEW' | null; pairsWith?: string[] } {
+  const out: { highlight?: 'BESTSELLER' | 'NEW' | null; pairsWith?: string[] } = {};
+  if (form.has('highlight')) {
+    const h = String(form.get('highlight'));
+    out.highlight = h === 'BESTSELLER' || h === 'NEW' ? h : null;
+  }
+  if (form.has('pairsWithSubmitted')) {
+    const ids = [...new Set(form.getAll('pairsWith').map(String).filter((x) => x && x !== itemId))];
+    if (ids.length > 3) throw new Error('"Combina com": escolha no maximo 3.');
+    out.pairsWith = ids;
+  }
+  return out;
+}
+
 async function proximaPosicao(sectionId: string | null): Promise<number> {
   const ultimo = await prisma.menuItem.aggregate({ where: { sectionId }, _max: { position: true } });
   return (ultimo._max.position ?? -1) + 1;
@@ -77,6 +92,16 @@ export async function guardarDefinicoesDoCardapio(_prev: ActionState, form: Form
     if (form.has('instagramHandle')) data.instagramHandle = lerRede('instagram', String(form.get('instagramHandle')));
     if (form.has('facebookHandle')) data.facebookHandle = lerRede('facebook', String(form.get('facebookHandle')));
     if (form.has('menuIntro')) data.menuIntro = texto(500).parse(form.get('menuIntro'));
+    if (form.has('menuHighlights')) {
+      // Uma por linha, no maximo 3 e curtas. Vazio = sem garantias na capa.
+      const linhas = String(form.get('menuHighlights'))
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean);
+      if (linhas.length > 3) throw new Error('Garantias: no maximo 3 (uma por linha).');
+      if (linhas.some((l) => l.length > 40)) throw new Error('Garantias: cada uma com no maximo 40 caracteres.');
+      data.menuHighlights = linhas.join('\n');
+    }
     if (form.has('menuPublishedSubmitted')) data.menuPublished = form.get('menuPublished') === 'on';
 
     await prisma.settings.upsert({ where: { id: 'default' }, create: { id: 'default', ...data }, update: data });
@@ -347,6 +372,7 @@ export async function guardarCombo(_prev: ActionState, form: FormData): Promise<
             price,
             published: marcado(form, 'published', atual.published),
             soldOut: marcado(form, 'soldOut', atual.soldOut),
+            ...destaqueEPares(form, id),
             ...(num(atual.price) !== price ? { priceSetAt: new Date() } : {}),
             components: { create: comps },
           },
@@ -395,6 +421,7 @@ export async function guardarItem(_prev: ActionState, form: FormData): Promise<A
         price,
         ...(num(atual.price) !== price ? { priceSetAt: new Date() } : {}),
         priceOnRequest: marcado(form, 'priceOnRequest', atual.priceOnRequest),
+        ...destaqueEPares(form, id),
         published: marcado(form, 'published', atual.published),
         soldOut: marcado(form, 'soldOut', atual.soldOut),
         ...(sectionId !== atual.sectionId ? { sectionId, position: await proximaPosicao(sectionId) } : {}),
