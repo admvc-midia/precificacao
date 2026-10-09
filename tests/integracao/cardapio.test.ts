@@ -161,18 +161,20 @@ describe('encomenda com cardapio, promocao, combo e cupao', () => {
     expect(Number(doComboCaixa.unitFoodCost)).toBeCloseTo(0.4);
 
     // A mesma cliente (pelo telefone) ja o usou.
+    const ritaS = nome('Rita S');
+    const clientesAntes = await prisma.customer.count();
     const outra = await createCustomerOrder(
       { ok: true },
-      form({ ...pedido, customerName: nome('Rita S'), customerPhone: '913000222' }),
+      form({ ...pedido, customerName: ritaS, customerPhone: '913000222' }),
     );
     expect(outra.ok).toBe(false);
     expect(outra.message).toMatch(/ja usou/);
     // A recusa nao deixou uma ficha de cliente nova para tras.
-    expect(await prisma.customer.count({ where: { name: nome('Rita S') } })).toBe(0);
+    expect(await prisma.customer.count()).toBe(clientesAntes);
 
     // Cancelada, deixa de contar.
     await ok(setCustomerOrderStatus({ ok: true }, form({ id: enc.id, status: 'CANCELLED' })));
-    await criar({ ...pedido, customerName: nome('Rita S'), customerPhone: '913000222' });
+    await criar({ ...pedido, customerName: ritaS, customerPhone: '913000222' });
   });
 });
 

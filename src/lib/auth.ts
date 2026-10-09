@@ -43,12 +43,13 @@ import {
 
 export const COOKIE = 'precificaragao_sessao';
 
-export type Perfil = 'OWNER' | 'KITCHEN' | 'READER';
+export type Perfil = 'OWNER' | 'KITCHEN' | 'READER' | 'MARKETING';
 
 export const PERFIL_LABEL: Record<Perfil, string> = {
   OWNER: 'Dono',
   KITCHEN: 'Cozinha',
   READER: 'Leitura',
+  MARKETING: 'Marketing',
 };
 
 /**
@@ -122,7 +123,7 @@ export interface Sessao {
   expira: number;
 }
 
-const PERFIS: Perfil[] = ['OWNER', 'KITCHEN', 'READER'];
+const PERFIS: Perfil[] = ['OWNER', 'KITCHEN', 'READER', 'MARKETING'];
 
 /** O valor a guardar no cookie: os dados em base64url, e a assinatura deles. */
 export function novaSessao(
@@ -350,6 +351,12 @@ export function abertaSemSessao(pathname: string): boolean {
 const ROTAS_DO_LIVRO = ['/receitas', '/livros', '/api/receitas', '/conta', '/ajuda'];
 
 /**
+ * O marketing: as campanhas e o guia, a conta e a ajuda. Nem o livro de
+ * receitas, nem encomendas, nem a Loja (cupoes e precos sao do dono).
+ */
+const ROTAS_DO_MARKETING = ['/marketing', '/conta', '/ajuda'];
+
+/**
  * A cozinha ve tambem as encomendas e a producao — o que fazer e para quando
  * — mas as paginas mostram-lhe so isso, sem precos nem custos. Criar uma
  * encomenda nao: o formulario e todo precos.
@@ -363,6 +370,7 @@ function casa(lista: string[], pathname: string): boolean {
 
 export function rotaPermitida(perfil: Perfil, pathname: string): boolean {
   if (perfil === 'OWNER') return true;
+  if (perfil === 'MARKETING') return casa(ROTAS_DO_MARKETING, pathname);
   if (casa(ROTAS_DO_LIVRO, pathname)) return true;
   return perfil === 'KITCHEN' && casa(ROTAS_DA_COZINHA, pathname) && !casa(FECHADAS_A_COZINHA, pathname);
 }
@@ -391,6 +399,7 @@ export function destinoInterno(valor: string): string | null {
 /** Para onde vai cada perfil ao entrar, ou quando bate numa porta fechada. */
 export function inicioDoPerfil(perfil: Perfil): string {
   // A cozinha comeca o dia pelo que ha para fazer.
+  if (perfil === 'MARKETING') return '/marketing';
   return perfil === 'OWNER' ? '/' : perfil === 'KITCHEN' ? '/encomendas' : '/receitas';
 }
 

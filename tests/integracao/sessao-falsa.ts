@@ -51,5 +51,7 @@ vi.mock('@/lib/sessao', () => {
     exigirDono: () => exigirPerfil('OWNER'),
     exigirEditorDoLivro: () => exigirPerfil('OWNER', 'KITCHEN'),
     exigirSessao: () => exigirPerfil('OWNER', 'KITCHEN', 'READER'),
+    exigirConta: () => exigirPerfil('OWNER', 'KITCHEN', 'READER', 'MARKETING'),
+    exigirMarketing: () => exigirPerfil('OWNER', 'MARKETING'),
   };
 });

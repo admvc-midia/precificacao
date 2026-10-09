@@ -61,7 +61,7 @@ export async function detalheReceita(id: string) {
     include: {
       versions: { orderBy: { number: 'desc' } },
       entries: { include: { cookbook: { select: { id: true, title: true } } } },
-      ficha: { select: { id: true, name: true, updatedAt: true } },
+      ficha: { select: { id: true, name: true, kind: true, updatedAt: true } },
     },
   });
 }

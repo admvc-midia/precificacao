@@ -3,12 +3,14 @@
 /** Ordens de producao e lista de compras (Modulo 4). */
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 
 import { prisma } from '@/lib/db';
 import { buildCostContext } from '@/lib/mappers';
 import { parseQty } from '@/lib/money';
 import { buildPurchaseList } from '@/lib/pricing/purchase';
-import { exigirDono } from '@/lib/sessao';
+import { registar } from '@/lib/registo';
+import { exigirDono, exigirPerfil } from '@/lib/sessao';
 import { errorMessage, type ActionState } from './shared';
 
 export async function createOrder(
@@ -220,4 +222,47 @@ export async function freezePurchaseList(
   } catch (err) {
     return { ok: false, message: errorMessage(err) };
   }
+}
+
+/**
+ * "Produzir" a partir de uma ficha (na ficha tecnica ou no livro de
+ * receitas): cria uma ordem so com esse produto e abre-a — dai em diante e o
+ * caminho de sempre (lista de compras, registar a producao).
+ *
+ * Dono e cozinha: a cozinha ja manda produzir as encomendas; isto e o mesmo
+ * para um produto solto. So produtos finais (a quantidade e em porcoes).
+ */
+export async function produzirFicha(_prev: ActionState, form: FormData): Promise<ActionState> {
+  let id: string;
+  try {
+    const eu = await exigirPerfil('OWNER', 'KITCHEN');
+    const recipeId = String(form.get('recipeId') ?? '');
+    const ficha = await prisma.recipe.findUnique({ where: { id: recipeId }, select: { name: true, kind: true } });
+    if (!ficha) throw new Error('Ficha nao encontrada.');
+    if (ficha.kind !== 'PRODUCT') throw new Error('So se produzem produtos finais; uma preparacao base entra pelas fichas que a usam.');
+
+    const qty = parseQty(String(form.get('qty') ?? ''));
+    if (!(qty > 0)) throw new Error('A quantidade tem de ser maior que zero.');
+    if (qty > 100_000) throw new Error('Quantidade alta demais: confira a virgula.');
+
+    const dueRaw = String(form.get('dueAt') ?? '').trim();
+    const dueAt = dueRaw ? new Date(`${dueRaw}T00:00:00.000Z`) : null;
+    if (dueAt && Number.isNaN(dueAt.getTime())) throw new Error('Data invalida.');
+    const dia = dueAt ? `${dueRaw.slice(8, 10)}/${dueRaw.slice(5, 7)}` : null;
+
+    const order = await prisma.productionOrder.create({
+      data: {
+        name: dia ? `${ficha.name} · ${dia}` : ficha.name,
+        dueAt,
+        notes: String(form.get('notes') ?? '').trim() || null,
+        lines: { create: [{ recipeId, qty }] },
+      },
+    });
+    id = order.id;
+    revalidatePath('/producao');
+    await registar({ quem: eu, acao: 'producao.da-ficha', alvo: ficha.name, detalhe: `${qty} un.${dia ? ` para ${dia}` : ''}` });
+  } catch (err) {
+    return { ok: false, message: errorMessage(err) };
+  }
+  redirect(`/producao/${id}`);
 }

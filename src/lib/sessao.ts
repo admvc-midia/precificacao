@@ -74,7 +74,17 @@ export function exigirEditorDoLivro(): Promise<Utilizador> {
   return exigirPerfil('OWNER', 'KITCHEN');
 }
 
-/** Ler o livro: qualquer pessoa com sessao valida. */
+/** Ler o livro: dono, cozinha e leitura (o marketing nao). */
 export function exigirSessao(): Promise<Utilizador> {
   return exigirPerfil('OWNER', 'KITCHEN', 'READER');
+}
+
+/** A propria conta (palavra-passe, sessoes): qualquer perfil com sessao valida. */
+export function exigirConta(): Promise<Utilizador> {
+  return exigirPerfil('OWNER', 'KITCHEN', 'READER', 'MARKETING');
+}
+
+/** As campanhas e o guia de marketing. */
+export function exigirMarketing(): Promise<Utilizador> {
+  return exigirPerfil('OWNER', 'MARKETING');
 }

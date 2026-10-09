@@ -24,6 +24,8 @@ import {
 } from '@/lib/actions/recipes';
 import { AllergenPanel } from '@/components/allergen-panel';
 import { FotoProduto } from '@/components/foto-produto';
+import { ReceitaDaFicha } from '@/components/livro/receita-da-ficha';
+import { ProduzirDialogo } from '@/components/producao/produzir-dialogo';
 import { fotoSrc } from '@/lib/foto-url';
 import { cn } from '@/lib/utils';
 import { CompositionTable } from '@/components/composition-table';
@@ -136,6 +138,8 @@ export default async function FichaPage({
             Imprimir
           </Link>
 
+          {isProduct ? <ProduzirDialogo recipeId={id} nome={recipe.name} /> : null}
+
           <FormDialog
             action={saveRecipe}
             title={`Editar ${recipe.name}`}
@@ -156,6 +160,9 @@ export default async function FichaPage({
       </header>
 
       {error ? <Alert tone="destructive">{error}</Alert> : null}
+
+      {/* A receita do livro que descreve esta ficha (ligada no livro). */}
+      <ReceitaDaFicha fichaId={id} fichaAtualizada={recipe.updatedAt} />
 
       <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
         <Card>

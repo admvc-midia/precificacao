@@ -5,6 +5,7 @@ import {
   Archive,
   ArchiveRestore,
   BookOpen,
+  ClipboardList,
   ExternalLink,
   FileText,
   GitCompare,
@@ -23,6 +24,7 @@ import {
 import { AjudaLink } from '@/components/ajuda-link';
 import { FotoProduto } from '@/components/foto-produto';
 import { CamposDados } from '@/components/livro/campos-receita';
+import { ProduzirDialogo } from '@/components/producao/produzir-dialogo';
 import { Ingredientes, Passos } from '@/components/livro/receita-texto';
 import { Alert, Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -110,6 +112,27 @@ export default async function ReceitaPage({
         </div>
 
         <div className="flex flex-wrap gap-2 pt-1">
+          {/* Produzir: dono e cozinha, quando a receita tem ficha de produto
+              final — e a ficha que sabe os insumos e as quantidades. */}
+          {editor && r.ficha?.kind === 'PRODUCT' ? <ProduzirDialogo recipeId={r.ficha.id} nome={r.ficha.name} /> : null}
+          {/* Sem ficha nao ha o que produzir. O dono cria-a a partir da receita
+              (ou liga uma que ja exista, no lapis de "Origem"); a cozinha pede-a. */}
+          {dono && !r.ficha && !r.archivedAt ? (
+            <Link href={`/receitas/${r.id}/ficha`} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+              <ClipboardList className="h-4 w-4" />
+              Criar ficha técnica a partir desta receita
+            </Link>
+          ) : null}
+          {editor && !dono && !r.ficha ? (
+            <p className="self-center text-xs text-muted-foreground">
+              Para produzir a partir daqui, peça ao dono para ligar esta receita a uma ficha técnica.
+            </p>
+          ) : null}
+          {dono && r.ficha && r.ficha.kind !== 'PRODUCT' ? (
+            <p className="self-center text-xs text-muted-foreground">
+              Ligada a uma preparação base: só os produtos finais se produzem.
+            </p>
+          ) : null}
           {editor && !r.archivedAt ? (
             <Link href={`/receitas/${r.id}/editar`} className={buttonVariants()}>
               <Pencil className="h-4 w-4" />

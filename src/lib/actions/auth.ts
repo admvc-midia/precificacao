@@ -34,7 +34,7 @@ import {
 } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { registar } from '@/lib/registo';
-import { exigirSessao } from '@/lib/sessao';
+import { exigirConta } from '@/lib/sessao';
 import { errorMessage, type ActionState } from './shared';
 
 /** Atraso fixo em cada tentativa falhada. */
@@ -203,7 +203,7 @@ export async function sair(): Promise<void> {
  */
 export async function trocarPalavraPasse(_prev: ActionState, form: FormData): Promise<ActionState> {
   try {
-    const eu = await exigirSessao();
+    const eu = await exigirConta();
     const u = await prisma.user.findUniqueOrThrow({ where: { id: eu.id } });
 
     if (!(await confereHash(String(form.get('atual') ?? ''), u.passwordHash))) {
@@ -235,7 +235,7 @@ export async function trocarPalavraPasse(_prev: ActionState, form: FormData): Pr
 /** "Sair de todos os aparelhos", menos este. */
 export async function terminarOutrasSessoes(_prev: ActionState): Promise<ActionState> {
   try {
-    const eu = await exigirSessao();
+    const eu = await exigirConta();
     const depois = await prisma.user.update({
       where: { id: eu.id },
       data: { sessionVersion: { increment: 1 } },

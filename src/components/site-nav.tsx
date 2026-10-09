@@ -50,6 +50,8 @@ import {
   Wallet,
   Warehouse,
   BadgePercent,
+  Megaphone,
+  NotebookText,
   ShoppingBag,
   Ticket,
   UtensilsCrossed,
@@ -129,6 +131,8 @@ const AJUDA: Destino = { href: '/ajuda', label: 'Ajuda', icon: LifeBuoy };
 const CARDAPIO: Destino = { href: '/loja/cardapio', label: 'Cardápio (link público)', short: 'Cardápio', icon: UtensilsCrossed };
 const PROMOCOES: Destino = { href: '/loja/promocoes', label: 'Promoções', icon: BadgePercent };
 const CUPOES: Destino = { href: '/loja/cupoes', label: 'Cupões de desconto', short: 'Cupões', icon: Ticket };
+const MARKETING: Destino = { href: '/marketing', label: 'Campanhas de marketing', short: 'Campanhas', icon: Megaphone };
+const GUIA_MARKETING: Destino = { href: '/marketing/guia', label: 'Guia de marketing', short: 'Guia', icon: NotebookText };
 const EXPORTAR: Destino = { href: '/exportar', label: 'Cópia de segurança', icon: Download };
 
 interface MenuDoPerfil {
@@ -160,7 +164,7 @@ const MENU_DONO: MenuDoPerfil = {
     { label: 'Receitas', icon: BookOpen, destinos: [RECEITAS, LIVROS] },
     { label: 'Produção', icon: Factory, destinos: [PRODUCAO, ESTOQUE] },
     { label: 'Clientes', icon: Users, destinos: [ENCOMENDAS, CLIENTES, POS_VENDA] },
-    { label: 'Loja', icon: ShoppingBag, destinos: [CARDAPIO, PROMOCOES, CUPOES] },
+    { label: 'Loja', icon: ShoppingBag, destinos: [CARDAPIO, PROMOCOES, CUPOES, MARKETING] },
     { label: 'Resultados', icon: BarChart3, destinos: [VENDAS, RELATORIO, DESPESAS, CALENDARIO] },
   ],
   engrenagem: [CONFIGURACOES, UTILIZADORES, REGISTO, CONTA, EXPORTAR, AJUDA],
@@ -171,6 +175,7 @@ const MENU_DONO: MenuDoPerfil = {
     CARDAPIO,
     PROMOCOES,
     CUPOES,
+    MARKETING,
     RECEITAS,
     LIVROS,
     INSUMOS,
@@ -193,6 +198,16 @@ const MENU_COZINHA: MenuDoPerfil = {
   noMais: [],
 };
 
+/** Marketing: as campanhas e o guia. Sem o livro, sem valores. */
+const MENU_MARKETING: MenuDoPerfil = {
+  inicio: '/marketing',
+  soltos: [MARKETING, GUIA_MARKETING],
+  grupos: [],
+  engrenagem: [CONTA, AJUDA],
+  primarios: [MARKETING, GUIA_MARKETING, CONTA],
+  noMais: [],
+};
+
 /** Leitura: so o livro. */
 const MENU_LIVRO: MenuDoPerfil = {
   inicio: '/receitas',
@@ -204,6 +219,7 @@ const MENU_LIVRO: MenuDoPerfil = {
 };
 
 function menuDe(perfil: Perfil | null): MenuDoPerfil {
+  if (perfil === 'MARKETING') return MENU_MARKETING;
   return perfil === 'OWNER' ? MENU_DONO : perfil === 'KITCHEN' ? MENU_COZINHA : MENU_LIVRO;
 }
 

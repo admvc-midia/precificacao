@@ -7,7 +7,7 @@ import { Field } from '@/components/ui/form-controls';
 import { Input } from '@/components/ui/input';
 import { terminarOutrasSessoes, trocarPalavraPasse } from '@/lib/actions/auth';
 import { PERFIL_LABEL } from '@/lib/auth';
-import { exigirSessao } from '@/lib/sessao';
+import { exigirConta } from '@/lib/sessao';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +16,7 @@ export default async function ContaPage({
 }: {
   searchParams: Promise<{ trocar?: string }>;
 }) {
-  const eu = await exigirSessao();
+  const eu = await exigirConta();
   const { trocar } = await searchParams;
 
   return (

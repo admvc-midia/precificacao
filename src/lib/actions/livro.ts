@@ -16,6 +16,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import { prisma } from '@/lib/db';
+import { parseQty } from '@/lib/money';
 import { apagarFotos, gravarFotos, lerImagem, MAX_FOTO, MAX_MINI } from '@/lib/fotos';
 import {
   apagarOriginal,
@@ -235,6 +236,96 @@ export async function alterarDadosReceita(_prev: ActionState, form: FormData): P
   } catch (err) {
     return { ok: false, message: errorMessage(err) };
   }
+}
+
+/**
+ * Cria a ficha tecnica a partir da receita do livro, com as linhas que o dono
+ * reviu em `/receitas/<id>/ficha`, e liga-as. Fica um produto final, com o
+ * rendimento em unidades/porcoes.
+ *
+ * Os campos chegam como `linha.<n>.incluir`, `linha.<n>.ref` ("ING:<id>" ou
+ * "REC:<id>") e `linha.<n>.qty` (na unidade em que a ficha mostra: kg, L ou
+ * un — a unidade sai do insumo ou da preparacao escolhida, nunca do browser).
+ */
+export async function criarFichaDaReceita(_prev: ActionState, form: FormData): Promise<ActionState> {
+  let fichaId: string;
+  try {
+    const eu = await exigirDono();
+    const id = campo(form, 'id') ?? '';
+    const receita = await prisma.bookRecipe.findUnique({ where: { id }, select: { title: true, fichaId: true } });
+    if (!receita) throw new Error('Receita nao encontrada.');
+    if (receita.fichaId) throw new Error('Esta receita ja tem ficha tecnica.');
+
+    const name = (campo(form, 'name') ?? '').trim();
+    if (!name) throw new Error('De um nome a ficha.');
+    if (name.length > 120) throw new Error('Nome demasiado longo.');
+    if (await prisma.recipe.findUnique({ where: { name }, select: { id: true } })) {
+      throw new Error(`Ja existe uma ficha chamada "${name}". Escolha outro nome.`);
+    }
+    const yieldQty = parseQty(campo(form, 'yieldQty') ?? '');
+    if (!(yieldQty > 0)) throw new Error('Diga quanto rende (unidades ou porcoes).');
+
+    const indices = new Set<string>();
+    for (const k of form.keys()) {
+      const m = /^linha\.(\d+)\.incluir$/.exec(k);
+      if (m && form.get(k) === 'on') indices.add(m[1]);
+    }
+    const pedidas = [...indices]
+      .sort((a, b) => Number(a) - Number(b))
+      .map((i) => ({
+        n: Number(i) + 1,
+        original: campo(form, `linha.${i}.original`) ?? '',
+        ref: campo(form, `linha.${i}.ref`) ?? '',
+        qty: parseQty(campo(form, `linha.${i}.qty`) ?? ''),
+      }));
+    if (pedidas.length === 0) throw new Error('Inclua pelo menos um ingrediente.');
+    for (const l of pedidas) {
+      if (!/^(ING|REC):.+/.test(l.ref)) throw new Error(`Linha ${l.n} ("${l.original}"): escolha o insumo.`);
+      if (!(l.qty > 0)) throw new Error(`Linha ${l.n} ("${l.original}"): escreva a quantidade.`);
+    }
+
+    // A unidade de cada linha sai do que foi escolhido.
+    const ingIds = pedidas.filter((l) => l.ref.startsWith('ING:')).map((l) => l.ref.slice(4));
+    const recIds = pedidas.filter((l) => l.ref.startsWith('REC:')).map((l) => l.ref.slice(4));
+    const [ings, recs] = await Promise.all([
+      prisma.ingredient.findMany({ where: { id: { in: ingIds } }, select: { id: true, baseUnit: true } }),
+      prisma.recipe.findMany({ where: { id: { in: recIds }, kind: 'BASE' }, select: { id: true, yieldUnit: true } }),
+    ]);
+    const baseDe = new Map<string, 'G' | 'ML' | 'UN'>([
+      ...ings.map((i) => [`ING:${i.id}`, i.baseUnit] as const),
+      ...recs.map((r) => [`REC:${r.id}`, r.yieldUnit] as const),
+    ]);
+    const UNIDADE = { G: 'KG', ML: 'L', UN: 'UN' } as const;
+    const itens = pedidas.map((l, sortOrder) => {
+      const base = baseDe.get(l.ref);
+      if (!base) throw new Error(`Linha ${l.n} ("${l.original}"): o insumo ja nao existe.`);
+      return {
+        ingredientId: l.ref.startsWith('ING:') ? l.ref.slice(4) : null,
+        childRecipeId: l.ref.startsWith('REC:') ? l.ref.slice(4) : null,
+        qty: l.qty,
+        unit: UNIDADE[base],
+        sortOrder,
+        notes: l.original.slice(0, 200) || null,
+      };
+    });
+
+    const ficha = await prisma.$transaction(async (tx) => {
+      const f = await tx.recipe.create({
+        data: { name, kind: 'PRODUCT', yieldQty, yieldUnit: 'UN', items: { create: itens } },
+        select: { id: true },
+      });
+      await tx.bookRecipe.update({ where: { id }, data: { fichaId: f.id } });
+      return f;
+    });
+    fichaId = ficha.id;
+    revalidar(id);
+    revalidatePath('/fichas');
+    revalidatePath('/precificacao');
+    await registar({ quem: eu, acao: 'receita.criar-ficha', alvo: receita.title, detalhe: `${name}, ${itens.length} linha(s)` });
+  } catch (err) {
+    return { ok: false, message: errorMessage(err) };
+  }
+  redirect(`/fichas/${fichaId}`);
 }
 
 /** Escolhe a versao em uso — voltar a uma anterior e so isto. */

@@ -23,6 +23,7 @@ const DESCRICAO: Record<Perfil, string> = {
   OWNER: 'Tudo: custos, encomendas, clientes, configurações e contas.',
   KITCHEN: 'O livro de receitas: ver, criar e alterar (cada alteração fica como versão). Não vê custos.',
   READER: 'O livro de receitas, só para ler e imprimir.',
+  MARKETING: 'As campanhas de marketing e o guia: criar, alterar e apagar. Não vê custos, vendas, encomendas nem receitas.',
 };
 
 function CamposPerfil({ atual }: { atual?: Perfil }) {

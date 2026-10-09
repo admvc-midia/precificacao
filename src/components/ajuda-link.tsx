@@ -28,7 +28,8 @@ export type SecaoAjuda =
   | 'utilizadores'
   | 'cardapio'
   | 'promocoes'
-  | 'cupoes';
+  | 'cupoes'
+  | 'marketing';
 
 export function AjudaLink({ secao }: { secao: SecaoAjuda }) {
   return (

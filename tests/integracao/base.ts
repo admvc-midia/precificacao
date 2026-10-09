@@ -82,6 +82,9 @@ export interface Retrato {
   itensDoCardapio: number;
   promocoes: number;
   cupoes: number;
+  campanhas: number;
+  tarefas: number;
+  guia: number;
   settings: Record<string, unknown>;
 }
 
@@ -145,6 +148,9 @@ export async function retrato(): Promise<Retrato> {
     promocoes: await prisma.promotion.count({ where: semMarca }),
     // Os codigos dos cupoes sao maiusculas: "ZZTEMP-...".
     cupoes: await prisma.coupon.count({ where: { NOT: { code: { startsWith: MARCA } } } }),
+    campanhas: await prisma.campaign.count({ where: { NOT: { title: { startsWith: MARCA } } } }),
+    tarefas: await prisma.campaignTask.count({ where: { NOT: { campaign: { title: { startsWith: MARCA } } } } }),
+    guia: await prisma.marketingGuideSection.count({ where: { NOT: { title: { startsWith: MARCA } } } }),
     settings: {
       businessName: s.businessName,
       followUpDays: s.followUpDays,
@@ -260,6 +266,9 @@ export async function limpar(): Promise<void> {
     },
   });
   await prisma.menuSection.deleteMany({ where: { name: { startsWith: MARCA } } });
+  // Marketing: campanhas marcadas (as tarefas vao em cascata) e secoes do guia.
+  await prisma.campaign.deleteMany({ where: { title: { startsWith: MARCA } } });
+  await prisma.marketingGuideSection.deleteMany({ where: { title: { startsWith: MARCA } } });
   await prisma.customer.deleteMany({ where: { name: { startsWith: MARCA } } });
   // Os testes gastam numeros de encomenda; sem isto a casa passava da #1 para a #9.
   // Schema explicito: o adaptador do Prisma 7 nao muda o search_path (ver `tabela`).

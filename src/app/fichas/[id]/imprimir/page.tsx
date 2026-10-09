@@ -31,6 +31,7 @@ import { PrintButton } from '@/components/print-button';
 import { fotoSrc } from '@/lib/foto-url';
 import { buildCostContext } from '@/lib/mappers';
 import { currencyOf } from '@/lib/money';
+import { ReceitaDaFicha } from '@/components/livro/receita-da-ficha';
 import { collectAllergens, type Allergen } from '@/lib/pricing/allergens';
 import { flattenRecipe } from '@/lib/pricing/cost';
 import { getPricingData, getRecipeDetail, getSettings } from '@/lib/queries';
@@ -202,6 +203,9 @@ export default async function ImprimirFichaPage({
             </table>
           )}
         </section>
+
+        {/* O modo de fazer da receita do livro ligada, para quem esta na bancada. */}
+        <ReceitaDaFicha fichaId={id} fichaAtualizada={recipe.updatedAt} papel />
 
         <section className="break-inside-avoid">
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide">

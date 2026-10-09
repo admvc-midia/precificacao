@@ -982,6 +982,9 @@ enum UserRole {
   KITCHEN
   /// O livro de receitas, so para ler e imprimir.
   READER
+  /// As campanhas de marketing e o guia: ver, criar, alterar, apagar. Nao ve
+  /// custos, vendas, encomendas nem o livro de receitas.
+  MARKETING
 }
 
 /// Uma pessoa com conta.
@@ -1455,4 +1458,90 @@ model CouponRecipe {
   recipe   Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
 
   @@id([couponId, recipeId])
+}
+
+// ---------------------------------------------------------------------------
+// Marketing: campanhas, tarefas e o guia
+// ---------------------------------------------------------------------------
+
+enum CampaignStatus {
+  IDEA
+  PLANNED
+  ACTIVE
+  DONE
+  CANCELLED
+}
+
+enum MarketingChannel {
+  INSTAGRAM
+  FACEBOOK
+  WHATSAPP
+  GOOGLE
+  PARTNERS
+  PRINT
+  EVENTS
+  ADS
+}
+
+/// Uma campanha de divulgacao ("Natal para empresas"), com as suas tarefas.
+/// Editada pelo dono e pelo perfil MARKETING.
+model Campaign {
+  id          String             @id @default(cuid())
+  title       String
+  objective   String?
+  /// Texto livre, com a marcacao dos textos do cardapio (`lib/cardapio/texto.ts`).
+  description String?
+  status      CampaignStatus     @default(IDEA)
+  channels    MarketingChannel[]
+
+  startsAt DateTime? @db.Date
+  endsAt   DateTime? @db.Date
+
+  /// Quanto se conta gastar (anuncios, amostras, impressos).
+  budget Decimal? @db.Decimal(12, 2)
+
+  /// Os codigos de cupao ligados a campanha, em maiusculas. Texto, e nao uma
+  /// ligacao a `Coupon`: o marketing planeia o codigo antes de o dono o criar,
+  /// e o resultado continua a contar se o cupao for apagado (as encomendas
+  /// guardam `couponCode`).
+  couponCodes String[]
+
+  position Int            @default(0)
+  tasks    CampaignTask[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+model CampaignTask {
+  id         String    @id @default(cuid())
+  campaignId String
+  campaign   Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  title      String
+  notes      String?
+  /// Quem a tem, em texto livre ("Ana").
+  assignee   String?
+  dueAt      DateTime? @db.Date
+  done       Boolean   @default(false)
+  doneAt     DateTime?
+  position   Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId, position])
+}
+
+/// Uma secao do guia de marketing (canais, conteudo, regras legais...).
+model MarketingGuideSection {
+  id       String @id @default(cuid())
+  title    String
+  /// Com a marcacao dos textos do cardapio.
+  body     String
+  position Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

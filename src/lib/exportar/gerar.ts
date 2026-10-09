@@ -426,7 +426,20 @@ export async function copiaCompleta(): Promise<CopiaCompleta> {
   // nao tem pressa.
   for (const modelo of tabelasDoSchema()) {
     const fora = camposFora(modelo);
-    const linhas = await cliente[acessor(modelo)].findMany();
+    let linhas: unknown[];
+    try {
+      linhas = await cliente[acessor(modelo)].findMany();
+    } catch (err) {
+      // O codigo ja tem a tabela e a base ainda nao (entre o deploy e o
+      // `db push`). Sem a tabela nao ha dados a perder: a copia segue sem
+      // ela — o restauro trata uma tabela ausente como vazia — em vez de a
+      // copia semanal falhar inteira por causa disto.
+      if ((err as { code?: string }).code === 'P2021') {
+        console.warn(`[copia] a tabela ${modelo} ainda nao existe na base; fica de fora.`);
+        continue;
+      }
+      throw err;
+    }
     // Tira depois de ler, e nao com `omit` na consulta: no Prisma 5 o `omit`
     // ainda e experimental. O efeito no ficheiro e o mesmo.
     tabelas[modelo] =

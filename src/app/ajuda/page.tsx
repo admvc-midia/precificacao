@@ -237,6 +237,12 @@ const SECOES: Secao[] = [
             Nos produtos finais, acrescente a <strong>embalagem</strong> (caixa, forminha),
             que também é custo.
           </li>
+          <li>
+            Se a receita estiver no <strong>livro de receitas</strong>, a ficha pode nascer dela
+            (&quot;Criar ficha técnica a partir desta receita&quot;). Ligada, a ficha mostra os
+            ingredientes e o modo de fazer da receita, e a <strong>ficha impressa</strong> leva o
+            modo de fazer.
+          </li>
         </Passos>
         <Nota>
           Faça primeiro as preparações base. Um bolo que usa o &quot;Recheio Brigadeiro&quot;
@@ -305,6 +311,11 @@ const SECOES: Secao[] = [
             produtos com as quantidades (por exemplo, 10 bolos, 100 brigadeiros).
           </li>
           <li>
+            Atalho: o botão <strong>Produzir</strong> na ficha técnica, ou no livro de receitas
+            quando a receita está ligada a uma ficha, pergunta quantas e para quando, cria a
+            ordem só com esse produto e abre-a. A cozinha também o pode usar.
+          </li>
+          <li>
             A app desce por todas as fichas e mostra o que falta comprar, em embalagens
             inteiras, numa lista só. No telemóvel, toque no <strong>círculo</strong> para
             riscar; toque na linha para ver a loja, quanto precisa e onde fica mais barato.
@@ -356,8 +367,14 @@ const SECOES: Secao[] = [
             servem só para esta encomenda — é o que pede o RGPD.
           </li>
           <li>
-            Escolha os produtos e as quantidades. O preço vem da tabela (o da Precificação);
-            se combinou outro, escreva-o — a app mostra o desconto.
+            Escolha os produtos (ou um <strong>combo</strong> do cardápio) e as quantidades. O
+            preço vem do <strong>cardápio</strong> (ou, se o produto não estiver lá, da tabela da
+            Precificação), já com a <strong>promoção</strong> do dia da entrega. Se combinou
+            outro, escreva-o — a app mostra o desconto.
+          </li>
+          <li>
+            Se o cliente trouxe um <strong>cupão</strong>, escreva o código e carregue em{' '}
+            <em>Verificar</em>: a app diz quanto desconta ou porque não vale.
           </li>
           <li>
             Dia e hora, se o cliente levanta ou se entregam (com a morada), e notas como
@@ -551,8 +568,13 @@ const SECOES: Secao[] = [
           (sai das listas e dos livros, mas não se perde); só o dono a apaga de vez.
         </Nota>
         <p>
-          <strong>Ficha técnica:</strong> o dono pode ligar a receita à ficha com os custos.
-          Quando a cozinha altera a receita depois da última alteração da ficha, a app avisa para
+          <strong>Ficha técnica:</strong> numa receita sem ficha, o dono carrega em{' '}
+          <strong>Criar ficha técnica a partir desta receita</strong>. A app lê os ingredientes,
+          propõe o insumo e a quantidade de cada linha e mostra tudo para rever: medidas como
+          &quot;1 lata&quot; ou &quot;2 colheres&quot; não viram quilos sozinhas, e é preciso escrever o
+          peso. A ficha fica ligada à receita e o botão <strong>Produzir</strong> aparece. Para
+          ligar a uma ficha que já existe, use o lápis de &quot;Origem&quot;. Quando a cozinha altera a
+          receita depois da última alteração da ficha, a app avisa (no livro e na ficha) para
           conferir as quantidades — a ficha não muda sozinha.
         </p>
       </>
@@ -574,11 +596,16 @@ const SECOES: Secao[] = [
             <strong>Cozinha</strong> — o livro de receitas: ver, criar, alterar (cada alteração é
             uma versão com o nome dela) e arquivar. Vê também as <strong>encomendas</strong>{' '}
             (o que fazer, quantas e para quando) e as <strong>ordens de produção</strong>: avança
-            a encomenda no pipeline e regista o que produziu. Não vê preços, custos, pagamentos nem
+            a encomenda no pipeline, regista o que produziu e usa o botão{' '}
+            <strong>Produzir</strong> nas receitas ligadas a uma ficha. Não vê preços, custos, pagamentos nem
             o telefone do cliente; criar, cancelar ou reabrir uma encomenda é com o dono.
           </li>
           <li>
             <strong>Leitura</strong> — o livro de receitas, só para ler e imprimir.
+          </li>
+          <li>
+            <strong>Marketing</strong> — as campanhas de marketing e o guia: criar, alterar e
+            apagar. Não vê custos, vendas, encomendas, clientes, cupões nem o livro de receitas.
           </li>
         </Passos>
         <p>
@@ -917,6 +944,43 @@ const SECOES: Secao[] = [
           No link público o cliente só escreve o código, que vai na mensagem do WhatsApp — quem
           confere é a app, quando regista a encomenda. Uma encomenda cancelada deixa de contar
           para os limites. Produtos juntados depois a uma encomenda não levam o desconto.
+        </Nota>
+      </>
+    ),
+  },
+  {
+    id: 'marketing',
+    titulo: 'Marketing',
+    resumo: 'Campanhas de divulgação com tarefas, e o guia da equipa.',
+    href: '/marketing',
+    conteudo: (
+      <>
+        <Passos>
+          <li>
+            Em <strong>Loja → Campanhas de marketing</strong> (o dono) ou logo ao entrar (perfil{' '}
+            <strong>Marketing</strong>, criado em ⚙ → Utilizadores). Da primeira vez,{' '}
+            <strong>Criar o plano</strong> traz 6 campanhas com tarefas e prazos, e o guia.
+          </li>
+          <li>
+            Cada <strong>campanha</strong> tem estado (Ideia, Planeada, A decorrer, Concluída,
+            Cancelada), datas, canais, orçamento e <strong>tarefas</strong> com responsável e
+            prazo. As atrasadas aparecem a vermelho. &quot;As tarefas de…&quot; mostra o que cada
+            pessoa tem por fazer.
+          </li>
+          <li>
+            <strong>Cupões da campanha</strong>: escreva os códigos (ex.: IG10, um por parceiro). A
+            campanha mostra quantas encomendas os usaram e quanto se descontou. Quem cria os
+            cupões é o dono, em Loja → Cupões.
+          </li>
+          <li>
+            O <strong>guia</strong> (canais, conteúdo, anúncios, impressos, regras, como medir) é
+            editável por toda a equipa.
+          </li>
+        </Passos>
+        <Nota>
+          O perfil Marketing só vê as campanhas, o guia, a conta e a ajuda: nada de custos,
+          vendas, encomendas, clientes ou receitas. O valor vendido com cada cupão só aparece ao
+          dono.
         </Nota>
       </>
     ),

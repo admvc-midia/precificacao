@@ -26,7 +26,7 @@ import { diferencas, registar } from '@/lib/registo';
 import { exigirDono } from '@/lib/sessao';
 import { errorMessage, type ActionState } from './shared';
 
-const PERFIS: Perfil[] = ['OWNER', 'KITCHEN', 'READER'];
+const PERFIS: Perfil[] = ['OWNER', 'KITCHEN', 'READER', 'MARKETING'];
 
 function campo(form: FormData, nome: string): string | undefined {
   return form.has(nome) ? String(form.get(nome) ?? '').trim() : undefined;
