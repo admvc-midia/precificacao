@@ -89,6 +89,17 @@ export async function deleteRecipe(
         message: `Esta preparacao e usada em ${usage} ficha(s). Remova-a delas primeiro.`,
       };
     }
+    // Um combo do cardapio segura a ficha (o combo deixaria de bater certo).
+    const combos = await prisma.menuComboItem.findMany({
+      where: { recipeId: id },
+      select: { combo: { select: { name: true } } },
+    });
+    if (combos.length > 0) {
+      return {
+        ok: false,
+        message: `Esta ficha esta no combo ${combos.map((c) => `"${c.combo.name ?? 'sem nome'}"`).join(', ')} do cardapio. Tire-a do combo primeiro.`,
+      };
+    }
 
     const apagada = await prisma.recipe.delete({ where: { id } });
     // Depois de apagar a ficha, e nunca antes: se o delete falhar, a foto
