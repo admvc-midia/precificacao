@@ -324,6 +324,25 @@ export function origemDepoisDeFalhar(
 // ---------------------------------------------------------------------------
 
 /**
+ * Abertas sem sessao: a porta, a saida (que apaga um cookie que ja nao vale)
+ * e o cardapio publico, que e o link da bio do Instagram.
+ */
+const SEM_SESSAO = new Set(['/entrar', '/sair', '/cardapio']);
+
+/**
+ * As fotos do cardapio publico (itens e capas das secoes). As rotas so
+ * entregam a foto de um item ou secao publicados (ver `api/cardapio/foto/`),
+ * por isso podem estar abertas; as outras fotos (`/api/fotos`) continuam
+ * atras do login.
+ */
+const FOTOS_DO_CARDAPIO = /^\/api\/cardapio\/foto\/(?:secao\/)?[A-Za-z0-9_-]+$/;
+
+/** O porteiro (`proxy.ts`) deixa passar sem sessao? */
+export function abertaSemSessao(pathname: string): boolean {
+  return SEM_SESSAO.has(pathname) || FOTOS_DO_CARDAPIO.test(pathname);
+}
+
+/**
  * O que a cozinha e a leitura podem abrir. Tudo o resto — custos, clientes,
  * configuracoes — e so do dono. Lista do que se pode, e nao do que nao se
  * pode: uma pagina nova nasce fechada a quem nao e dono.

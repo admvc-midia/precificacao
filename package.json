@@ -17,7 +17,8 @@
     "dev:turbo": "next dev",
     "lint:fix": "eslint . --fix",
     "test:db": "vitest run --config vitest.integracao.mts",
-    "test:db:preparar": "tsx tools/base-de-testes.mts"
+    "test:db:preparar": "tsx tools/base-de-testes.mts",
+    "dev:teste": "tsx tools/dev-teste.mts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",

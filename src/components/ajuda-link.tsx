@@ -25,7 +25,10 @@ export type SecaoAjuda =
   | 'relatorio'
   | 'receitas'
   | 'calendario'
-  | 'utilizadores';
+  | 'utilizadores'
+  | 'cardapio'
+  | 'promocoes'
+  | 'cupoes';
 
 export function AjudaLink({ secao }: { secao: SecaoAjuda }) {
   return (

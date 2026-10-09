@@ -354,7 +354,11 @@ export async function getCustomerOrder(id: string) {
       channel: true,
       productionOrder: { select: { id: true, name: true, producedAt: true } },
       lines: {
-        include: { recipe: { select: { id: true, name: true } } },
+        include: {
+          recipe: { select: { id: true, name: true } },
+          promotion: { select: { name: true } },
+          menuItem: { select: { name: true, kind: true } },
+        },
         orderBy: { id: 'asc' },
       },
     },

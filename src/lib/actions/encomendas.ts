@@ -12,6 +12,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+import { diaEmLisboa } from '@/lib/datas';
 import { prisma } from '@/lib/db';
 import { parseDecimal, parseQty } from '@/lib/money';
 import {
@@ -22,8 +23,16 @@ import {
   type OrderStatus,
 } from '@/lib/pricing/encomendas';
 import { followUpDate } from '@/lib/pricing/clientes';
-import { priceForRecipe, referenceChannel } from '@/lib/pricing/sugerido';
-import { getCostedRecipes } from '@/lib/queries';
+import {
+  aplicarCupaoAsLinhas,
+  dadosDePreco,
+  linhasDaEntrada,
+  paraGravar,
+  type CupaoAplicado,
+  type LinhaCalculada,
+} from '@/lib/cardapio/encomenda';
+import { currencyOf, formatMoney } from '@/lib/money';
+import { getSettings } from '@/lib/queries';
 import { alvoDoFormulario, registar, resumoDoFormulario } from '@/lib/registo';
 import { exigirDono, exigirPerfil } from '@/lib/sessao';
 import { errorMessage, type ActionState } from './shared';
@@ -43,58 +52,6 @@ function revalidar(id?: string) {
 /** Texto do formulario, ou `undefined` se o campo nao veio (≠ vazio). */
 function campo(form: FormData, nome: string): string | undefined {
   return form.has(nome) ? String(form.get(nome) ?? '').trim() : undefined;
-}
-
-/**
- * Preco de tabela e custos de hoje, por ficha. Uma leitura so para todas as
- * linhas: o custo de um produto pode descer por varias sub-receitas.
- */
-async function tabelaDeHoje() {
-  const { recipes, settings, channels } = await getCostedRecipes();
-  const ref = referenceChannel(channels);
-  return new Map(
-    recipes.map((r) => {
-      const preco = priceForRecipe(r, ref, settings);
-      return [
-        r.id,
-        {
-          name: r.name,
-          kind: r.kind,
-          error: r.error,
-          listPrice: preco?.feasible && preco.price > 0 ? preco.price : null,
-          food: r.cost?.foodCostPerUnit ?? 0,
-          packaging: r.cost?.packagingCost ?? 0,
-          deliveryPackaging: r.cost?.deliveryPackagingCost ?? 0,
-        },
-      ];
-    }),
-  );
-}
-
-type Tabela = Awaited<ReturnType<typeof tabelaDeHoje>>;
-
-/** Os dados de uma linha nova, com o preco combinado ou o de tabela. */
-function linhaNova(tabela: Tabela, recipeId: string, qty: number, price: number | null) {
-  const t = tabela.get(recipeId);
-  if (!t || t.kind !== 'PRODUCT') throw new Error('Produto nao encontrado.');
-  if (t.error) throw new Error(`"${t.name}": ${t.error}`);
-  if (!(qty > 0)) throw new Error(`A quantidade de "${t.name}" tem de ser maior que zero.`);
-
-  const unitPrice = price ?? t.listPrice;
-  if (unitPrice === null) {
-    throw new Error(`"${t.name}" nao tem preco de tabela. Escreva o preco combinado.`);
-  }
-  if (unitPrice < 0) throw new Error(`O preco de "${t.name}" nao pode ser negativo.`);
-
-  return {
-    recipeId,
-    qty,
-    unitPrice,
-    listPrice: t.listPrice,
-    unitFoodCost: t.food,
-    unitPackagingCost: t.packaging,
-    unitDeliveryPackagingCost: t.deliveryPackaging,
-  };
 }
 
 /**
@@ -166,6 +123,80 @@ async function resolverCliente(form: FormData): Promise<string | null> {
   return novo.id;
 }
 
+/**
+ * O cliente para contar os usos do cupao, sem o criar: o escolhido, o que
+ * tem o mesmo telefone, ou um novo (que nunca usou nada). O cliente so e
+ * criado depois de o cupao passar, para uma recusa nao deixar fichas soltas.
+ */
+async function clienteProvavel(form: FormData): Promise<{ id: string | null; temCliente: boolean }> {
+  const id = campo(form, 'customerId') ?? '';
+  if (id) return { id, temCliente: true };
+  const name = campo(form, 'customerName') ?? '';
+  if (!name) return { id: null, temCliente: false };
+  const phone = campo(form, 'customerPhone') ?? '';
+  if (phone) {
+    const alvo = normalizePhone(phone);
+    const comTelefone = await prisma.customer.findMany({
+      where: { phone: { not: null } },
+      select: { id: true, phone: true },
+    });
+    const mesmo = comTelefone.find((c) => normalizePhone(c.phone!) === alvo);
+    if (mesmo) return { id: mesmo.id, temCliente: true };
+  }
+  return { id: null, temCliente: true };
+}
+
+/**
+ * As linhas da nova encomenda, com cardapio, promocoes do dia da entrega,
+ * combos desdobrados e o cupao (se houver). Lanca com a mensagem para o
+ * ecra quando algo nao serve.
+ */
+async function calcularEncomenda(
+  form: FormData,
+  dueAt: Date,
+): Promise<{ linhas: LinhaCalculada[]; cupao: CupaoAplicado | null }> {
+  const entradas = readOrderLines(form, parseQty, parseDecimal);
+  if (entradas.length === 0) throw new Error('Junte pelo menos um produto.');
+
+  // `dueAt` e a hora de Lisboa guardada como UTC: o dia e o da data ISO.
+  const dia = dueAt.toISOString().slice(0, 10);
+  const dados = await dadosDePreco();
+  const linhas = entradas.flatMap((e) => linhasDaEntrada(dados, e, dia));
+
+  const codigo = campo(form, 'couponCode') ?? '';
+  if (!codigo) return { linhas, cupao: null };
+  const cupao = await aplicarCupaoAsLinhas(
+    codigo,
+    linhas,
+    await clienteProvavel(form),
+    dia,
+    currencyOf(await getSettings()),
+  );
+  return { linhas: cupao.linhas, cupao };
+}
+
+/**
+ * "Verificar" o cupao antes de criar a encomenda: as mesmas contas, sem
+ * gravar nada. A mensagem diz quanto desconta ou porque nao vale.
+ */
+export async function verificarCupao(_prev: ActionState, form: FormData): Promise<ActionState> {
+  try {
+    await exigirDono();
+    if (!campo(form, 'couponCode')) throw new Error('Escreva o codigo do cupao.');
+    // Sem dia escolhido, conta o de hoje.
+    const dueAt = parseLocalDateTime(campo(form, 'dueAt') ?? '') ?? new Date(`${diaEmLisboa(new Date())}T12:00:00Z`);
+    const { linhas, cupao } = await calcularEncomenda(form, dueAt);
+    const cfg = currencyOf(await getSettings());
+    const total = linhas.reduce((a, l) => a + l.total, 0);
+    return {
+      ok: true,
+      message: `${cupao!.couponCode}: menos ${formatMoney(cupao!.couponDiscount, cfg)}. A encomenda fica em ${formatMoney(total, cfg)}.`,
+    };
+  } catch (err) {
+    return { ok: false, message: errorMessage(err) };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Criar e alterar
 // ---------------------------------------------------------------------------
@@ -186,11 +217,7 @@ export async function createCustomerOrder(
       throw new Error('Para entregar, escreva a morada.');
     }
 
-    const linhas = readOrderLines(form, parseQty, parseDecimal);
-    if (linhas.length === 0) throw new Error('Junte pelo menos um produto.');
-
-    const tabela = await tabelaDeHoje();
-    const dados = linhas.map((l) => linhaNova(tabela, l.recipeId, l.qty, l.price));
+    const { linhas, cupao } = await calcularEncomenda(form, dueAt);
 
     const channelId = campo(form, 'channelId') || null;
     const customerId = await resolverCliente(form);
@@ -203,7 +230,10 @@ export async function createCustomerOrder(
         fulfillment,
         address,
         notes: campo(form, 'notes') || null,
-        lines: { create: dados },
+        couponId: cupao?.couponId ?? null,
+        couponCode: cupao?.couponCode ?? null,
+        couponDiscount: cupao?.couponDiscount ?? null,
+        lines: { create: linhas.map(paraGravar) },
       },
     });
     id = order.id;
@@ -402,25 +432,30 @@ export async function addCustomerOrderLine(
     if (!orderId) throw new Error('Encomenda nao informada.');
     if (!recipeId) throw new Error('Escolha um produto.');
 
+    const order = await prisma.customerOrder.findUnique({ where: { id: orderId }, select: { dueAt: true } });
+    if (!order) throw new Error('Encomenda nao encontrada.');
+
+    // Como na criacao: cardapio e promocao do dia da entrega, ou o preco
+    // escrito. O cupao da encomenda nao se reaplica a linhas novas.
     const priceRaw = campo(form, 'price') ?? '';
-    const tabela = await tabelaDeHoje();
-    const nova = linhaNova(
-      tabela,
-      recipeId,
-      parseQty(campo(form, 'qty') ?? ''),
-      priceRaw ? parseDecimal(priceRaw) : null,
+    const novas = linhasDaEntrada(
+      await dadosDePreco(),
+      { recipeId, qty: parseQty(campo(form, 'qty') ?? ''), price: priceRaw ? parseDecimal(priceRaw) : null },
+      order.dueAt.toISOString().slice(0, 10),
     );
 
-    const igual = await prisma.customerOrderLine.findFirst({
-      where: { orderId, recipeId, unitPrice: nova.unitPrice },
-    });
-    if (igual) {
-      await prisma.customerOrderLine.update({
-        where: { id: igual.id },
-        data: { qty: Number(igual.qty) + nova.qty },
+    for (const nova of novas.map(paraGravar)) {
+      const igual = await prisma.customerOrderLine.findFirst({
+        where: { orderId, recipeId: nova.recipeId, unitPrice: nova.unitPrice, menuItemId: nova.menuItemId },
       });
-    } else {
-      await prisma.customerOrderLine.create({ data: { orderId, ...nova } });
+      if (igual) {
+        await prisma.customerOrderLine.update({
+          where: { id: igual.id },
+          data: { qty: Number(igual.qty) + nova.qty },
+        });
+      } else {
+        await prisma.customerOrderLine.create({ data: { orderId, ...nova } });
+      }
     }
 
     revalidar(orderId);

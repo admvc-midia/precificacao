@@ -795,6 +795,133 @@ const SECOES: Secao[] = [
     ),
   },
   {
+    id: 'cardapio',
+    titulo: 'Cardápio (link público)',
+    resumo: 'O menu que o cliente abre pelo Instagram e encomenda pelo WhatsApp.',
+    href: '/loja/cardapio',
+    conteudo: (
+      <>
+        <Passos>
+          <li>
+            Em <strong>Loja → Cardápio</strong>. Da primeira vez, <strong>Criar a partir do
+            PDF</strong> monta as secções do &quot;Menu Bolos&quot; (Bolos, Caseirinhos,
+            Informações importantes, Cuidados extras) com os textos e os preços.
+          </li>
+          <li>
+            <strong>Secções</strong> — cada uma é <em>Lista</em> (nome, descrição, preço),{' '}
+            <em>Galeria</em> (fotos grandes, duas por linha — boa para caixas e kits),{' '}
+            <em>Cartões</em> (tamanhos lado a lado, como 16 cm e 20 cm) ou <em>Só texto</em>.
+            Quando todos os itens de uma lista custam o mesmo, o preço aparece uma vez no título
+            (&quot;Valor: 25 €&quot;). Nos textos: <code>## Título</code> faz um subtítulo rosa,{' '}
+            <code>### Título</code> uma pílula lilás, <code>- item</code> um marcador,{' '}
+            <code>&gt; texto</code> um destaque roxo, <code>~ texto</code> uma nota pequena e{' '}
+            <code>**assim**</code> fica a negrito.
+          </li>
+          <li>
+            <strong>Produtos</strong> — de uma ficha técnica (o preço começa no de tabela) ou só
+            com nome e preço. Um item <em>sem ficha</em> aparece no link, mas só entra nas
+            encomendas da app depois de o ligar a uma ficha (no lápis do item).
+          </li>
+          <li>
+            <strong>Fotos</strong> — o botão da câmara em cada item põe uma foto própria; sem
+            ela, o link usa a foto da ficha técnica. Cada secção (menos as de texto) pode ter
+            uma foto de capa. No link, tocar numa foto abre-a em grande.
+          </li>
+          <li>
+            <strong>Combos</strong> — várias fichas a um preço fixo. Numa encomenda, o combo
+            desdobra-se nas fichas que leva, com o preço repartido, para a produção e as vendas
+            por produto continuarem certas.
+          </li>
+          <li>
+            O <strong>preço do cardápio é seu</strong>: não muda quando os custos mudam. Se a
+            tabela passar a dizer outro valor, o item mostra um aviso e o botão{' '}
+            <em>Usar tabela</em>.
+          </li>
+          <li>
+            Ligue o <strong>link</strong> e ponha-o na bio do Instagram. O cliente escolhe as
+            quantidades e carrega em <em>Encomendar</em>: abre o WhatsApp da casa com a lista, o
+            total estimado e o cupão escritos. A encomenda regista-se na app como sempre.
+          </li>
+          <li>
+            O link tem a identidade do site (logótipo, cores e estampa). Segue o claro ou o
+            escuro do telemóvel do cliente, e o botão da lua/sol no canto troca e fica
+            lembrado.
+          </li>
+        </Passos>
+        <Nota>
+          O link mostra o nome, a descrição, a foto, o preço com IVA, as promoções e os
+          alergénios de cada item — nunca custos. Um produto com insumos por rever diz
+          &quot;informação ainda incompleta — pergunte-nos&quot;, e nunca &quot;sem
+          alergénios&quot;. Rascunhos, itens escondidos e secções escondidas não aparecem.
+          Mudanças no cardápio aparecem logo; nomes e alergénios das fichas, em até 5 minutos.
+        </Nota>
+      </>
+    ),
+  },
+  {
+    id: 'promocoes',
+    titulo: 'Promoções',
+    resumo: 'Descontos com data de início e fim, sobre itens do cardápio.',
+    href: '/loja/promocoes',
+    conteudo: (
+      <>
+        <Passos>
+          <li>
+            Quatro tipos: <strong>percentagem</strong> (-15%), <strong>valor por unidade</strong>{' '}
+            (-0,50 €), <strong>leve X, pague Y</strong> (leve 12, pague 10, por lotes: 25 = 2
+            lotes + 1) e <strong>preço por quantidade</strong> (a partir de 50, 0,90 € cada).
+            Para um combo a preço fixo, crie um combo no Cardápio.
+          </li>
+          <li>
+            O primeiro e o último dia contam. Sem data de fim, dura até a desligar.
+          </li>
+          <li>
+            No link, a percentagem e o valor aparecem com o preço riscado; as outras, como
+            etiqueta. Na <strong>nova encomenda</strong> o preço já vem com a promoção do{' '}
+            <em>dia da entrega</em>. Se escrever outro preço à mão, vale o seu.
+          </li>
+        </Passos>
+        <Nota>
+          Várias promoções no mesmo item não se somam: vale a mais barata para o cliente. Cada
+          promoção mostra o CMV que fica e avisa quando passa do alvo.
+        </Nota>
+      </>
+    ),
+  },
+  {
+    id: 'cupoes',
+    titulo: 'Cupões de desconto',
+    resumo: 'Códigos que o cliente diz e a app confere na encomenda.',
+    href: '/loja/cupoes',
+    conteudo: (
+      <>
+        <Passos>
+          <li>
+            Um cupão tem um <strong>código</strong> (NATAL25), um desconto em{' '}
+            <strong>percentagem</strong> ou em <strong>valor fixo</strong>, datas, e pode ter
+            encomenda mínima, limite de usos no total e por cliente.
+          </li>
+          <li>
+            Vale para <strong>toda a encomenda</strong> ou <strong>só para algumas fichas</strong>{' '}
+            (também quando vêm dentro de um combo). Por omissão não se junta a promoções: as
+            linhas já em promoção ficam de fora.
+          </li>
+          <li>
+            Na <strong>nova encomenda</strong>, escreva o código e carregue em{' '}
+            <em>Verificar</em>: a app diz quanto desconta ou porque não vale (terminou, já foi
+            usado, falta o mínimo…). O desconto fica nos preços das linhas, e a encomenda guarda
+            o código.
+          </li>
+        </Passos>
+        <Nota>
+          No link público o cliente só escreve o código, que vai na mensagem do WhatsApp — quem
+          confere é a app, quando regista a encomenda. Uma encomenda cancelada deixa de contar
+          para os limites. Produtos juntados depois a uma encomenda não levam o desconto.
+        </Nota>
+      </>
+    ),
+  },
+  {
     id: 'painel',
     titulo: 'Painel',
     resumo: 'O resumo: onde está o lucro e onde está o risco.',

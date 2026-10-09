@@ -18,16 +18,24 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field, Select } from '@/components/ui/form-controls';
 import { Input, Textarea } from '@/components/ui/input';
-import { createCustomerOrder } from '@/lib/actions/encomendas';
+import { createCustomerOrder, verificarCupao } from '@/lib/actions/encomendas';
 import { formatMoney, parseDecimal, parseQty, type CurrencyConfig } from '@/lib/money';
+import { precoDaLinha, type PromocaoInput } from '@/lib/pricing/cardapio';
 import { SOURCE_LABEL, type CustomerSource } from '@/lib/pricing/clientes';
 import { cn } from '@/lib/utils';
 
 export interface ProdutoOpcao {
   id: string;
   name: string;
-  /** Preco de tabela; nulo quando a ficha nao tem preco calculavel. */
+  /** Preco do cardapio, ou de tabela; nulo quando a ficha nao tem preco calculavel. */
   listPrice: number | null;
+  /** O item do cardapio, para as promocoes. */
+  menuItemId: string | null;
+}
+
+export interface ComboOpcao extends ProdutoOpcao {
+  /** "6 × Brigadeiro, 1 × Bolo 16 cm". */
+  leva: string;
 }
 
 export interface ClienteOpcao {
@@ -52,8 +60,16 @@ function rotulo(c: ClienteOpcao): string {
   return c.phone ? `${c.name} · ${c.phone}` : c.name;
 }
 
+/** O dia (AAAA-MM-DD) do campo datetime-local, ou hoje em Lisboa. */
+function diaDaEntrega(valor: string): string {
+  if (/^\d{4}-\d{2}-\d{2}/.test(valor)) return valor.slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon' }).format(new Date());
+}
+
 export function NovaEncomenda({
   produtos,
+  combos,
+  promocoes,
   clientes,
   canais,
   canalPadrao,
@@ -61,6 +77,8 @@ export function NovaEncomenda({
   clienteInicial,
 }: {
   produtos: ProdutoOpcao[];
+  combos: ComboOpcao[];
+  promocoes: PromocaoInput[];
   clientes: ClienteOpcao[];
   canais: Array<{ id: string; name: string }>;
   canalPadrao: string;
@@ -81,8 +99,16 @@ export function NovaEncomenda({
   const [origem, setOrigem] = useState('');
 
   const [entrega, setEntrega] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
+  const [dueAt, setDueAt] = useState('');
+  const [cupao, setCupao] = useState('');
+  const [verificacao, verificar] = useActionState(verificarCupao, INICIAL);
+  const [aVerificar, startVerificar] = useTransition();
 
-  const porId = useMemo(() => new Map(produtos.map((p) => [p.id, p])), [produtos]);
+  const porId = useMemo(
+    () => new Map<string, ProdutoOpcao | ComboOpcao>([...produtos, ...combos].map((p) => [p.id, p])),
+    [produtos, combos],
+  );
+  const dia = diaDaEntrega(dueAt);
   const porRotulo = useMemo(() => new Map(clientes.map((c) => [rotulo(c), c])), [clientes]);
   const escolhido = clienteId ? clientes.find((c) => c.id === clienteId) : undefined;
 
@@ -103,12 +129,22 @@ export function NovaEncomenda({
     setLinhas((ls) => ls.map((l) => (l.key === key ? { ...l, [campo]: valor } : l)));
   }
 
-  // Totais ao vivo, com o preco escrito ou o de tabela.
+  // Totais ao vivo: o preco escrito, ou o do cardapio com a promocao do dia
+  // da entrega. O servidor refaz as contas ao gravar.
   const contas = linhas.map((l) => {
     const p = porId.get(l.recipeId);
     const qty = parseQty(l.qty);
-    const unit = l.price.trim() ? parseDecimal(l.price) : (p?.listPrice ?? 0);
-    return { total: qty * unit, tabela: p?.listPrice != null ? qty * p.listPrice : null };
+    const sugerido =
+      p?.listPrice != null && qty > 0
+        ? precoDaLinha(p.menuItemId, p.listPrice, qty, promocoes, dia)
+        : null;
+    const total = l.price.trim() ? qty * parseDecimal(l.price) : (sugerido?.total ?? 0);
+    return {
+      total,
+      tabela: p?.listPrice != null ? qty * p.listPrice : null,
+      promo: l.price.trim() ? null : (sugerido?.promotionName ?? null),
+      unitSugerido: sugerido?.unitPrice ?? p?.listPrice ?? null,
+    };
   });
   const total = contas.reduce((a, c) => a + c.total, 0);
   const tabela = contas.reduce((a, c) => a + (c.tabela ?? c.total), 0);
@@ -226,7 +262,14 @@ export function NovaEncomenda({
           </CardHeader>
           <CardContent className="space-y-4">
             <Field label="Dia e hora" htmlFor="enc-dia">
-              <Input id="enc-dia" name="dueAt" type="datetime-local" required />
+              <Input
+                id="enc-dia"
+                name="dueAt"
+                type="datetime-local"
+                required
+                value={dueAt}
+                onChange={(e) => setDueAt(e.target.value)}
+              />
             </Field>
 
             <fieldset className="space-y-1.5">
@@ -286,12 +329,14 @@ export function NovaEncomenda({
         <CardHeader>
           <CardTitle>Produtos</CardTitle>
           <CardDescription>
-            O preço vem da tabela. Escreva outro se combinou um diferente.
+            O preço vem do cardápio (ou da tabela), com a promoção do dia da entrega. Escreva
+            outro se combinou um diferente.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {linhas.map((l, i) => {
             const p = porId.get(l.recipeId);
+            const conta = contas[i];
             return (
               <div
                 key={l.key}
@@ -313,7 +358,24 @@ export function NovaEncomenda({
                         {op.name}
                       </option>
                     ))}
+                    {combos.length ? (
+                      <optgroup label="Combos do cardápio">
+                        {combos.map((op) => (
+                          <option key={op.id} value={op.id}>
+                            {op.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
                   </Select>
+                  {p && 'leva' in p ? (
+                    <p className="text-xs text-muted-foreground">Leva {p.leva}.</p>
+                  ) : null}
+                  {conta.promo ? (
+                    <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                      Promoção: {conta.promo}
+                    </p>
+                  ) : null}
                 </Field>
                 <Field label="Qtd." htmlFor={`enc-q-${l.key}`}>
                   <Input
@@ -333,8 +395,8 @@ export function NovaEncomenda({
                     value={l.price}
                     onChange={(e) => mudarLinha(l.key, 'price', e.target.value)}
                     placeholder={
-                      p?.listPrice != null
-                        ? formatMoney(p.listPrice, currency).replace(/\s/g, ' ')
+                      conta.unitSugerido != null
+                        ? formatMoney(conta.unitSugerido, currency).replace(/\s/g, ' ')
                         : 'preço'
                     }
                   />
@@ -382,6 +444,59 @@ export function NovaEncomenda({
               ) : null}
             </span>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Cupão</CardTitle>
+          <CardDescription>
+            Se o cliente trouxe um código. O desconto é conferido ao criar a encomenda.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2">
+            <Input
+              name="couponCode"
+              aria-label="Código do cupão"
+              autoCapitalize="characters"
+              autoComplete="off"
+              value={cupao}
+              onChange={(e) => setCupao(e.target.value.toUpperCase())}
+              placeholder="BEMVINDA10"
+              className="max-w-xs uppercase"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!cupao.trim() || aVerificar}
+              onClick={(e) => {
+                const dados = new FormData(e.currentTarget.form!);
+                startVerificar(() => verificar(dados));
+              }}
+            >
+              {aVerificar ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+              Verificar
+            </Button>
+          </div>
+          {verificacao.message && cupao.trim() ? (
+            <p
+              role="status"
+              className={cn(
+                'flex items-start gap-2 text-sm',
+                verificacao.ok
+                  ? 'text-emerald-700 dark:text-emerald-400'
+                  : 'text-red-700 dark:text-red-400',
+              )}
+            >
+              {verificacao.ok ? (
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              ) : (
+                <XCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              )}
+              <span>{verificacao.message}</span>
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 

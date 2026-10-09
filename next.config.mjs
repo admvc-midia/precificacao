@@ -44,6 +44,9 @@ const COMUNS = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // `npm run dev:teste` usa outra pasta: o Next 16 so deixa correr um
+  // `next dev` por pasta de build, e assim corre ao lado do `npm run dev`.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   // Para a pagina de Ajuda dizer que versao esta publicada. Ficam gravados no
   // momento do build: a data de hoje e, na Vercel, o commit que foi publicado.
   // Localmente nao ha commit, e a Ajuda diz "desenvolvimento".

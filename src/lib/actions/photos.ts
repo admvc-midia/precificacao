@@ -12,8 +12,9 @@
  * a mais no Blob — nunca uma ficha a apontar para uma foto que ja nao existe.
  */
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 
+import { TAG_CARDAPIO } from '@/lib/cardapio/consultas';
 import { prisma } from '@/lib/db';
 import { apagarFotos, gravarFotos, lerImagem, MAX_FOTO, MAX_MINI } from '@/lib/fotos';
 import { exigirDono } from '@/lib/sessao';
@@ -23,6 +24,8 @@ function revalidar(id: string) {
   revalidatePath(`/fichas/${id}`);
   revalidatePath('/fichas');
   revalidatePath('/precificacao', 'layout');
+  // A foto aparece no cardapio publico, que esta em cache.
+  updateTag(TAG_CARDAPIO);
 }
 
 export async function saveRecipePhoto(_prev: ActionState, form: FormData): Promise<ActionState> {

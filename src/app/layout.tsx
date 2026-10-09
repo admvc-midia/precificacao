@@ -55,6 +55,27 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // O proxy so leu o cookie; aqui confirma-se na base que a conta continua
   // ativa e igual. Se nao, sai — pela rota que pode apagar o cookie.
   const caminho = (await headers()).get('x-caminho') ?? '';
+
+  // O cardapio publico e de quem vem do Instagram: sem sessao e sem a barra
+  // da app. O tema (claro/escuro) e o mesmo mecanismo, com o botao na pagina.
+  if (caminho === '/cardapio') {
+    return (
+      <html
+        lang="pt-PT"
+        data-tema={tema}
+        className={`${titulo.variable}${tema === 'escuro' ? ' dark' : ''}`}
+        suppressHydrationWarning
+      >
+        <head>
+          <Script id="tema" strategy="beforeInteractive">
+            {SCRIPT_TEMA}
+          </Script>
+        </head>
+        <body>{children}</body>
+      </html>
+    );
+  }
+
   const aberta = caminho === '/entrar' || caminho === '/sair';
   const eu = aberta ? null : await utilizadorAtual();
   if (!aberta && !eu) redirect('/sair?motivo=sessao');

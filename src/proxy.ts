@@ -19,10 +19,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-import { COOKIE, inicioDoPerfil, lerSessao, rotaPermitida } from '@/lib/auth';
-
-/** Abertas sem sessao: a porta, e a saida (que apaga um cookie que ja nao vale). */
-const SEM_SESSAO = new Set(['/entrar', '/sair']);
+import { abertaSemSessao, COOKIE, inicioDoPerfil, lerSessao, rotaPermitida } from '@/lib/auth';
 
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
@@ -33,7 +30,7 @@ export function proxy(request: NextRequest) {
   cabecalhos.set('x-caminho', pathname);
   const seguir = () => NextResponse.next({ request: { headers: cabecalhos } });
 
-  if (SEM_SESSAO.has(pathname)) return seguir();
+  if (abertaSemSessao(pathname)) return seguir();
 
   const sessao = lerSessao(request.cookies.get(COOKIE)?.value);
   if (!sessao) {
@@ -64,9 +61,11 @@ export const config = {
    * `icon` ou `logo-` deixaria tambem passar, sem sessao, qualquer rota futura
    * que comecasse assim (`/iconografia`) — e nada avisaria. So as duas pastas
    * do `_next` ficam por prefixo, porque tem subcaminhos. Um ficheiro novo em
-   * `public/` que a pagina de entrada precise tem de entrar nesta lista.
+   * `public/` que a pagina de entrada ou o cardapio publico precisem tem de
+   * entrar nesta lista (o cardapio usa o logotipo e a estampa, e a imagem
+   * `cardapio-partilha.png` das redes sociais).
    */
   matcher: [
-    '/((?!_next/static|_next/image|(?:favicon\\.ico|robots\\.txt|icon\\.svg|apple-icon\\.png|logo-creme\\.png|logo-vinho\\.png|estampa\\.svg|estampa-escura\\.svg)$).*)',
+    '/((?!_next/static|_next/image|(?:favicon\\.ico|robots\\.txt|icon\\.svg|apple-icon\\.png|logo-creme\\.png|logo-vinho\\.png|estampa\\.svg|estampa-escura\\.svg|cardapio-partilha\\.png)$).*)',
   ],
 };

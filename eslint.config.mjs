@@ -11,7 +11,7 @@ import typescript from 'eslint-config-next/typescript';
  * pagina no browser.
  */
 const config = [
-  { ignores: ['.next/**', 'node_modules/**', 'next-env.d.ts', 'src/generated/**'] },
+  { ignores: ['.next/**', '.next-teste/**', 'node_modules/**', 'next-env.d.ts', 'src/generated/**'] },
 
   ...(Array.isArray(coreWebVitals) ? coreWebVitals : [coreWebVitals]),
   ...(Array.isArray(typescript) ? typescript : [typescript]),

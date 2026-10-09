@@ -10,7 +10,11 @@
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-vi.mock('next/cache', () => ({ revalidatePath: () => {} }));
+vi.mock('next/cache', () => ({
+  revalidatePath: () => {},
+  updateTag: () => {},
+  unstable_cache: <T,>(fn: T) => fn,
+}));
 vi.mock('next/navigation', () => ({
   redirect: (url: string) => {
     throw new Error(`REDIRECT ${url}`);

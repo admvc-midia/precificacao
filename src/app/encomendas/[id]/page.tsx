@@ -54,6 +54,8 @@ import {
   updateCustomerOrderLine,
 } from '@/lib/actions/encomendas';
 import { updateCustomer } from '@/lib/actions/clientes';
+import { PREFIXO_COMBO } from '@/lib/cardapio/encomenda';
+import { prisma } from '@/lib/db';
 import { num, toChannelInput } from '@/lib/mappers';
 import { formatMoney, formatPercent } from '@/lib/money';
 import {
@@ -112,10 +114,14 @@ export default async function EncomendaPage({
     return <EncomendaCozinha e={so} />;
   }
 
-  const [e, { recipes, settings, currency, channels }, canais] = await Promise.all([
+  const [e, { recipes, settings, currency, channels }, canais, itensDoCardapio] = await Promise.all([
     getCustomerOrder(id),
     getCostedRecipes(),
     getChannels(),
+    prisma.menuItem.findMany({
+      select: { id: true, kind: true, name: true, recipeId: true, price: true },
+      orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+    }),
   ]);
   if (!e) notFound();
 
@@ -137,6 +143,7 @@ export default async function EncomendaPage({
   );
 
   const ref = referenceChannel(channels);
+  const doCardapio = new Map(itensDoCardapio.filter((i) => i.recipeId).map((i) => [i.recipeId!, num(i.price)]));
   const produtos = recipes
     .filter((x) => x.kind === 'PRODUCT' && !x.error)
     .map((x) => {
@@ -144,9 +151,13 @@ export default async function EncomendaPage({
       return {
         id: x.id,
         name: x.name,
-        listPrice: preco?.feasible && preco.price > 0 ? preco.price : null,
+        // O do cardapio, se la estiver: e o que a action usa sem preco escrito.
+        listPrice: doCardapio.get(x.id) ?? (preco?.feasible && preco.price > 0 ? preco.price : null),
       };
     });
+  const combos = itensDoCardapio
+    .filter((i) => i.kind === 'COMBO')
+    .map((i) => ({ id: `${PREFIXO_COMBO}${i.id}`, name: i.name ?? 'Combo', listPrice: num(i.price) }));
 
   const agora = nowInLisbon();
   const aberta = e.status !== 'DELIVERED' && e.status !== 'CANCELLED';
@@ -419,6 +430,21 @@ export default async function EncomendaPage({
                           >
                             {l.recipe.name}
                           </Link>
+                          {l.menuItem?.kind === 'COMBO' ? (
+                            <span className="block text-xs text-muted-foreground">
+                              do combo {l.menuItem.name}
+                            </span>
+                          ) : null}
+                          {l.promotion ? (
+                            <span className="block text-xs text-emerald-700 dark:text-emerald-400">
+                              Promoção: {l.promotion.name}
+                            </span>
+                          ) : null}
+                          {l.couponDiscount !== null && num(l.couponDiscount) > 0 ? (
+                            <span className="block text-xs text-emerald-700 dark:text-emerald-400">
+                              Cupão: −{formatMoney(num(l.couponDiscount), currency)}
+                            </span>
+                          ) : null}
                         </TableCell>
                         <TableNum>{num(l.qty)}</TableNum>
                         <TableNum>
@@ -481,6 +507,18 @@ export default async function EncomendaPage({
               </Table>
             )}
 
+            {e.couponCode ? (
+              <p className="border-t px-4 py-3 text-sm sm:px-6">
+                Cupão <span className="font-mono font-medium">{e.couponCode}</span>
+                {e.couponDiscount !== null
+                  ? `: −${formatMoney(num(e.couponDiscount), currency)}, já descontado nos preços acima.`
+                  : null}{' '}
+                <span className="text-muted-foreground">
+                  Produtos juntados depois não levam o desconto.
+                </span>
+              </p>
+            ) : null}
+
             <div className="border-t p-4 sm:px-6">
               <ActionForm action={addCustomerOrderLine} showSuccess={false} className="space-y-3">
                 <input type="hidden" name="orderId" value={e.id} />
@@ -496,6 +534,15 @@ export default async function EncomendaPage({
                           {p.listPrice !== null ? ` — ${formatMoney(p.listPrice, currency)}` : ''}
                         </option>
                       ))}
+                      {combos.length ? (
+                        <optgroup label="Combos do cardápio">
+                          {combos.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} — {formatMoney(p.listPrice, currency)}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ) : null}
                     </Select>
                   </Field>
                   <Field label="Qtd." htmlFor="add-qty">

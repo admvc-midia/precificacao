@@ -49,6 +49,10 @@ import {
   Users,
   Wallet,
   Warehouse,
+  BadgePercent,
+  ShoppingBag,
+  Ticket,
+  UtensilsCrossed,
 } from 'lucide-react';
 
 import {
@@ -122,6 +126,9 @@ const UTILIZADORES: Destino = { href: '/utilizadores', label: 'Utilizadores', ic
 const REGISTO: Destino = { href: '/registo', label: 'Registo de alterações', icon: History };
 const CONTA: Destino = { href: '/conta', label: 'A minha conta', short: 'Conta', icon: UserRound };
 const AJUDA: Destino = { href: '/ajuda', label: 'Ajuda', icon: LifeBuoy };
+const CARDAPIO: Destino = { href: '/loja/cardapio', label: 'Cardápio (link público)', short: 'Cardápio', icon: UtensilsCrossed };
+const PROMOCOES: Destino = { href: '/loja/promocoes', label: 'Promoções', icon: BadgePercent };
+const CUPOES: Destino = { href: '/loja/cupoes', label: 'Cupões de desconto', short: 'Cupões', icon: Ticket };
 const EXPORTAR: Destino = { href: '/exportar', label: 'Cópia de segurança', icon: Download };
 
 interface MenuDoPerfil {
@@ -153,6 +160,7 @@ const MENU_DONO: MenuDoPerfil = {
     { label: 'Receitas', icon: BookOpen, destinos: [RECEITAS, LIVROS] },
     { label: 'Produção', icon: Factory, destinos: [PRODUCAO, ESTOQUE] },
     { label: 'Clientes', icon: Users, destinos: [ENCOMENDAS, CLIENTES, POS_VENDA] },
+    { label: 'Loja', icon: ShoppingBag, destinos: [CARDAPIO, PROMOCOES, CUPOES] },
     { label: 'Resultados', icon: BarChart3, destinos: [VENDAS, RELATORIO, DESPESAS, CALENDARIO] },
   ],
   engrenagem: [CONFIGURACOES, UTILIZADORES, REGISTO, CONTA, EXPORTAR, AJUDA],
@@ -160,6 +168,9 @@ const MENU_DONO: MenuDoPerfil = {
   noMais: [
     CLIENTES,
     POS_VENDA,
+    CARDAPIO,
+    PROMOCOES,
+    CUPOES,
     RECEITAS,
     LIVROS,
     INSUMOS,

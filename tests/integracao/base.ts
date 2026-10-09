@@ -78,6 +78,10 @@ export interface Retrato {
   receitasDoLivro: number;
   versoesDoLivro: number;
   livros: number;
+  secoesDoCardapio: number;
+  itensDoCardapio: number;
+  promocoes: number;
+  cupoes: number;
   settings: Record<string, unknown>;
 }
 
@@ -133,6 +137,14 @@ export async function retrato(): Promise<Retrato> {
       where: { NOT: { recipe: { title: { startsWith: MARCA } } } },
     }),
     livros: await prisma.cookbook.count({ where: { NOT: { title: { startsWith: MARCA } } } }),
+    secoesDoCardapio: await prisma.menuSection.count({ where: semMarca }),
+    // Itens marcados pelo nome, ou ligados a uma ficha marcada.
+    itensDoCardapio: await prisma.menuItem.count({
+      where: { NOT: [{ name: { startsWith: MARCA } }, { recipe: { name: { startsWith: MARCA } } }] },
+    }),
+    promocoes: await prisma.promotion.count({ where: semMarca }),
+    // Os codigos dos cupoes sao maiusculas: "ZZTEMP-...".
+    cupoes: await prisma.coupon.count({ where: { NOT: { code: { startsWith: MARCA } } } }),
     settings: {
       businessName: s.businessName,
       followUpDays: s.followUpDays,
@@ -149,6 +161,11 @@ export async function retrato(): Promise<Retrato> {
       displayDecimals: s.displayDecimals,
       expectedMonthlyRevenue:
         s.expectedMonthlyRevenue === null ? null : String(s.expectedMonthlyRevenue),
+      whatsappNumber: s.whatsappNumber,
+      instagramHandle: s.instagramHandle,
+      facebookHandle: s.facebookHandle,
+      menuIntro: s.menuIntro,
+      menuPublished: s.menuPublished,
     },
   };
 }
@@ -179,6 +196,11 @@ export async function reporSettings(r: Retrato): Promise<void> {
       rounding: s.rounding as RoundingStrategy,
       displayDecimals: s.displayDecimals as number,
       expectedMonthlyRevenue: s.expectedMonthlyRevenue as string | null,
+      whatsappNumber: s.whatsappNumber as string | null,
+      instagramHandle: s.instagramHandle as string | null,
+      facebookHandle: s.facebookHandle as string | null,
+      menuIntro: s.menuIntro as string | null,
+      menuPublished: s.menuPublished as boolean,
     },
   });
 }
@@ -223,6 +245,21 @@ export async function limpar(): Promise<void> {
     where: { customerOrders: { some: encomendasMarcadas } },
   });
   await prisma.customerOrder.deleteMany({ where: encomendasMarcadas });
+  // Cardapio: promocoes, cupoes e secoes marcados; itens marcados pelo nome,
+  // ligados a fichas marcadas, ou combos que as levam (um combo seguraria a
+  // ficha: MenuComboItem e Restrict).
+  await prisma.promotion.deleteMany({ where: { name: { startsWith: MARCA } } });
+  await prisma.coupon.deleteMany({ where: { code: { startsWith: MARCA } } });
+  await prisma.menuItem.deleteMany({
+    where: {
+      OR: [
+        { name: { startsWith: MARCA } },
+        { recipeId: { in: fichas } },
+        { components: { some: { recipeId: { in: fichas } } } },
+      ],
+    },
+  });
+  await prisma.menuSection.deleteMany({ where: { name: { startsWith: MARCA } } });
   await prisma.customer.deleteMany({ where: { name: { startsWith: MARCA } } });
   // Os testes gastam numeros de encomenda; sem isto a casa passava da #1 para a #9.
   // Schema explicito: o adaptador do Prisma 7 nao muda o search_path (ver `tabela`).

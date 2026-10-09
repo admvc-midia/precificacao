@@ -1,0 +1,217 @@
+/*
+ * O cardapio publico com a identidade do site: a mesma paleta, logotipo,
+ * letra e estampa da app (ver `globals.css`). Vinho #5B1C32, creme #EFE6D6,
+ * rosa #D1AEB1.
+ *
+ * A estrutura (secoes em pilula, subtitulos sublinhados, cartoes de tamanhos)
+ * veio do "Menu Bolos.pdf"; as cores ja nao.
+ *
+ * Claro e escuro pelo mesmo mecanismo da app: classe `dark` no <html>, posta
+ * pelo servidor (cookie `tema`) ou pelo `SCRIPT_TEMA` antes de pintar, e
+ * trocada pelo botao do topo (`TemaCardapio`).
+ */
+
+.cardapio {
+  --ab-fundo: #efe6d6;
+  --ab-texto: #3a1422;
+  --ab-texto-suave: #6b4a55;
+  --ab-vinho: #5b1c32;
+  --ab-rosa: #d1aeb1;
+  /* Titulos e precos: o vinho da marca. */
+  --ab-titulo: #5b1c32;
+  --ab-preco: #5b1c32;
+  /* Pilulas das secoes e botoes: vinho com letra creme. */
+  --ab-pilula: #5b1c32;
+  --ab-pilula-texto: #f3ece0;
+  --ab-botao: #5b1c32;
+  --ab-botao-texto: #f3ece0;
+  /* Etiquetas de promocao. */
+  --ab-etiqueta: #8a2f4b;
+  --ab-etiqueta-texto: #fff;
+  --ab-ponto: #b98a8f;
+  --ab-linha: #d9c9b8;
+  --ab-cartao: #f6f0e6;
+  --ab-cartao-texto: #5b1c32;
+  --ab-campo: #fbf8f2;
+  --ab-estampa: url('/estampa.svg');
+  --ab-estampa-opacidade: 0.13;
+
+  color-scheme: light;
+  background: var(--ab-fundo);
+  color: var(--ab-texto);
+  min-height: 100vh;
+  position: relative;
+  isolation: isolate;
+  overflow-x: clip;
+}
+
+/* Escuro: vinho profundo, letra creme, rosa de destaque — como o `.dark` da app. */
+.dark .cardapio {
+  --ab-fundo: #1a0b10;
+  --ab-texto: #efe6d6;
+  --ab-texto-suave: #c4aeb2;
+  --ab-titulo: #e3c6c9;
+  --ab-preco: #e3c6c9;
+  --ab-pilula: #d1aeb1;
+  --ab-pilula-texto: #2a0f18;
+  --ab-botao: #d1aeb1;
+  --ab-botao-texto: #2a0f18;
+  --ab-etiqueta: #d1aeb1;
+  --ab-etiqueta-texto: #2a0f18;
+  --ab-ponto: #b98a8f;
+  --ab-linha: #3a2028;
+  --ab-cartao: #2a141c;
+  --ab-cartao-texto: #efe6d6;
+  --ab-campo: #241016;
+  --ab-estampa: url('/estampa-escura.svg');
+  --ab-estampa-opacidade: 0.5;
+
+  color-scheme: dark;
+}
+
+/* A estampa do site, bem apagada e fixa, como no fundo da app (mesma janela
+   de 360x318 que repete sem emendas). */
+.cardapio::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: var(--ab-estampa);
+  background-size: 360px 318px;
+  opacity: var(--ab-estampa-opacidade);
+}
+
+/* A serifada do site (Cormorant Garamond, carregada no layout raiz). */
+.cardapio .ab-serif {
+  font-family: var(--font-titulo), Georgia, serif;
+  font-weight: 600;
+  /* A Cormorant usa algarismos "antigos" por omissao: "50 €" lia-se "5o €". */
+  font-variant-numeric: lining-nums;
+}
+
+/* Titulo de secao em pilula ("Bolos", "Caseirinhos"). */
+.cardapio .ab-pilula {
+  display: inline-block;
+  background: var(--ab-pilula);
+  color: var(--ab-pilula-texto);
+  border-radius: 999px;
+  padding: 0.15em 1.3em 0.25em;
+  line-height: 1.15;
+}
+
+/* Subtitulo sublinhado ("TAMANHO E VALORES", "MASSA"). */
+.cardapio .ab-subtitulo {
+  color: var(--ab-titulo);
+  font-weight: 700;
+  text-transform: uppercase;
+  text-decoration: underline;
+  text-decoration-color: var(--ab-rosa);
+  text-underline-offset: 0.22em;
+  text-decoration-thickness: 2px;
+  letter-spacing: 0.08em;
+  font-size: 0.85em;
+}
+
+.cardapio .ab-ponto {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--ab-ponto);
+  flex-shrink: 0;
+}
+
+.cardapio .ab-faixa {
+  background: var(--ab-pilula);
+  color: var(--ab-pilula-texto);
+  text-transform: uppercase;
+  text-align: center;
+  letter-spacing: 0.06em;
+  padding: 0.6rem 1rem;
+}
+
+.cardapio .ab-cartao-tamanho {
+  background: var(--ab-cartao);
+  color: var(--ab-cartao-texto);
+  border: 1px solid var(--ab-linha);
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.cardapio .ab-justificado {
+  text-align: justify;
+  hyphens: auto;
+}
+
+.cardapio details > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.cardapio details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.cardapio .ab-botao {
+  background: var(--ab-botao);
+  color: var(--ab-botao-texto);
+  border-radius: 999px;
+  font-weight: 600;
+}
+.cardapio .ab-botao:hover {
+  filter: brightness(1.08);
+}
+.cardapio .ab-botao:focus-visible,
+.cardapio .ab-mais:focus-visible,
+.cardapio .ab-tema:focus-visible,
+.cardapio input:focus-visible {
+  outline: 2px solid var(--ab-rosa);
+  outline-offset: 2px;
+}
+
+.cardapio .ab-mais {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--ab-rosa);
+  color: var(--ab-titulo);
+  background: var(--ab-campo);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  line-height: 1;
+}
+.cardapio .ab-mais[data-cheio='true'] {
+  background: var(--ab-botao);
+  border-color: var(--ab-botao);
+  color: var(--ab-botao-texto);
+}
+
+.cardapio .ab-tema {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--ab-linha);
+  background: var(--ab-campo);
+  color: var(--ab-titulo);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Um logotipo por tema; o outro fica escondido. */
+.cardapio .ab-logo-escuro {
+  display: none;
+}
+.dark .cardapio .ab-logo-claro {
+  display: none;
+}
+.dark .cardapio .ab-logo-escuro {
+  display: block;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cardapio .ab-barra {
+    transition: transform 200ms ease;
+  }
+}
